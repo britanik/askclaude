@@ -1,0 +1,8 @@
+node_modules
+.history
+.idea
+dist
+.env
+.lh
+old
+docs
