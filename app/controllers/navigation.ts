@@ -10,6 +10,7 @@ import { sendMessage } from "../templates/sendMessage"
 import { tmplRegisterLang } from "../templates/tmplRegisterLanguage"
 import { handleAssistantReply, handleUserReply, startAssistant } from "./assistants"
 import { promptsDict } from "../helpers/prompts"
+import { tmplAdmin } from "../templates/tmplAdmin"
 
 export interface INavigationParams {
   user?: IUser
@@ -188,6 +189,15 @@ export default class Navigation {
           await sendMessage({ text: this.dict.getString('ASSISTANT_ERROR'), user: this.user, bot: this.bot })
         }
       },
+    }
+  }
+
+  admin(){
+    return {
+      action: async () => {
+        await tmplAdmin( this.user, this.bot )
+      },
+      callback: async () => {},
     }
   }
 

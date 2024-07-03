@@ -4,6 +4,7 @@ export const menuButtons = [
   { name: '/start', method: 'start' },
   { name: '/new', method: 'new' },
   { name: '/run_scheduler', method: 'adminRunScheduler' },
+  { name: '/admin', method: 'admin' },
 ];
 
 export const isMenuClicked = ( msg ):IMenuButton | false => {
