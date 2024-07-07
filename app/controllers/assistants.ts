@@ -8,7 +8,7 @@ import { IUser } from "../interfaces/users"
 // import { IChatComplitionResponse } from "../interfaces/chatCompletionResponse"
 
 import { sendMessage } from "../templates/sendMessage"
-import { chatCall } from "../services/ai"
+import { claudeCall } from "../services/ai"
 import Dict from "../helpers/dict"
 import { addLog } from "./log"
 
@@ -72,7 +72,7 @@ export async function getRecentThread(user:IUser):Promise<IThread>{
 export async function sendThreadToChatGPT(params){
   const { thread } = params
   try {
-    const chatCompletion = await chatCall({ messages: thread.messages, temperature: 1 })
+    const chatCompletion = await claudeCall({ messages: thread.messages, temperature: 1 })
     return chatCompletion.content[0].text
 
   } catch(e){

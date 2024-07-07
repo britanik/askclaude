@@ -1,5 +1,9 @@
 import axios from "axios"
 import { promptsDict } from "../helpers/prompts"
+import TelegramBot from "node-telegram-bot-api"
+import fs from 'fs';
+import FormData from 'form-data';
+import { getReadableId } from "../helpers/helpers";
 
 export interface IThreadMessage {
   role: string,
@@ -13,7 +17,7 @@ export interface IChatCallParams {
   response_format?: { type: 'text' | 'json_object' }
 }
 
-export async function chatCall( params:IChatCallParams ){
+export async function claudeCall( params:IChatCallParams ){
   console.log('function: chatCall')
   let { messages, temperature = 0.1, response_format = { type: 'text' } } = params
   
@@ -43,5 +47,56 @@ export async function chatCall( params:IChatCallParams ){
 
   } catch(e){ 
     console.log(e.response.data, 'e.config')
+  }
+}
+
+export async function getTranscription(msg, bot:TelegramBot):Promise<string>{
+  // console.log('function: getTranscription')
+  const fileName = `audio/temp_audio_${getReadableId()}.oga`;
+
+  try {
+
+    const fileLink = await bot.getFileLink(msg.voice.file_id)
+  
+    // Download the file
+    const response = await axios({
+      method: 'get',
+      url: fileLink,
+      responseType: 'stream'
+    });
+
+    // Save the file locally (temporarily)
+    const writer = fs.createWriteStream(fileName);
+    response.data.pipe(writer);
+
+    await new Promise((resolve, reject) => {
+      writer.on('finish', resolve);
+      writer.on('error', reject);
+    });
+
+    // Prepare form data
+    const form = new FormData();
+    form.append('file', fs.createReadStream(fileName));
+    form.append('model', 'whisper-1');
+
+    // Send request to OpenAI
+    const openaiResponse = await axios.post('https://api.openai.com/v1/audio/transcriptions', form, {
+      headers: {
+        ...form.getHeaders(),
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+      },
+    });
+
+    return openaiResponse.data.text
+
+  } catch (error) {
+    // console.error('Error in getTranscription:', error);
+    console.log(error.response.data, 'error.response.data')
+    throw error;
+  } finally {
+    // Delete the temporary file
+    if (fs.existsSync(fileName)) {
+      fs.unlinkSync(fileName);
+    }
   }
 }

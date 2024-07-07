@@ -25,6 +25,10 @@ export default class Dict {
       ASSISTANT_START: {
         rus: () => `Привет!`,
         eng: () => `Hey!`
+      },
+      ASSISTANT_ERROR: {
+        rus: () => `Произошла ошибка`,
+        eng: () => `An error occurred`
       }
     }
   }

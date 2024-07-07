@@ -8,6 +8,7 @@ import { sendMessage } from "../templates/sendMessage"
 import { tmplRegisterLang } from "../templates/tmplRegisterLanguage"
 import { handleAssistantReply, handleUserReply, startAssistant } from "./assistants"
 import { tmplAdmin } from "../templates/tmplAdmin"
+import { getTranscription } from "../services/ai"
 
 export interface INavigationParams {
   user?: IUser
@@ -150,8 +151,9 @@ export default class Navigation {
       },
       callback: async () => {
         try {
-          const userReply = this.data?.v ? this.dict.getString(this.data.v) : this.msg.text
-          let threadWithUserMessage = await handleUserReply(this.user, userReply, this.bot)
+          let text:string
+          text = ( this.msg.voice ) ? await getTranscription(this.msg, this.bot) : this.msg.text
+          let threadWithUserMessage = await handleUserReply(this.user, text, this.bot)
           await handleAssistantReply(threadWithUserMessage, this.bot, this.dict)
         } catch (e) {
           console.error('Failed to handle assistant callback', e)
