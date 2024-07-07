@@ -5,8 +5,6 @@ import TelegramBot from 'node-telegram-bot-api'
 import { IUser } from '../interfaces/users'
 import { isAdmin } from '../helpers/helpers'
 import Thread from '../models/threads'
-import { IThread } from "../interfaces/threads"
-import users from '../models/users'
 
 export async function tmplAdmin(user: IUser, bot: TelegramBot) {
   if (!isAdmin(user)) return
