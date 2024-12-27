@@ -31,18 +31,23 @@ connect(mongoString).then(() => { console.log('-- Connected to MongoDB') }).catc
 // Used in registerPhotoUpload and settingsPhotoUpload
 let mediaGroups:number[] = []
 
-const startNavigation = async ( msg = null, callbackQuery = null ) => {
-  // New navigation
-  console.log(msg,'msg')
+const startNavigation = async (msg = null, callbackQuery = null) => {
+  console.log(msg, 'msg')
   let chatId = (msg) ? msg.chat.id : callbackQuery.message.chat.id
-  let user:IUser = await User.findOne({ chatId: chatId })
-  if( !user ){
+  let user: IUser = await User.findOne({ chatId: chatId })
+  
+  if (!user) {
     user = await new User({
-      ID: getReadableId( moment() ),
+      ID: getReadableId(moment()),
       name: msg.from.first_name + ' ' + msg.from.last_name,
       chatId: chatId,
+      username: msg.from.username || null,
       showUsername: (msg.from.username) ? true : false,
     }).save()
+  } else if (msg && user.username !== msg.from.username) {
+    console.log('Here')
+    user.username = msg.from.username || null
+    await user.save()
   }
 
   let navigation = new Navigation({
@@ -55,7 +60,6 @@ const startNavigation = async ( msg = null, callbackQuery = null ) => {
   })
 
   await navigation.build()
-
 }
 
 bot.on('message', async ( msg, param ) => {
