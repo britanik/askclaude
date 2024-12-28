@@ -9,6 +9,7 @@ import { tmplRegisterLang } from "../templates/tmplRegisterLanguage"
 import { handleAssistantReply, handleUserReply, startAssistant } from "./assistants"
 import { tmplAdmin } from "../templates/tmplAdmin"
 import { getTranscription } from "../services/ai"
+import { isAdmin } from "../helpers/helpers"
 
 export interface INavigationParams {
   user?: IUser
@@ -180,6 +181,43 @@ export default class Navigation {
       callback: async () => {
         await sendMessage({ text: this.dict.getString('NOT_FOUND'), user: this.user, bot: this.bot })
       },
+    }
+  }
+
+  pm() {
+    return {
+      action: async () => {
+        if (!isAdmin(this.user)) return;
+  
+        const params = this.msg.text.split(' ');
+        if (params.length < 3) {
+          await sendMessage({ 
+            text: 'Error: Invalid format. Use /pm [chatId] [message]', 
+            user: this.user, 
+            bot: this.bot 
+          });
+          return;
+        }
+  
+        const chatId = params[1];
+        const message = params.slice(2).join(' ');
+  
+        try {
+          await this.bot.sendMessage(chatId, message);
+          await sendMessage({
+            text: `Message sent successfully to ${chatId}`,
+            user: this.user,
+            bot: this.bot
+          });
+        } catch (error) {
+          await sendMessage({
+            text: `Error sending message: ${error.message}`,
+            user: this.user,
+            bot: this.bot
+          });
+        }
+      },
+      callback: async () => {}
     }
   }
 }
