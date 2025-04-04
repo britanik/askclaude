@@ -37,12 +37,14 @@ const startNavigation = async (msg = null, callbackQuery = null) => {
   let user: IUser = await User.findOne({ chatId: chatId })
   
   if (!user) {
+    const firstName = msg.from.first_name || '';
+    const lastName = msg.from.last_name || '';
+    const name = firstName + (lastName ? ' ' + lastName : '');
     user = await new User({
       ID: getReadableId(moment()),
-      name: msg.from.first_name + ' ' + msg.from.last_name,
+      name,
       chatId: chatId,
       username: msg.from.username || null,
-      showUsername: (msg.from.username) ? true : false,
     }).save()
   } else if (msg && user.username !== msg.from.username) {
     console.log('Here')
