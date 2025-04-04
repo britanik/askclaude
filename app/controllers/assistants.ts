@@ -46,7 +46,10 @@ export async function handleUserReply(user:IUser, userReply:string, bot):Promise
   return thread
 }
 
-export async function handleAssistantReply(thread:IThread, bot, dict):Promise<void>{
+export async function handleAssistantReply(thread:IThread, bot:TelegramBot, dict):Promise<void>{
+  // Show "Thinking" status while processing
+  await bot.sendChatAction(thread.owner.chatId, "typing");
+  
   let assistantReply:string = await sendThreadToChatGPT({ thread })
   console.log(assistantReply,'assistantReply')
 
