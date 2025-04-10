@@ -43,28 +43,46 @@ export async function handleUserReply(
 ): Promise<IThread> {
   let thread: IThread = await getRecentThread(user);
   
-  // If this is part of a media group and not the first message
-  if (mediaGroupId && images.length > 0) {
+  // If this is part of a media group
+  if (mediaGroupId) {
     // Check if the last message already has some images and is from the same media group
     const lastMessage = thread.messages[thread.messages.length - 1];
-    if (lastMessage.role === 'user' && lastMessage.images && lastMessage.images.length > 0) {
+    
+    if (lastMessage.role === 'user' && 
+        lastMessage.mediaGroupId === mediaGroupId) {
       // Add this image to the existing images array
+      lastMessage.images = lastMessage.images || [];
       lastMessage.images.push(...images);
+      
+      // Update the content if provided and this message has content
+      if (userReply && userReply.trim() !== " " && userReply.trim() !== "") {
+        lastMessage.content = userReply;
+      }
+      
       return await thread.save();
+    } else {
+      // This is the first message in a new media group
+      return await addMessageToThread({ 
+        thread, 
+        message: { 
+          role: 'user', 
+          content: userReply || " ", // Ensure content is never empty
+          images: images.length > 0 ? images : undefined,
+          mediaGroupId // Store the media group ID with the message
+        } 
+      });
     }
+  } else {
+    // Regular message without media group
+    return await addMessageToThread({ 
+      thread, 
+      message: { 
+        role: 'user', 
+        content: userReply || " ", // Ensure content is never empty
+        images: images.length > 0 ? images : undefined 
+      } 
+    });
   }
-  
-  // Otherwise, add a new message
-  thread = await addMessageToThread({ 
-    thread, 
-    message: { 
-      role: 'user', 
-      content: userReply || " ", // Ensure content is never empty
-      images: images.length > 0 ? images : undefined 
-    } 
-  });
-
-  return thread;
 }
 
 export async function handleAssistantReply(thread:IThread, bot:TelegramBot, dict):Promise<void>{

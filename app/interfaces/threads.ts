@@ -10,6 +10,7 @@ export interface IThread extends Document {
     tool_calls?: [], 
     created?: Date, 
     name?: string,
-    images?: string[]
+    images?: string[],
+    mediaGroupId?: string  // Add this field
   }[]
 }

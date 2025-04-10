@@ -154,6 +154,7 @@ export default class Navigation {
         try {
           let text: string = '';
           let images: string[] = [];
+          let mediaGroupId = this.msg.media_group_id || null;
           
           // Handle voice messages
           if (this.msg.voice) {
@@ -175,21 +176,42 @@ export default class Navigation {
             text = this.msg.text;
           }
           
-          // Handle media groups (multiple photos)
-          if (this.msg.media_group_id) {
-            const existingGroup = this.mediaGroups.includes(this.msg.media_group_id);
+          // For media groups, wait before processing to collect all images
+          if (mediaGroupId) {
+            const isFirstMessageInGroup = !this.mediaGroups.includes(mediaGroupId);
             
-            if (!existingGroup) {
-              // This is the first image from a media group
-              this.mediaGroups.push(this.msg.media_group_id);
+            if (isFirstMessageInGroup) {
+              // This is the first message from a media group
+              this.mediaGroups.push(mediaGroupId);
               
               // Wait for other images in the group (3 seconds should be enough)
+              console.log(`First message in media group ${mediaGroupId}, waiting for others...`);
               await new Promise(resolve => setTimeout(resolve, 3000));
+              console.log(`Finished waiting for media group ${mediaGroupId}`);
+            } else {
+              // For subsequent messages in the same media group, just add the image and return
+              // without sending to Claude yet - this is handled by the first message
+              console.log(`Additional message in media group ${mediaGroupId}`);
+              await handleUserReply(this.user, text, this.bot, images, mediaGroupId);
+              return; // Important: don't process this as a full message
             }
           }
           
-          let threadWithUserMessage = await handleUserReply(this.user, text, this.bot, images, this.msg.media_group_id);
-          await handleAssistantReply(threadWithUserMessage, this.bot, this.dict);
+          // Now process the message normally
+          let threadWithUserMessage = await handleUserReply(this.user, text, this.bot, images, mediaGroupId);
+          
+          // Only send to Claude if this isn't a media group or it's the first message after waiting
+          if (!mediaGroupId || this.mediaGroups.includes(mediaGroupId)) {
+            await handleAssistantReply(threadWithUserMessage, this.bot, this.dict);
+            
+            // Remove from mediaGroups array after processing
+            if (mediaGroupId) {
+              const index = this.mediaGroups.indexOf(mediaGroupId);
+              if (index > -1) {
+                this.mediaGroups.splice(index, 1);
+              }
+            }
+          }
         } catch (e) {
           console.error('Failed to handle assistant callback', e);
           await sendMessage({ text: this.dict.getString('ASSISTANT_ERROR'), user: this.user, bot: this.bot });

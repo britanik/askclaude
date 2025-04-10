@@ -14,7 +14,8 @@ const ThreadSchema = new Schema<IThread>({
     "tool_calls": { type: Array, default: undefined },
     "created": { type: Date, default: () => moment().utc() },
     "name": { type: String, default: undefined },
-    "images": { type: [String], default: undefined } // Add images array to schema
+    "images": { type: [String], default: undefined },
+    "mediaGroupId": { type: String, default: undefined } // Add this field
   }],
 })
 
