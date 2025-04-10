@@ -242,25 +242,6 @@ export async function getImageAsBase64(url) {
   }
 }
 
-function getMediaTypeFromUrl(url) {
-  const extension = path.extname(url).toLowerCase();
-  
-  switch (extension) {
-    case '.jpg':
-    case '.jpeg':
-      return 'image/jpeg';
-    case '.png':
-      return 'image/png';
-    case '.gif':
-      return 'image/gif';
-    case '.webp':
-      return 'image/webp';
-    default:
-      // If we can't determine, default to jpeg
-      return 'image/jpeg';
-  }
-}
-
 export async function saveImageTemporarily(url) {
   try {
     // Create a unique filename
@@ -289,6 +270,39 @@ export async function saveImageTemporarily(url) {
     });
   } catch (error) {
     console.error('Error saving image:', error);
+    throw error;
+  }
+}
+
+export async function saveImagePermanently(url, imageId) {
+  try {
+    // Define a permanent directory for images
+    const imageDir = path.join(__dirname, '../images');
+    
+    // Ensure directory exists
+    if (!fs.existsSync(imageDir)) {
+      fs.mkdirSync(imageDir, { recursive: true });
+    }
+    
+    // Create a filename with timestamp to avoid conflicts
+    const fileName = path.join(imageDir, `${Date.now()}_${imageId}${path.extname(url) || '.jpg'}`);
+    
+    // Download and save the file
+    const response = await axios({
+      method: 'get',
+      url: url,
+      responseType: 'stream'
+    });
+    
+    const writer = fs.createWriteStream(fileName);
+    response.data.pipe(writer);
+    
+    return new Promise((resolve, reject) => {
+      writer.on('finish', () => resolve(fileName));
+      writer.on('error', reject);
+    });
+  } catch (error) {
+    console.error('Error saving image permanently:', error);
     throw error;
   }
 }

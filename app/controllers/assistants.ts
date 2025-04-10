@@ -8,7 +8,7 @@ import { IUser } from "../interfaces/users"
 // import { IChatComplitionResponse } from "../interfaces/chatCompletionResponse"
 
 import { sendMessage } from "../templates/sendMessage"
-import { claudeCall, formatMessagesWithImages } from "../services/ai"
+import { claudeCall, formatMessagesWithImages, saveImagePermanently } from "../services/ai"
 import Dict from "../helpers/dict"
 import { addLog } from "./log"
 
@@ -42,7 +42,28 @@ export async function handleUserReply(
   mediaGroupId?: string
 ): Promise<IThread> {
   let thread: IThread = await getRecentThread(user);
+  const savedImagePaths = [];
   
+  if (images.length > 0) {
+    for (const imageId of images) {
+      try {
+        // Get file link from Telegram
+        const fileLink = await bot.getFileLink(imageId);
+        
+        // Save image to a permanent location
+        const savedPath = await saveImagePermanently(fileLink, imageId);
+        
+        // Store both the Telegram ID and local path
+        savedImagePaths.push({
+          telegramId: imageId,
+          localPath: savedPath
+        });
+      } catch (error) {
+        console.error(`Error saving image ${imageId}:`, error);
+      }
+    }
+  }
+
   // If this is part of a media group
   if (mediaGroupId) {
     // Check if the last message already has some images and is from the same media group
