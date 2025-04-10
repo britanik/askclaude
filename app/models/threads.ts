@@ -13,7 +13,8 @@ const ThreadSchema = new Schema<IThread>({
     "content": String,
     "tool_calls": { type: Array, default: undefined },
     "created": { type: Date, default: () => moment().utc() },
-    "name": { type: String, default: undefined }
+    "name": { type: String, default: undefined },
+    "images": { type: [String], default: undefined } // Add images array to schema
   }],
 })
 

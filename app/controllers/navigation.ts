@@ -152,15 +152,49 @@ export default class Navigation {
       },
       callback: async () => {
         try {
-          let text:string
-          text = ( this.msg.voice ) ? await getTranscription(this.msg, this.bot) : this.msg.text
-          let threadWithUserMessage = await handleUserReply(this.user, text, this.bot)
-          await handleAssistantReply(threadWithUserMessage, this.bot, this.dict)
+          let text: string = '';
+          let images: string[] = [];
+          
+          // Handle voice messages
+          if (this.msg.voice) {
+            text = await getTranscription(this.msg, this.bot);
+          } 
+          // Handle photo messages
+          else if (this.msg.photo && this.msg.photo.length > 0) {
+            // Get the caption if it exists
+            text = this.msg.caption || '';
+            
+            // Get the highest quality photo (last in array)
+            const photoId = this.msg.photo[this.msg.photo.length - 1].file_id;
+            images.push(photoId);
+            
+            console.log('Received image:', photoId);
+          }
+          // Handle regular text messages
+          else {
+            text = this.msg.text;
+          }
+          
+          // Handle media groups (multiple photos)
+          if (this.msg.media_group_id) {
+            const existingGroup = this.mediaGroups.includes(this.msg.media_group_id);
+            
+            if (!existingGroup) {
+              // This is the first image from a media group
+              this.mediaGroups.push(this.msg.media_group_id);
+              
+              // Wait for other images in the group (3 seconds should be enough)
+              await new Promise(resolve => setTimeout(resolve, 3000));
+            }
+          }
+          
+          let threadWithUserMessage = await handleUserReply(this.user, text, this.bot, images, this.msg.media_group_id);
+          await handleAssistantReply(threadWithUserMessage, this.bot, this.dict);
         } catch (e) {
-          console.error('Failed to handle assistant callback', e)
-          await sendMessage({ text: this.dict.getString('ASSISTANT_ERROR'), user: this.user, bot: this.bot })
+          console.error('Failed to handle assistant callback', e);
+          await sendMessage({ text: this.dict.getString('ASSISTANT_ERROR'), user: this.user, bot: this.bot });
         }
-      },
+      }
     }
   }
 

@@ -8,7 +8,7 @@ import { IUser } from "../interfaces/users"
 // import { IChatComplitionResponse } from "../interfaces/chatCompletionResponse"
 
 import { sendMessage } from "../templates/sendMessage"
-import { claudeCall } from "../services/ai"
+import { claudeCall, formatMessagesWithImages } from "../services/ai"
 import Dict from "../helpers/dict"
 import { addLog } from "./log"
 
@@ -34,31 +34,51 @@ export async function createNewThread(params):Promise<IThread>{
   }
 }
 
-export async function handleUserReply(user:IUser, userReply:string, bot):Promise<IThread>{
-  let thread:IThread = await getRecentThread(user)
+export async function handleUserReply(
+  user: IUser, 
+  userReply: string, 
+  bot: TelegramBot, 
+  images: string[] = [], 
+  mediaGroupId?: string
+): Promise<IThread> {
+  let thread: IThread = await getRecentThread(user);
   
-  thread = await addMessageToThread({ thread, message: { role: 'user', content: userReply } })
+  // If this is part of a media group and not the first message
+  if (mediaGroupId && images.length > 0) {
+    // Check if the last message already has some images and is from the same media group
+    const lastMessage = thread.messages[thread.messages.length - 1];
+    if (lastMessage.role === 'user' && lastMessage.images && lastMessage.images.length > 0) {
+      // Add this image to the existing images array
+      lastMessage.images.push(...images);
+      return await thread.save();
+    }
+  }
+  
+  // Otherwise, add a new message
+  thread = await addMessageToThread({ 
+    thread, 
+    message: { 
+      role: 'user', 
+      content: userReply || " ", // Ensure content is never empty
+      images: images.length > 0 ? images : undefined 
+    } 
+  });
 
-  // Добавляем сообщение пользователя в thread.messages
-  // await addLog({ method: 'handleUserReply', data: { content: userReply }, user: user, bot })
-
-  // Возвращаем thread
-  return thread
+  return thread;
 }
 
 export async function handleAssistantReply(thread:IThread, bot:TelegramBot, dict):Promise<void>{
   // Show "Thinking" status while processing
   await bot.sendChatAction(thread.owner.chatId, "typing");
   
-  let assistantReply:string = await sendThreadToChatGPT({ thread })
-  console.log(assistantReply,'assistantReply')
+  let assistantReply:string = await sendThreadToChatGPT({ thread, bot }); // Pass the bot here
+  console.log(assistantReply,'assistantReply');
 
-  // Добавляем сообщение ассистента в thread.messages
-  thread = await addMessageToThread({ thread, message: { role: 'assistant', content: assistantReply }})
+  // Add the assistant's message to thread.messages
+  thread = await addMessageToThread({ thread, message: { role: 'assistant', content: assistantReply }});
 
-  if( assistantReply ){
-    await sendThreadToUser({ user: thread.owner, content: assistantReply, bot, dict })
-    // await addLog({ method: 'handleAssistantReply', data: { content: assistantReply }, user: thread.owner, bot })
+  if(assistantReply){
+    await sendThreadToUser({ user: thread.owner, content: assistantReply, bot, dict });
   }
 }
 
@@ -72,14 +92,21 @@ export async function getRecentThread(user:IUser):Promise<IThread>{
   }
 }
 
-export async function sendThreadToChatGPT(params){
-  const { thread } = params
+export async function sendThreadToChatGPT(params) {
+  const { thread, bot } = params;
   try {
-    const chatCompletion = await claudeCall({ messages: thread.messages, temperature: 1 })
-    return chatCompletion.content[0].text
-
-  } catch(e){
-    console.log('Failed to chatCall')
+    // Format messages for Claude API with image support
+    const formattedMessages = await formatMessagesWithImages(thread.messages, thread.owner, bot);
+    
+    const chatCompletion = await claudeCall({ 
+      messages: formattedMessages, 
+      temperature: 1 
+    });
+    
+    return chatCompletion.content[0].text;
+  } catch(e) {
+    console.log('Failed to chatCall', e);
+    throw e;
   }
 }
 

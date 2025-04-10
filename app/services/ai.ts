@@ -3,6 +3,8 @@ import { promptsDict } from "../helpers/prompts"
 import TelegramBot from "node-telegram-bot-api"
 import fs from 'fs';
 import FormData from 'form-data';
+import path from 'path';
+import { v4 as uuidv4 } from 'uuid';
 import { getReadableId } from "../helpers/helpers";
 
 export interface IThreadMessage {
@@ -12,41 +14,82 @@ export interface IThreadMessage {
 }
 
 export interface IChatCallParams {
-  messages: IThreadMessage[],
+  messages: Array<{
+    role: string,
+    content: string | Array<{
+      type: string,
+      text?: string,
+      source?: {
+        type: string,
+        media_type: string,
+        data: string
+      }
+    }>
+  }>,
   temperature?: number,
   response_format?: { type: 'text' | 'json_object' }
 }
 
-export async function claudeCall( params:IChatCallParams ){
-  console.log('function: chatCall')
-  let { messages, temperature = 0.1, response_format = { type: 'text' } } = params
+export async function claudeCall(params: IChatCallParams) {
+  console.log('function: chatCall');
+  let { messages, temperature = 0.1, response_format = { type: 'text' } } = params;
   
-  // sometime message.content can be null and ChatGPT crashes
-  messages = messages.filter( m => m.content !== null )
-
-  // delete params _id and created from every message
-  const cleanMessages = []
-  for( let message of messages ){
-    let cleanMessage = { role: message.role, content: message.content }
-    cleanMessages.push(cleanMessage)
-  }
-
   try {
-
-    let chatParams = {
-      model: process.env.CLAUDE_MODEL,
+    console.log(`Sending request to Claude API with ${messages.length} messages`);
+    
+    // Debug log for the first and last message
+    if (messages.length > 0) {
+      const firstMsg = messages[0];
+      const lastMsg = messages[messages.length - 1];
+      
+      console.log(`First message role: ${firstMsg.role}`);
+      console.log(`Last message role: ${lastMsg.role}`);
+      
+      // Check if it's a content array
+      if (lastMsg.content && Array.isArray(lastMsg.content)) {
+        console.log(`Last message has ${lastMsg.content.length} content items`);
+      }
+    }
+    
+    // Prepare API request
+    const chatParams = {
+      model: process.env.CLAUDE_MODEL || "claude-3-haiku-20240307",
       system: promptsDict.system(),
-      messages: cleanMessages,
-      max_tokens: +process.env.CLAUDE_MAX_OUTPUT,
+      messages: messages,
+      max_tokens: +(process.env.CLAUDE_MAX_OUTPUT || 1000),
       stream: false,
       temperature,
+    };
+    
+    // Make API request
+    const request = await axios.post(
+      'https://api.anthropic.com/v1/messages', 
+      chatParams, 
+      { 
+        headers: {
+          'x-api-key': process.env.CLAUDE_TOKEN, 
+          'anthropic-version': '2023-06-01',
+          'Content-Type': 'application/json'
+        },
+        timeout: 60000 // 60-second timeout for image processing
+      }
+    );
+    
+    console.log(`Received response from Claude API: ${request.status}`);
+    return request.data;
+  } catch(e) { 
+    console.log('Claude API error:');
+    
+    if (e.response) {
+      console.log('Status:', e.response.status);
+      console.log('Data:', e.response.data);
+    } else if (e.request) {
+      console.log('No response received:', e.request);
+    } else {
+      console.log('Error:', e.message);
     }
-
-    let request = await axios.post('https://api.anthropic.com/v1/messages', chatParams, { headers: {'x-api-key': process.env.CLAUDE_TOKEN, 'anthropic-version': '2023-06-01'} })
-    return request.data
-
-  } catch(e){ 
-    console.log(e.response.data, 'e.config')
+    
+    throw e;
   }
 }
 
@@ -98,5 +141,154 @@ export async function getTranscription(msg, bot:TelegramBot):Promise<string>{
     if (fs.existsSync(fileName)) {
       fs.unlinkSync(fileName);
     }
+  }
+}
+
+export async function formatMessagesWithImages(messages, user, bot) {
+  const formattedMessages = [];
+  
+  for (const message of messages) {
+    // Skip empty messages
+    if (!message.content && (!message.images || message.images.length === 0)) {
+      continue;
+    }
+    
+    // Initialize the basic message
+    let formattedMessage;
+    
+    // If message has images, format it for Claude's vision API
+    if (message.images && message.images.length > 0) {
+      formattedMessage = {
+        role: message.role,
+        content: []
+      };
+      
+      // Add text content if exists
+      if (message.content && message.content.trim() !== '') {
+        formattedMessage.content.push({
+          type: "text",
+          text: message.content
+        });
+      } else {
+        // Claude requires at least some text content
+        formattedMessage.content.push({
+          type: "text",
+          text: " " // Empty space as minimal content
+        });
+      }
+      
+      // Process images
+      console.log(`Processing ${message.images.length} images for user ${user.username || user.chatId}`);
+      
+      for (const imageId of message.images) {
+        try {
+          // Get file link from Telegram
+          const fileLink = await bot.getFileLink(imageId);
+          console.log(`Got file link: ${fileLink} for image ${imageId}`);
+          
+          // Get image as base64
+          const imageBase64 = await getImageAsBase64(fileLink);
+          
+          // Add image to content array
+          formattedMessage.content.push({
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: "image/jpeg", // Default to JPEG
+              data: imageBase64
+            }
+          });
+          
+          console.log(`Successfully processed image ${imageId}`);
+        } catch (error) {
+          console.error(`Error processing image ${imageId}:`, error);
+        }
+      }
+    } else {
+      // Regular text message
+      formattedMessage = {
+        role: message.role,
+        content: message.content || " " // Ensure content is never empty
+      };
+    }
+    
+    // Add the formatted message
+    formattedMessages.push(formattedMessage);
+  }
+  
+  return formattedMessages;
+}
+
+export async function getImageAsBase64(url) {
+  try {
+    console.log(`Downloading image from ${url}`);
+    
+    // Download the image
+    const response = await axios({
+      method: 'get',
+      url: url,
+      responseType: 'arraybuffer',
+      timeout: 30000 // 30 second timeout
+    });
+    
+    // Convert to base64
+    const base64 = Buffer.from(response.data).toString('base64');
+    console.log(`Successfully converted image to base64 (${base64.length} chars)`);
+    
+    return base64;
+  } catch (error) {
+    console.error('Error fetching image:', error.message);
+    throw error;
+  }
+}
+
+function getMediaTypeFromUrl(url) {
+  const extension = path.extname(url).toLowerCase();
+  
+  switch (extension) {
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg';
+    case '.png':
+      return 'image/png';
+    case '.gif':
+      return 'image/gif';
+    case '.webp':
+      return 'image/webp';
+    default:
+      // If we can't determine, default to jpeg
+      return 'image/jpeg';
+  }
+}
+
+export async function saveImageTemporarily(url) {
+  try {
+    // Create a unique filename
+    const tempDir = path.join(__dirname, '../temp');
+    
+    // Ensure temp directory exists
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+    
+    const fileName = path.join(tempDir, `${uuidv4()}${path.extname(url)}`);
+    
+    // Download and save the file
+    const response = await axios({
+      method: 'get',
+      url: url,
+      responseType: 'stream'
+    });
+    
+    const writer = fs.createWriteStream(fileName);
+    response.data.pipe(writer);
+    
+    return new Promise((resolve, reject) => {
+      writer.on('finish', () => resolve(fileName));
+      writer.on('error', reject);
+    });
+  } catch (error) {
+    console.error('Error saving image:', error);
+    throw error;
   }
 }
