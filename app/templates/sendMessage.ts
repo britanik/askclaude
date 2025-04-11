@@ -27,7 +27,7 @@ export async function sendMessage(params: ISendMessageParams) {
       buttons, 
       keyboard, 
       placeholder 
-    }) // Adjust this method to ensure proper types are returned based on usage context
+    })
 
     if( deletable && user ){
       let messageId = userController.getMessage(user, deletable);
@@ -73,10 +73,7 @@ export async function sendMessage(params: ISendMessageParams) {
       }  
 
       // Send new message without considering it deletable
-      console.log(chatId,'chatId')
-      console.log(user,'user')
       let chatIdToSent = chatId || user.chatId
-      console.log(chatIdToSent,'chatIdToSent')
       sent = await bot.sendMessage(chatIdToSent, text, options)
     }
 
