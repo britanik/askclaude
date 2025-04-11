@@ -1,7 +1,5 @@
 import TelegramBot from "node-telegram-bot-api"
 
-import * as userController from './users'
-
 import Thread from '../models/threads'
 import { IThread } from "../interfaces/threads"
 import { IUser } from "../interfaces/users"
@@ -10,10 +8,8 @@ import { IUser } from "../interfaces/users"
 import { sendMessage } from "../templates/sendMessage"
 import { claudeCall, formatMessagesWithImages, saveImagePermanently } from "../services/ai"
 import Dict from "../helpers/dict"
-import { addLog } from "./log"
 
 export async function startAssistant(user:IUser, firstMessage:string):Promise<IThread>{
-  console.log('startAssistant')
   try {
     return await createNewThread({ user, messages: [
       { role: 'user', content: firstMessage }
@@ -24,7 +20,6 @@ export async function startAssistant(user:IUser, firstMessage:string):Promise<IT
 }
 
 export async function createNewThread(params):Promise<IThread>{
-  console.log('createNewThread')
   try {
     const { user, messages } = params
     const thread:IThread = await new Thread({ owner: user, messages }).save()
@@ -111,7 +106,6 @@ export async function handleAssistantReply(thread:IThread, bot:TelegramBot, dict
   await bot.sendChatAction(thread.owner.chatId, "typing");
   
   let assistantReply:string = await sendThreadToChatGPT({ thread, bot }); // Pass the bot here
-  console.log(assistantReply,'assistantReply');
 
   // Add the assistant's message to thread.messages
   thread = await addMessageToThread({ thread, message: { role: 'assistant', content: assistantReply }});
@@ -124,7 +118,6 @@ export async function handleAssistantReply(thread:IThread, bot:TelegramBot, dict
 export async function getRecentThread(user:IUser):Promise<IThread>{
   try {
     let recentThread = await Thread.findOne({ owner: user }).sort({ created: -1 }).populate('owner')
-    // console.log(recentThread,'recentThread')
     return recentThread
   } catch(e){
     console.log('Failed to getRecentThread', e)
@@ -161,7 +154,6 @@ export async function addMessageToThread(params){
 
 export async function sendThreadToUser( params:{user:IUser, content?:string, bot:TelegramBot, dict:Dict} ){
   const { user, content, bot, dict } = params
-  console.log('sendThreadToUser')
   
   // let extract = extractAndClearJson(content)
   // let buttons = (extract.json && extract.json.buttons) ? generateAssistantsButtons({ buttons: extract.json.buttons, action: "settingsAboutAssistant", dict }) : null

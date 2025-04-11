@@ -31,26 +31,10 @@ export interface IChatCallParams {
 }
 
 export async function claudeCall(params: IChatCallParams) {
-  console.log('function: chatCall');
+  // console.log('function: chatCall');
   let { messages, temperature = 0.1, response_format = { type: 'text' } } = params;
   
-  try {
-    console.log(`Sending request to Claude API with ${messages.length} messages`);
-    
-    // Debug log for the first and last message
-    if (messages.length > 0) {
-      const firstMsg = messages[0];
-      const lastMsg = messages[messages.length - 1];
-      
-      console.log(`First message role: ${firstMsg.role}`);
-      console.log(`Last message role: ${lastMsg.role}`);
-      
-      // Check if it's a content array
-      if (lastMsg.content && Array.isArray(lastMsg.content)) {
-        console.log(`Last message has ${lastMsg.content.length} content items`);
-      }
-    }
-    
+  try {    
     // Prepare API request
     const chatParams = {
       model: process.env.CLAUDE_MODEL || "claude-3-haiku-20240307",
@@ -75,7 +59,7 @@ export async function claudeCall(params: IChatCallParams) {
       }
     );
     
-    console.log(`Received response from Claude API: ${request.status}`);
+    // console.log(`Received response from Claude API: ${request.status}`);
     return request.data;
   } catch(e) { 
     console.log('Claude API error:');
@@ -185,13 +169,13 @@ export async function formatMessagesWithImages(messages, user, bot) {
       }
       
       // Process images
-      console.log(`Processing ${message.images.length} images for user ${user.username || user.chatId}`);
+      // console.log(`Processing ${message.images.length} images for user ${user.username || user.chatId}`);
       
       for (const imageId of message.images) {
         try {
           // Get file link from Telegram
           const fileLink = await bot.getFileLink(imageId);
-          console.log(`Got file link: ${fileLink} for image ${imageId}`);
+          // console.log(`Got file link: ${fileLink} for image ${imageId}`);
           
           // Get image as base64
           const imageBase64 = await getImageAsBase64(fileLink);
@@ -206,7 +190,7 @@ export async function formatMessagesWithImages(messages, user, bot) {
             }
           });
           
-          console.log(`Successfully processed image ${imageId}`);
+          // console.log(`Successfully processed image ${imageId}`);
         } catch (error) {
           console.error(`Error processing image ${imageId}:`, error);
         }
@@ -228,7 +212,7 @@ export async function formatMessagesWithImages(messages, user, bot) {
 
 export async function getImageAsBase64(url) {
   try {
-    console.log(`Downloading image from ${url}`);
+    // console.log(`Downloading image from ${url}`);
     
     // Download the image
     const response = await axios({
@@ -240,7 +224,7 @@ export async function getImageAsBase64(url) {
     
     // Convert to base64
     const base64 = Buffer.from(response.data).toString('base64');
-    console.log(`Successfully converted image to base64 (${base64.length} chars)`);
+    // console.log(`Successfully converted image to base64 (${base64.length} chars)`);
     
     return base64;
   } catch (error) {

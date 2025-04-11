@@ -47,7 +47,7 @@ const startNavigation = async (msg = null, callbackQuery = null) => {
       username: msg.from.username || null,
     }).save()
   } else if (msg && user.username !== msg.from.username) {
-    console.log('Here')
+    // console.log('Here')
     user.username = msg.from.username || null
     await user.save()
   }
@@ -67,7 +67,7 @@ const startNavigation = async (msg = null, callbackQuery = null) => {
 bot.on('message', async ( msg, param ) => {
   try{
     if( msg.photo && msg.photo.length > 0 ){
-      console.log(msg.photo[msg.photo.length-1].file_id,'file_id')
+      // console.log(msg.photo[msg.photo.length-1].file_id,'file_id')
     }
 
     await startNavigation(msg, null)
