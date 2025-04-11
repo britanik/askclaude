@@ -135,6 +135,29 @@ export async function sendThreadToChatGPT(params) {
       temperature: 1 
     });
     
+    // Update token usage in the thread
+    if (chatCompletion.usage) {
+      // Initialize tokens object if it doesn't exist
+      if (!thread.tokens) {
+        thread.tokens = {
+          prompt: 0,
+          completion: 0,
+          total: 0
+        };
+      }
+      
+      // Update current thread tokens, safely handling undefined values
+      const inputTokens = chatCompletion.usage.input_tokens || 0;
+      const outputTokens = chatCompletion.usage.output_tokens || 0;
+      
+      thread.tokens.prompt = (thread.tokens.prompt || 0) + inputTokens;
+      thread.tokens.completion = (thread.tokens.completion || 0) + outputTokens;
+      thread.tokens.total = (thread.tokens.total || 0) + inputTokens + outputTokens;
+      
+      // Save the updated token counts
+      await thread.save();
+    }
+    
     return chatCompletion.content[0].text;
   } catch(e) {
     console.log('Failed to chatCall', e);

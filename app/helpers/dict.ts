@@ -31,12 +31,32 @@ export default class Dict {
         eng: () => `An error occurred`
       },
       SETTINGS_TITLE: {
-        rus: () => `Настройки`,
-        eng: () => `Settings`
+        rus: () => `⚙️ Настройки`,
+        eng: () => `⚙️ Settings`
+      },
+      SETTINGS_USAGE: {
+        rus: () => `Использовано токенов`,
+        eng: () => `Tokens used`
+      },
+      SETTINGS_USAGE_ADVICE: {
+        rus: () => `Для экономии токенов создавайте новый чат каждый раз как меняете тему разговора`,
+        eng: () => `To save tokens, create a new chat each time you change the topic of conversation.`
+      },
+      SETTINGS_FORMATS: {
+        rus: () => `Доступные форматы`,
+        eng: () => `Available formats`
+      },
+      SETTINGS_FORMATS_STRING: {
+        rus: () => `Текст, Фото, Голосовые сообщения`,
+        eng: () => `Text, Photo, Voice messages`
+      },
+      SETTINGS_LANGUAGE: {
+        rus: () => `Язык`,
+        eng: () => `Language`
       },
       NEW_CHAT_BUTTON: {
-        rus: () => `Новый чат`,
-        eng: () => `New Chat`
+        rus: () => `💬 Новый чат`,
+        eng: () => `💬 New Chat`
       },
     }
   }

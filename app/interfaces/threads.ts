@@ -11,6 +11,11 @@ export interface IThread extends Document {
     created?: Date, 
     name?: string,
     images?: string[],
-    mediaGroupId?: string  // Add this field
+    mediaGroupId?: string
   }[]
+  tokens?: {
+    prompt?: number,  // tokens used in the prompt (input)
+    completion?: number,  // tokens used in the completion (output)
+    total?: number  // total tokens used (input + output)
+  }
 }
