@@ -39,7 +39,7 @@ export async function getTokenUsage(user: IUser) {
     return {
       total: 0,
       monthly: 0,
-      limit: process.env.MONTHLY_TOKEN_LIMIT
+      limit: 100000
     };
   }
 }
