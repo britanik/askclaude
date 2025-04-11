@@ -94,8 +94,15 @@ export async function claudeCall(params: IChatCallParams) {
 }
 
 export async function getTranscription(msg, bot:TelegramBot):Promise<string>{
-  // console.log('function: getTranscription')
-  const fileName = `audio/temp_audio_${getReadableId()}.oga`;
+  // Create audio directory path
+  const audioDir = path.join(__dirname, '../audio');
+  
+  // Ensure audio directory exists
+  if (!fs.existsSync(audioDir)) {
+    fs.mkdirSync(audioDir, { recursive: true });
+  }
+
+  const fileName = path.join(audioDir, `temp_audio_${getReadableId()}.oga`);
 
   try {
 
@@ -133,8 +140,8 @@ export async function getTranscription(msg, bot:TelegramBot):Promise<string>{
     return openaiResponse.data.text
 
   } catch (error) {
-    // console.error('Error in getTranscription:', error);
-    console.log(error.response.data, 'error.response.data')
+    // console.error('Error in getTranscription:', error.response);
+    // console.log(error.response.data, 'error.response.data')
     throw error;
   } finally {
     // Delete the temporary file
