@@ -29,7 +29,15 @@ export default class Dict {
       ASSISTANT_ERROR: {
         rus: () => `Произошла ошибка`,
         eng: () => `An error occurred`
-      }
+      },
+      SETTINGS_TITLE: {
+        rus: () => `Настройки`,
+        eng: () => `Settings`
+      },
+      NEW_CHAT_BUTTON: {
+        rus: () => `Новый чат`,
+        eng: () => `New Chat`
+      },
     }
   }
 

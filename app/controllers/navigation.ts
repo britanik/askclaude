@@ -11,6 +11,8 @@ import { tmplAdmin } from "../templates/tmplAdmin"
 import { getTranscription } from "../services/ai"
 import { isAdmin } from "../helpers/helpers"
 
+import { tmplSettings } from '../templates/tmplSettings'
+
 export interface INavigationParams {
   user?: IUser
   callbackQuery?: any
@@ -124,7 +126,9 @@ export default class Navigation {
       action: async () => {
         await this.assistant().action()
       },
-      callback: async () => {},
+      callback: async () => {
+        await this.assistant().action()
+      },
     }
   }
 
@@ -136,8 +140,20 @@ export default class Navigation {
       callback: async () => {
         this.user = await userController.updatePref(this.user, 'lang', this.data.v)
         this.dict.setLang(this.data.v)
-        await this.assistant().action()
+        
+        // After setting language, show settings page first
+        await tmplSettings(this.user, this.bot, this.dict);        
       },
+    }
+  }
+
+  settings() {
+    return {
+      action: async () => {
+        const { tmplSettings } = require('../templates/tmplSettings');
+        await tmplSettings(this.user, this.bot, this.dict);
+      },
+      callback: async () => {},
     }
   }
 

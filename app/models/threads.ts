@@ -15,7 +15,7 @@ const ThreadSchema = new Schema<IThread>({
     "created": { type: Date, default: () => moment().utc() },
     "name": { type: String, default: undefined },
     "images": { type: [String], default: undefined },
-    "mediaGroupId": { type: String, default: undefined } // Add this field
+    "mediaGroupId": { type: String, default: undefined }
   }],
 })
 
