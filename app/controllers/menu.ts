@@ -4,9 +4,11 @@ export const menuButtons = [
   { name: '/start', method: 'start' },
   { name: '/new', method: 'new' },
   { name: '/settings', method: 'settings' },
+  { name: '/invite', method: 'invite' },
   { name: '/run_scheduler', method: 'adminRunScheduler' },
   { name: '/admin', method: 'admin' },
   { name: '/pm', method: 'pm' },
+  { name: '/updateUserSchema', method: 'updateUserSchema' }
 ];
 
 export const isMenuClicked = ( msg ):IMenuButton | false => {

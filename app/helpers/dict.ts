@@ -19,8 +19,8 @@ export default class Dict {
     return {
       // Register
       REGISTER_LANG: {
-        rus: () => `Please select your language`,
-        eng: () => `Please select your language`
+        rus: () => `ℹ️ Please select your language`,
+        eng: () => `ℹ️ Please select your language`
       },
       ASSISTANT_START: {
         rus: () => `Привет!`,
@@ -42,6 +42,10 @@ export default class Dict {
         rus: () => `Для экономии токенов создавайте новый чат каждый раз как меняете тему разговора`,
         eng: () => `To save tokens, create a new chat each time you change the topic of conversation.`
       },
+      SETTINGS_USAGE_REFS: {
+        rus: () => `Чтобы пополнить баланс токенов - пригласи друга использовать меня`,
+        eng: () => `Topup tokens balance by inviting friend to use me`
+      },
       SETTINGS_FORMATS: {
         rus: () => `Доступные форматы`,
         eng: () => `Available formats`
@@ -54,10 +58,14 @@ export default class Dict {
         rus: () => `Язык`,
         eng: () => `Language`
       },
-      NEW_CHAT_BUTTON: {
+      BUTTON_NEW_CHAT: {
         rus: () => `💬 Новый чат`,
         eng: () => `💬 New Chat`
       },
+      BUTTON_CODE: {
+        rus: () => `🤑 Ввести код`,
+        eng: () => `🤑 Enter code`
+      }
     }
   }
 

@@ -18,7 +18,8 @@ const UserSchema = new Schema<IUser>({
   messages: { type: Object, default: {} },
   data: { type: Object, default: {} },
   prefs: {
-    lang: { type: String }
+    lang: { type: String },
+    token_balance: { type: Number }
   }
 })
 

@@ -12,6 +12,8 @@ import { getTranscription } from "../services/ai"
 import { isAdmin } from "../helpers/helpers"
 
 import { tmplSettings } from '../templates/tmplSettings'
+import { tmplInvite } from "../templates/tmplInvite"
+import { updateUserSchema } from "./tokens"
 
 export interface INavigationParams {
   user?: IUser
@@ -157,6 +159,17 @@ export default class Navigation {
     }
   }
 
+  invite() {
+    return {
+      action: async () => {
+        await tmplInvite(this.user, this.bot, this.dict);
+      },
+      callback: async () => {
+        await tmplInvite(this.user, this.bot, this.dict);
+      },
+    }
+  }
+
   assistant() {
     return {
       action: async () => {
@@ -290,6 +303,17 @@ export default class Navigation {
         }
       },
       callback: async () => {}
+    }
+  }
+
+  updateUserSchema(){
+    return {
+      action: async () => {
+        console.log('updateUserSchema')
+        await updateUserSchema()
+      },
+      callback: async () => {
+      },
     }
   }
 }

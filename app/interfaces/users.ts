@@ -1,6 +1,5 @@
 import { Document } from "mongoose"
 
-
 export interface IUser extends Document {
   ID: number;
   name: string;
@@ -13,5 +12,6 @@ export interface IUser extends Document {
   data: Object,
   prefs: {
     lang: 'eng' | 'rus',
+    token_balance?: number,
   }
 }
