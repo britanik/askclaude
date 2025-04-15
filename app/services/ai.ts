@@ -37,7 +37,7 @@ export async function claudeCall(params: IChatCallParams) {
   try {    
     // Prepare API request
     const chatParams = {
-      model: process.env.CLAUDE_MODEL || "claude-3-haiku-20240307",
+      model: process.env.CLAUDE_MODEL, // Use primary model
       system: promptsDict.system(),
       messages: messages,
       max_tokens: +(process.env.CLAUDE_MAX_OUTPUT || 1000),
@@ -45,22 +45,57 @@ export async function claudeCall(params: IChatCallParams) {
       temperature,
     };
     
-    // Make API request
-    const request = await axios.post(
-      'https://api.anthropic.com/v1/messages', 
-      chatParams, 
-      { 
-        headers: {
-          'x-api-key': process.env.CLAUDE_TOKEN, 
-          'anthropic-version': '2023-06-01',
-          'Content-Type': 'application/json'
-        },
-        timeout: 60000 // 60-second timeout for image processing
+    try {
+      // Make API request with primary model
+      const request = await axios.post(
+        'https://api.anthropic.com/v1/messages', 
+        chatParams, 
+        { 
+          headers: {
+            'x-api-key': process.env.CLAUDE_TOKEN, 
+            'anthropic-version': '2023-06-01',
+            'Content-Type': 'application/json'
+          },
+          timeout: 60000 // 60-second timeout for image processing
+        }
+      );
+
+      return request.data;
+      
+    } catch (primaryError) {
+      // Check if it's a 529 error or any server error (5xx)
+      if (primaryError.response && (primaryError.response.status === 529 || 
+          (primaryError.response.status >= 500 && primaryError.response.status < 600))) {
+        
+        console.log(`Primary model ${process.env.CLAUDE_MODEL} failed with status ${primaryError.response.status}, trying backup model...`);
+        
+        // Use backup model if primary fails
+        const backupModel = process.env.CLAUDE_MODEL_BACKUP;
+                
+        // Update model in request
+        chatParams.model = backupModel;
+        
+        // Try with backup model
+        const backupRequest = await axios.post(
+          'https://api.anthropic.com/v1/messages', 
+          chatParams, 
+          { 
+            headers: {
+              'x-api-key': process.env.CLAUDE_TOKEN, 
+              'anthropic-version': '2023-06-01',
+              'Content-Type': 'application/json'
+            },
+            timeout: 60000
+          }
+        );
+        
+        console.log(`Received response from backup model ${backupModel}`);
+        return backupRequest.data;
+      } else {
+        // For other types of errors, rethrow
+        throw primaryError;
       }
-    );
-    
-    // console.log(`Received response from Claude API: ${request.status}`);
-    return request.data;
+    }
   } catch(e) { 
     console.log('Claude API error:');
     
