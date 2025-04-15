@@ -16,20 +16,7 @@ const ThreadSchema = new Schema<IThread>({
     "name": { type: String, default: undefined },
     "images": { type: [String], default: undefined },
     "mediaGroupId": { type: String, default: undefined }
-  }],
-  // Nested token tracking object with defaults
-  tokens: {
-    type: {
-      prompt: { type: Number, default: 0 },
-      completion: { type: Number, default: 0 },
-      total: { type: Number, default: 0 }
-    },
-    default: () => ({
-      prompt: 0,
-      completion: 0,
-      total: 0
-    })
-  }
+  }]
 })
 
 export default mongoose.model('Thread', ThreadSchema);

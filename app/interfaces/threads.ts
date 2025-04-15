@@ -13,9 +13,4 @@ export interface IThread extends Document {
     images?: string[],
     mediaGroupId?: string
   }[]
-  tokens?: {
-    prompt?: number,  // tokens used in the prompt (input)
-    completion?: number,  // tokens used in the completion (output)
-    total?: number  // total tokens used (input + output)
-  }
 }
