@@ -61,6 +61,7 @@ const startNavigation = async (msg = null, callbackQuery = null) => {
     if( code ){
       const isValid = await isValidInviteCode(code);
       if( isValid ){
+        console.log(user.prefs, 'user.prefs before processReferral')
         await processReferral(user, isValid);
         await sendMessage({ 
           text: "✅ Спасибо! Вы активировали код приглашения и получили 100,000 токенов!", 

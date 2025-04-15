@@ -48,7 +48,7 @@ export async function processReferral(newUser: IUser, invite: IInvite): Promise<
   try {
         
     // Check if the owner is trying to use their own code
-    if (invite.owner._id.toString() === newUser._id.toString()) {
+    if( invite.owner._id.equals(newUser._id) ){
       return false;
     }
     

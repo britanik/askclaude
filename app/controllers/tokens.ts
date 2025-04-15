@@ -30,7 +30,7 @@ export async function addTokens(user: IUser, reason: string): Promise<void> {
   try {
     // Initialize token_balance if it doesn't exist
     if (!user.prefs.token_balance) {
-      user.prefs.token_balance = 0;
+      user.prefs.token_balance = 100000;
     }
     
     // Add tokens

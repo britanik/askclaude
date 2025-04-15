@@ -39,12 +39,12 @@ export default class Dict {
         eng: () => `Tokens used`
       },
       SETTINGS_USAGE_ADVICE: {
-        rus: () => `Для экономии токенов создавайте новый чат каждый раз как меняете тему разговора`,
-        eng: () => `To save tokens, create a new chat each time you change the topic of conversation.`
+        rus: () => `Для экономии токенов создавайте новый чат /new каждый раз как меняете тему разговора`,
+        eng: () => `To save tokens, create a new chat (/new) each time you change the topic of conversation.`
       },
       SETTINGS_USAGE_REFS: {
-        rus: () => `Чтобы пополнить баланс токенов - пригласи друга использовать меня`,
-        eng: () => `Topup tokens balance by inviting friend to use me`
+        rus: () => `Чтобы пополнить баланс токенов - пригласите друзей /invite`,
+        eng: () => `Topup tokens balance by inviting friends /invite`
       },
       SETTINGS_FORMATS: {
         rus: () => `Доступные форматы`,
@@ -58,6 +58,10 @@ export default class Dict {
         rus: () => `Язык`,
         eng: () => `Language`
       },
+      ENTER_CODE: {
+        rus: () => `<strong>Введите код</strong> полученный в приглашении (или /new чтобы пропустить):`,
+        eng: () => `<strong>Enter the code</strong> received in the invitation (or /new to skip):`
+      },
       BUTTON_NEW_CHAT: {
         rus: () => `💬 Новый чат`,
         eng: () => `💬 New Chat`
@@ -65,7 +69,11 @@ export default class Dict {
       BUTTON_CODE: {
         rus: () => `🤑 Ввести код`,
         eng: () => `🤑 Enter code`
-      }
+      },
+      BUTTON_INVITE_FRIEND: {
+        rus: () => `🎁 Пригласить друга`,
+        eng: () => `🎁 Invite friend`
+      },
     }
   }
 

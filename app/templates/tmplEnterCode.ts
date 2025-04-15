@@ -39,8 +39,8 @@ ${formatNumber(tokenUsage.total)} / ${formatNumber(tokenUsage.limit)}
       { text: dict.getString('BUTTON_NEW_CHAT'), callback_data: '{"a":"new"}' },
     ],
     [
-      { text: dict.getString('BUTTON_INVITE_FRIEND'), callback_data: '{"a":"settings","v":"invite"}' },
-      { text: dict.getString('BUTTON_CODE'), callback_data: '{"a":"settings","v":"code"}' },
+      { text: dict.getString('BUTTON_INVITE_FRIEND'), callback_data: '{"a":"invite"}' },
+      { text: dict.getString('BUTTON_CODE'), callback_data: '{"a":"enterCode"}' },
     ]
   ];
 

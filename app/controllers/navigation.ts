@@ -14,6 +14,7 @@ import { isAdmin } from "../helpers/helpers"
 import { tmplSettings } from '../templates/tmplSettings'
 import { tmplInvite } from "../templates/tmplInvite"
 import { updateUserSchema } from "./tokens"
+import { isValidInviteCode, processReferral } from "./invites"
 
 export interface INavigationParams {
   user?: IUser
@@ -155,7 +156,60 @@ export default class Navigation {
         const { tmplSettings } = require('../templates/tmplSettings');
         await tmplSettings(this.user, this.bot, this.dict);
       },
-      callback: async () => {},
+      callback: async () => {
+        if (this.data.v === 'code') {
+          await this.enterCode().action();
+        }
+        if (this.data.v === 'invite') {
+          await this.invite().action();
+        }
+      },
+    }
+  }
+
+  enterCode() {
+    return {
+      action: async () => {
+        // Set step to wait for code input
+        this.user = await userController.addStep(this.user, 'enterCode');
+        await sendMessage({
+          text: this.dict.getString('ENTER_CODE'),
+          user: this.user,
+          bot: this.bot,
+        })
+      },
+      callback: async () => {
+        // Process the entered code
+        const enteredCode = this.msg.text;
+        
+        const isValid = await isValidInviteCode(enteredCode);
+        
+        if (isValid) {
+          const success = await processReferral(this.user, isValid);
+          
+          if (success) {
+            await sendMessage({ 
+              text: "✅ Спасибо! Вы активировали код приглашения и получили 100,000 токенов!", 
+              user: this.user, 
+              bot: this.bot 
+            });
+          } else {
+            await sendMessage({ 
+              text: "🚫 Не удалось активировать код. Возможно, вы уже использовали код приглашения или пытаетесь использовать свой собственный код.", 
+              user: this.user, 
+              bot: this.bot 
+            });
+          }
+        } else {
+          await sendMessage({ 
+            text: "🚫 Неверный код приглашения. Пожалуйста, проверьте код и попробуйте снова.", 
+            user: this.user, 
+            bot: this.bot 
+          });
+          // Keep in enterCodeStep to allow retry
+          return;
+        }
+      },
     }
   }
 
@@ -165,7 +219,6 @@ export default class Navigation {
         await tmplInvite(this.user, this.bot, this.dict);
       },
       callback: async () => {
-        await tmplInvite(this.user, this.bot, this.dict);
       },
     }
   }
@@ -316,4 +369,6 @@ export default class Navigation {
       },
     }
   }
+
+
 }

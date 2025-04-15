@@ -11,36 +11,17 @@ export async function getTokenUsage(user: IUser) {
     // Get all threads for this user
     const allThreads = await Thread.find({ owner: user._id });
     
-    // Get current month threads
-    const currentMonthStart = moment().startOf('month');
-    const currentMonthThreads = await Thread.find({ 
-      owner: user._id,
-      created: { $gte: currentMonthStart.toDate() }
-    });
-    
     // Calculate totals
     const totalTokens = allThreads.reduce((sum, thread) => {
       return sum + (thread.tokens?.total || 0);
     }, 0);
-    
-    const monthlyTokens = currentMonthThreads.reduce((sum, thread) => {
-      return sum + (thread.tokens?.total || 0);
-    }, 0);
-    
-    const monthlyLimit = parseInt(process.env.MONTHLY_TOKEN_LIMIT);
 
     return {
       total: totalTokens,
-      monthly: monthlyTokens,
-      limit: monthlyLimit
-    };
+      limit: user.prefs.token_balance
+    }
   } catch (e) {
     console.error('Error calculating token usage:', e);
-    return {
-      total: 0,
-      monthly: 0,
-      limit: 100000
-    };
   }
 }
 
