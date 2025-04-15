@@ -13,7 +13,7 @@ export async function updateUserSchema() {
     let updateCount = 0;
     for (const user of users) {
       if (user.prefs.token_balance === undefined) {
-        user.prefs.token_balance = 0;
+        user.prefs.token_balance = +process.env.TOKENS_START_AMOUNT || 100000;
         await user.save();
         updateCount++;
       }
