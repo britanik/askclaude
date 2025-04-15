@@ -8,7 +8,8 @@ export async function updateUserSchema() {
   // This function can be called manually with /updateUserSchema
   // to ensure all users have the token_balance field
   try {
-    const users = await User.find({ 'prefs.token_balance': { $exists: false } });
+    // get users with token_balance undefined or 0
+    const users = await User.find({ $or: [{ 'prefs.token_balance': { $exists: false } }, { 'prefs.token_balance': 0 }] });
     
     let updateCount = 0;
     for (const user of users) {
