@@ -40,9 +40,18 @@ export async function tmplAdmin(user: IUser, bot: TelegramBot) {
 
   let text = `${getUsersPart()}
   `
+  
+  // Add buttons for admin actions
+  let buttons = [
+    [
+      { text: "📢 Уведомление", callback_data: '{"a":"admin","v":"notifications"}' }
+    ]
+  ]
+  
   await sendMessage({
     text,
     user,
-    bot
+    bot,
+    buttons
   })
 }

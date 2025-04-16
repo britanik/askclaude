@@ -15,6 +15,7 @@ import { tmplSettings } from '../templates/tmplSettings'
 import { tmplInvite } from "../templates/tmplInvite"
 import { updateUserSchema } from "./tokens"
 import { isValidInviteCode, processReferral } from "./invites"
+import { sendNotificationToAllUsers } from "./notifications"
 
 export interface INavigationParams {
   user?: IUser
@@ -307,7 +308,11 @@ export default class Navigation {
       action: async () => {
         await tmplAdmin(this.user, this.bot)
       },
-      callback: async () => {},
+      callback: async () => {
+        if(this.data.v === 'notifications') {
+          await this.notifications().action();
+        }
+      },
     }
   }
 
@@ -356,6 +361,68 @@ export default class Navigation {
         }
       },
       callback: async () => {}
+    }
+  }
+
+  notifications() {
+    return {
+      action: async () => {
+        if (!isAdmin(this.user)) return;
+        this.user = await userController.addStep(this.user, 'notificationsText');
+        await sendMessage({
+          text: "Введите текст уведомления для всех пользователей:",
+          user: this.user,
+          bot: this.bot,
+        });
+      },
+      callback: async () => {
+      },
+    }
+  }
+
+  notificationsText() {
+    return {
+      action: async () => { },
+      callback: async () => {
+        if (!isAdmin(this.user)) return;
+        
+        const notificationText = this.msg.text;
+        
+        // Check if notification text is valid
+        if (!notificationText || notificationText.trim() === '') {
+          await sendMessage({
+            text: 'Текст уведомления не может быть пустым. Попробуйте снова:',
+            user: this.user,
+            bot: this.bot,
+          });
+          return;
+        }
+
+        // Confirm receipt of notification text and inform about sending process
+        await sendMessage({
+          text: "Идет отправка ...",
+          user: this.user,
+          bot: this.bot,
+        });
+        
+        // Send notifications using the controller
+        const results = await sendNotificationToAllUsers(notificationText, this.bot, this.user);
+        
+        // Send statistics back to admin
+        const statsMessage = `Результаты:
+Успешно: ${results.success}
+Ошибки: ${results.failed}
+Всего пользователей: ${results.total}`;
+        
+        await sendMessage({
+          text: statsMessage,
+          user: this.user,
+          bot: this.bot,
+        });
+        
+        // Reset the step
+        this.user = await userController.addStep(this.user, 'assistant');
+      }
     }
   }
 
