@@ -35,10 +35,15 @@ export async function handleUserReply(
   mediaGroupId?: string
 ): Promise<IThread> {
   let thread: IThread = await getRecentThread(user);
-  console.log(thread,'thread')
   const savedImagePaths = [];
   
+  // Log user message
+  console.log(`[USER MESSAGE] ${user.username || user.chatId}: ${userReply}`);
+  
+  // Log photo uploads if any
   if (images.length > 0) {
+    console.log(`[PHOTOS UPLOADED] ${user.username || user.chatId}: ${images.length} photo(s)`);
+    
     for (const imageId of images) {
       try {
         // Get file link from Telegram
@@ -52,6 +57,8 @@ export async function handleUserReply(
           telegramId: imageId,
           localPath: savedPath
         });
+        
+        console.log(`[PHOTO DETAILS] File ID: ${imageId}, Saved to: ${savedPath}`);
       } catch (error) {
         console.error(`Error saving image ${imageId}:`, error);
       }
@@ -105,6 +112,9 @@ export async function handleAssistantReply(thread:IThread, bot:TelegramBot, dict
   await bot.sendChatAction(thread.owner.chatId, "typing");
   
   let assistantReply:string = await sendThreadToChatGPT({ thread, bot }); // Pass the bot here
+
+  // Log assistant reply
+  console.log(`[ASSISTANT REPLY] To ${thread.owner.username || thread.owner.chatId}: ${assistantReply}`);
 
   // Add the assistant's message to thread.messages
   thread = await addMessageToThread({ thread, message: { role: 'assistant', content: assistantReply }});
