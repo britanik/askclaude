@@ -51,6 +51,7 @@ const startNavigation = async (msg = null, callbackQuery = null) => {
       name,
       chatId: chatId,
       username: msg.from.username || null,
+      step: 'assistant',
       prefs: {
         lang: 'rus', // Default language
         token_balance: process.env.TOKENS_START_AMOUNT // Initialize token balance for new users

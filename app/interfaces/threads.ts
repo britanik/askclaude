@@ -1,10 +1,11 @@
-import { Document } from "mongoose"
+import { Document, ObjectId } from "mongoose"
 import { IUser } from "./users"
 
 export interface IThread extends Document {
+  _id: ObjectId
   owner: IUser
   created?: Date
-  messages: { 
+  messages?: { 
     role: string, 
     content?: string, 
     tool_calls?: [], 

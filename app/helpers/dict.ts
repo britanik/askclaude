@@ -74,6 +74,10 @@ export default class Dict {
         rus: () => `🎁 Пригласить друга`,
         eng: () => `🎁 Invite friend`
       },
+      NOT_FOUND: {
+        rus: () => `Извините, произошла ошибка. Попробуйте начать заново /start или начните новый диалогк /new`,
+        eng: () => `Sorry, an error occurred. Try to start over /start or start a new dialog /new`
+      }
     }
   }
 

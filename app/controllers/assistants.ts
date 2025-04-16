@@ -35,6 +35,7 @@ export async function handleUserReply(
   mediaGroupId?: string
 ): Promise<IThread> {
   let thread: IThread = await getRecentThread(user);
+  console.log(thread,'thread')
   const savedImagePaths = [];
   
   if (images.length > 0) {
@@ -116,6 +117,10 @@ export async function handleAssistantReply(thread:IThread, bot:TelegramBot, dict
 export async function getRecentThread(user:IUser):Promise<IThread>{
   try {
     let recentThread = await Thread.findOne({ owner: user }).sort({ created: -1 }).populate('owner')
+    if (!recentThread) {
+      // If no thread is found, create a new one
+      recentThread = await createNewThread({ user, messages: [] });
+    }
     return recentThread
   } catch(e){
     console.log('Failed to getRecentThread', e)
