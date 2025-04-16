@@ -76,22 +76,25 @@ export default class Navigation {
 
   private determineMethod(): string | null {
     if (this.data && this[this.data.a]) {
-      return this.data.a
+      return this.data.a;
     }
-
+  
     if (this.msg) {
-      const menuItem: IMenuButton | false = isMenuClicked(this.msg)
+      const menuItem: IMenuButton | false = isMenuClicked(this.msg);
       if (menuItem) {
-        return menuItem.method
+        return menuItem.method;
       }
-
-      const step = userController.getStep(this.user)
+  
+      const step = userController.getStep(this.user);
       if (step) {
-        return step
+        return step;
       }
+      
+      // If no step is defined, default to assistant
+      return 'assistant';
     }
-
-    return null
+  
+    return null;
   }
 
   private determineActionType(method: string): 'action' | 'callback' {
