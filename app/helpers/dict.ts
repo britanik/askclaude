@@ -39,8 +39,8 @@ export default class Dict {
         eng: () => `Tokens used`
       },
       SETTINGS_USAGE_ADVICE: {
-        rus: () => `Для экономии токенов создавайте новый чат /new каждый раз как меняете тему разговора`,
-        eng: () => `To save tokens, create a new chat (/new) each time you change the topic of conversation.`
+        rus: () => `Для экономии токенов создавайте /new чат каждый раз как меняете тему разговора`,
+        eng: () => `To save tokens, create a /new chat each time you change the topic of conversation.`
       },
       SETTINGS_USAGE_REFS: {
         rus: () => `Чтобы пополнить баланс токенов - пригласите друзей /invite`,
@@ -71,8 +71,8 @@ export default class Dict {
         eng: () => `🤑 Enter code`
       },
       BUTTON_INVITE_FRIEND: {
-        rus: () => `🎁 Пригласить друга`,
-        eng: () => `🎁 Invite friend`
+        rus: () => `🎁 Пригласить`,
+        eng: () => `🎁 Invite`
       },
       NOT_FOUND: {
         rus: () => `Извините, произошла ошибка. Попробуйте начать заново /start или начните новый диалогк /new`,
