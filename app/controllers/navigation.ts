@@ -16,6 +16,7 @@ import { tmplInvite } from "../templates/tmplInvite"
 import { updateUserSchema } from "./tokens"
 import { isValidInviteCode, processReferral } from "./invites"
 import { sendNotificationToAllUsers } from "./notifications"
+import { generateImage } from "./images"
 
 export interface INavigationParams {
   user?: IUser
@@ -304,6 +305,17 @@ export default class Navigation {
           await sendMessage({ text: this.dict.getString('ASSISTANT_ERROR'), user: this.user, bot: this.bot });
         }
       }
+    }
+  }
+
+  image() {
+    return {
+      action: async () => {
+        await generateImage(this.user, this.bot);
+      },
+      callback: async () => {
+        await generateImage(this.user, this.bot);
+      },
     }
   }
 
