@@ -232,8 +232,8 @@ export default class Navigation {
       action: async () => {
         console.log('Assistant()')
         this.user = await userController.addStep(this.user, 'assistant')
-        const firstMessage = this.dict.getString('ASSISTANT_START')
-        let thread = await startAssistant(this.user, firstMessage)
+        
+        let thread = await startAssistant(this.user, this.dict.getString('ASSISTANT_START'))
         await handleAssistantReply(thread, this.bot, this.dict)
       },
       callback: async () => {
@@ -284,6 +284,7 @@ export default class Navigation {
           }
           
           // Now process the message normally
+          console.log('process the message normally')
           let threadWithUserMessage = await handleUserReply(this.user, text, this.bot, images, mediaGroupId);
           
           // Only send to Claude if this isn't a media group or it's the first message after waiting

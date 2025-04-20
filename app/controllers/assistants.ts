@@ -108,19 +108,25 @@ export async function handleUserReply(
 }
 
 export async function handleAssistantReply(thread:IThread, bot:TelegramBot, dict):Promise<void>{
-  // Show "Thinking" status while processing
-  await bot.sendChatAction(thread.owner.chatId, "typing");
+  // Get fresh thread before processing
+  const freshThread = await Thread.findById(thread._id).populate('owner');
   
-  let assistantReply:string = await sendThreadToChatGPT({ thread, bot }); // Pass the bot here
+  // Show "Thinking" status while processing
+  await bot.sendChatAction(freshThread.owner.chatId, "typing");
+  
+  let assistantReply = await sendThreadToChatGPT({ thread: freshThread, bot });
 
   // Log assistant reply
-  console.log(`[ASSISTANT REPLY] To ${thread.owner.username || thread.owner.chatId}: ${assistantReply}`);
+  console.log(`[ASSISTANT REPLY] To ${freshThread.owner.username || freshThread.owner.chatId}: ${assistantReply}`);
 
   // Add the assistant's message to thread.messages
-  thread = await addMessageToThread({ thread, message: { role: 'assistant', content: assistantReply }});
+  const updatedThread = await addMessageToThread({ 
+    thread: freshThread, 
+    message: { role: 'assistant', content: assistantReply }
+  });
 
-  if(assistantReply){
-    await sendThreadToUser({ user: thread.owner, content: assistantReply, bot, dict });
+  if( assistantReply ){
+    await sendThreadToUser({ user: updatedThread.owner, content: assistantReply, bot, dict });
   }
 }
 
@@ -176,8 +182,15 @@ export async function sendThreadToChatGPT(params) {
 export async function addMessageToThread(params){
   try {
     const { thread, message } = params
-    thread.messages.push(message)
-    return await thread.save()
+
+    // First, get the latest version of the thread from the database
+    const freshThread = await Thread.findById(thread._id).populate('owner');
+    if (!freshThread) {
+      throw new Error(`Thread with ID ${thread._id} not found`);
+    }
+
+    freshThread.messages.push(message)
+    return await freshThread.save()
   } catch(e){
     console.log('Failed to addMessageToThread')
   }
@@ -185,8 +198,11 @@ export async function addMessageToThread(params){
 
 export async function sendThreadToUser( params:{user:IUser, content?:string, bot:TelegramBot, dict:Dict} ){
   const { user, content, bot, dict } = params
-  
   // let extract = extractAndClearJson(content)
   // let buttons = (extract.json && extract.json.buttons) ? generateAssistantsButtons({ buttons: extract.json.buttons, action: "settingsAboutAssistant", dict }) : null
-  await sendMessage({ text: content, user, bot })
+  try {
+    await sendMessage({ text: content, user, bot })
+  } catch(e){
+    console.log('Failed to sendThreadToUser', e)
+  }
 }
