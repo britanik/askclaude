@@ -62,6 +62,14 @@ export default class Dict {
         rus: () => `<strong>Введите код</strong> полученный в приглашении (или /new чтобы пропустить):`,
         eng: () => `<strong>Enter the code</strong> received in the invitation (or /new to skip):`
       },
+      IMAGE_ASK_PROMPT: {
+        rus: () => `Опишите изображение:`,
+        eng: () => `Describe the image:`
+      },
+      IMAGE_ASK_PROMPT_VALIDATE_ERROR: {
+        rus: () => `Пожалуйста, введите текст`,
+        eng: () => `Please enter text`
+      },
       BUTTON_NEW_CHAT: {
         rus: () => `💬 Новый чат`,
         eng: () => `💬 New Chat`

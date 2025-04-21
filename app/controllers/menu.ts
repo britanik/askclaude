@@ -5,7 +5,7 @@ export const menuButtons = [
   { name: '/new', method: 'new' },
   { name: '/settings', method: 'settings' },
   { name: '/invite', method: 'invite' },
-  { name: '/image', method: 'image' },
+  { name: '/image', method: 'imageAskPrompt' },
   { name: '/run_scheduler', method: 'adminRunScheduler' },
   { name: '/admin', method: 'admin' },
   { name: '/pm', method: 'pm' },

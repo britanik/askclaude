@@ -308,15 +308,73 @@ export default class Navigation {
     }
   }
 
-  image() {
+  imageAskPrompt() {
     return {
       action: async () => {
-        await generateImage(this.user, this.bot);
+        // add step "image"
+        this.user = await userController.addStep(this.user, 'imageAskPrompt');
+
+        // send message to user
+        await sendMessage({
+          text: this.dict.getString('IMAGE_ASK_PROMPT'),
+          user: this.user,
+          bot: this.bot,
+        });
       },
       callback: async () => {
-        await generateImage(this.user, this.bot);
+        let prompt = this.msg.text
+        if (!prompt || prompt.trim() === '') {
+          await sendMessage({
+            text: this.dict.getString('IMAGE_ASK_PROMPT_VALIDATE_ERROR'),
+            user: this.user,
+            bot: this.bot,
+          });
+          return;
+        }
+
+        await generateImage(prompt, this.user, this.bot);
       },
     }
+  }
+
+  imageRetry() {
+    return {
+      action: async () => {
+        // This should not be called directly as an action
+        await sendMessage({
+          text: this.dict.getString('NOT_FOUND'),
+          user: this.user,
+          bot: this.bot
+        });
+      },
+      callback: async () => {
+        try {
+          const imageId = this.data.id;
+          
+          if (!imageId) {
+            await sendMessage({
+              text: 'Image ID is missing. Please try generating a new image.',
+              user: this.user,
+              bot: this.bot
+            });
+            return;
+          }
+          
+          // Import regenerateImage function
+          const { regenerateImage } = require('../controllers/images');
+          
+          // Regenerate the image
+          await regenerateImage(imageId, this.user, this.bot);
+        } catch (error) {
+          console.error('Error handling image retry:', error);
+          await sendMessage({
+            text: 'Sorry, there was an error regenerating the image. Please try again later.',
+            user: this.user,
+            bot: this.bot
+          });
+        }
+      },
+    };
   }
 
   admin() {
@@ -452,6 +510,5 @@ export default class Navigation {
       },
     }
   }
-
 
 }
