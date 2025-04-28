@@ -126,7 +126,7 @@ export async function handleImageGeneration(
     isGenerating = false;
     clearInterval(typingInterval);
     
-    // console.error('Error generating image:', error);
+    console.error('Error generating image:', error);
     await sendMessage({
       text: 'Sorry, there was an error generating the image. Please try again later.',
       user,
@@ -166,34 +166,34 @@ export async function generateOpenAIImage(prompt: string, user: IUser, bot: Tele
 }
 
 // GetImg image generation function
-export async function generateGetImgImage(prompt: string, user: IUser, bot: TelegramBot): Promise<void> {
-  console.log('generateGetImgImage')
-  const generateImage = async (prompt: string): Promise<string> => {
-    const response = await axios.post(
-      'https://api.getimg.ai/v1/essential/text-to-image',
-      {
-        style: 'photorealism',
-        width: 1024,
-        height: 1024,
-        output_format: 'jpeg',
-        response_format: 'url',
-        prompt: prompt
-      },
-      {
-        headers: {
-          'accept': 'application/json',
-          'content-type': 'application/json',
-          'authorization': `Bearer ${process.env.GETIMG_API_KEY}`
-        }
-      }
-    );
+// export async function generateGetImgImage(prompt: string, user: IUser, bot: TelegramBot): Promise<void> {
+//   console.log('generateGetImgImage')
+//   const generateImage = async (prompt: string): Promise<string> => {
+//     const response = await axios.post(
+//       'https://api.getimg.ai/v1/essential/text-to-image',
+//       {
+//         style: 'photorealism',
+//         width: 1024,
+//         height: 1024,
+//         output_format: 'jpeg',
+//         response_format: 'url',
+//         prompt: prompt
+//       },
+//       {
+//         headers: {
+//           'accept': 'application/json',
+//           'content-type': 'application/json',
+//           'authorization': `Bearer ${process.env.GETIMG_API_KEY}`
+//         }
+//       }
+//     );
     
-    // Extract image URL from response
-    return response.data.url;
-  };
+//     // Extract image URL from response
+//     return response.data.url;
+//   };
   
-  await handleImageGeneration(prompt, user, bot, generateImage, 'getimg');
-}
+//   await handleImageGeneration(prompt, user, bot, generateImage, 'getimg');
+// }
 
 // Function to get an image either from local storage or by Telegram file ID
 export async function getStoredImage(imageId: string): Promise<{ buffer?: Buffer, telegramFileId?: string, error?: string }> {
@@ -270,9 +270,9 @@ export async function regenerateImage(imageId: string, user: IUser, bot: Telegra
       case 'openai':
         await generateOpenAIImage(imageDoc.prompt, user, bot);
         break;
-      case 'getimg':
-        await generateGetImgImage(imageDoc.prompt, user, bot);
-        break;
+      // case 'getimg':
+      //   await generateGetImgImage(imageDoc.prompt, user, bot);
+      //   break;
       default:
         // If provider is unknown (for backward compatibility)
         // Default to OpenAI

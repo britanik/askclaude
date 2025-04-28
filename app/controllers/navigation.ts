@@ -16,7 +16,7 @@ import { tmplInvite } from "../templates/tmplInvite"
 import { updateUserSchema } from "./tokens"
 import { isValidInviteCode, processReferral } from "./invites"
 import { sendNotificationToAllUsers } from "./notifications"
-import { generateOpenAIImage, generateGetImgImage } from "./images"
+import { generateOpenAIImage } from "./images"
 
 export interface INavigationParams {
   user?: IUser
@@ -324,35 +324,6 @@ export default class Navigation {
         }
 
         await generateOpenAIImage(prompt, this.user, this.bot);
-      },
-    }
-  }
-
-  image2AskPrompt() {
-    return {
-      action: async () => {
-        // add step "image2AskPrompt"
-        this.user = await userController.addStep(this.user, 'image2AskPrompt');
-
-        // send message to user
-        await sendMessage({
-          text: this.dict.getString('IMAGE_ASK_PROMPT'),
-          user: this.user,
-          bot: this.bot,
-        });
-      },
-      callback: async () => {
-        let prompt = this.msg.text
-        if (!prompt || prompt.trim() === '') {
-          await sendMessage({
-            text: this.dict.getString('IMAGE_ASK_PROMPT_VALIDATE_ERROR'),
-            user: this.user,
-            bot: this.bot,
-          });
-          return;
-        }
-
-        await generateGetImgImage(prompt, this.user, this.bot);
       },
     }
   }
