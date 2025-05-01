@@ -32,6 +32,37 @@ export async function saveImageLocally(imageBuffer: Buffer): Promise<string> {
   });
 }
 
+// Function to check content with OpenAI Moderation API
+export async function moderateContent(prompt: string): Promise<{flagged: boolean, categories: any}> {
+  try {
+    const response = await axios.post(
+      'https://api.openai.com/v1/moderations',
+      {
+        input: prompt
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+        }
+      }
+    );
+    
+    // Return the moderation result
+    return {
+      flagged: response.data.results[0].flagged,
+      categories: response.data.results[0].categories
+    };
+  } catch (error) {
+    console.error('Error calling moderation API:', error);
+    // Default to flagged: false when API call fails
+    return {
+      flagged: false,
+      categories: {}
+    };
+  }
+}
+
 // Common function to handle image generation process
 export async function handleImageGeneration(
   prompt: string, 
@@ -167,48 +198,64 @@ export async function generateOpenAIImage(prompt: string, user: IUser, bot: Tele
     await handleImageGeneration(prompt, user, bot, generateImage, 'openai');
 
   } catch (error) {
-
-    console.error('Error generating image:', error.response.data);
+    console.error('Error generating image:', error.response?.data || error);
     await sendMessage({
       text: 'Sorry, there was an error generating the image. Please try again later.',
       user,
       bot
     });
-
-    return;
-
   }
 }
 
 // GetImg image generation function
-// export async function generateGetImgImage(prompt: string, user: IUser, bot: TelegramBot): Promise<void> {
-//   console.log('generateGetImgImage')
-//   const generateImage = async (prompt: string): Promise<string> => {
-//     const response = await axios.post(
-//       'https://api.getimg.ai/v1/essential/text-to-image',
-//       {
-//         style: 'photorealism',
-//         width: 1024,
-//         height: 1024,
-//         output_format: 'jpeg',
-//         response_format: 'url',
-//         prompt: prompt
-//       },
-//       {
-//         headers: {
-//           'accept': 'application/json',
-//           'content-type': 'application/json',
-//           'authorization': `Bearer ${process.env.GETIMG_API_KEY}`
-//         }
-//       }
-//     );
+export async function generateGetImgImage(prompt: string, user: IUser, bot: TelegramBot): Promise<void> {
+  console.log('generateGetImgImage');
+  const generateImage = async (prompt: string): Promise<string> => {
+    const response = await axios.post(
+      'https://api.getimg.ai/v1/essential/text-to-image',
+      {
+        style: 'photorealism',
+        width: 1024,
+        height: 1024,
+        output_format: 'jpeg',
+        response_format: 'url',
+        prompt: prompt
+      },
+      {
+        headers: {
+          'accept': 'application/json',
+          'content-type': 'application/json',
+          'authorization': `Bearer ${process.env.GETIMG_API_KEY}`
+        }
+      }
+    );
     
-//     // Extract image URL from response
-//     return response.data.url;
-//   };
+    // Extract image URL from response
+    return response.data.url;
+  };
   
-//   await handleImageGeneration(prompt, user, bot, generateImage, 'getimg');
-// }
+  await handleImageGeneration(prompt, user, bot, generateImage, 'getimg');
+}
+
+// Main image generation function with moderation
+export async function generateImage(prompt: string, user: IUser, bot: TelegramBot): Promise<void> {
+  try {
+    // First, moderate the content
+    const moderationResult = await moderateContent(prompt);
+    
+    // Check if content is flagged as sexual
+    if (moderationResult.flagged) {            
+      // Send to GetImg for potentially sensitive content
+      await generateGetImgImage(prompt, user, bot);
+    } else {
+      // Content is safe or flagged for non-sexual reasons, send to DALL-E
+      await generateOpenAIImage(prompt, user, bot);
+    }
+  } catch (error) {
+    console.error('Error in generateImage:', error);
+    await sendMessage({ text: 'Sorry, there was an error generating the image. Please try again later.', user, bot });
+  }
+}
 
 // Function to get an image either from local storage or by Telegram file ID
 export async function getStoredImage(imageId: string): Promise<{ buffer?: Buffer, telegramFileId?: string, error?: string }> {
@@ -280,20 +327,8 @@ export async function regenerateImage(imageId: string, user: IUser, bot: Telegra
     // Log the regeneration attempt
     console.log(`Regenerating image with prompt: "${imageDoc.prompt}" for user ${user.username || user.chatId}, using provider: ${imageDoc.provider}`);
     
-    // Use the stored provider to determine which API to use
-    switch (imageDoc.provider) {
-      case 'openai':
-        await generateOpenAIImage(imageDoc.prompt, user, bot);
-        break;
-      // case 'getimg':
-      //   await generateGetImgImage(imageDoc.prompt, user, bot);
-      //   break;
-      default:
-        // If provider is unknown (for backward compatibility)
-        // Default to OpenAI
-        console.log(`Provider unknown for image ${imageId}, defaulting to OpenAI`);
-        await generateOpenAIImage(imageDoc.prompt, user, bot);
-    }
+    // Generate new image using the stored prompt
+    await generateImage(imageDoc.prompt, user, bot);
     
   } catch (error) {
     console.error('Error regenerating image:', error);

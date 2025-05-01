@@ -16,8 +16,11 @@ import { tmplInvite } from "../templates/tmplInvite"
 import { getMinutesToNextHour, isTokenLimit, updateUserSchema } from "./tokens"
 import { isValidInviteCode, processReferral } from "./invites"
 import { sendNotificationToAllUsers } from "./notifications"
-import { generateOpenAIImage, getPeriodImageLimit, isImageLimit } from "./images"
+import { getPeriodImageLimit, isImageLimit } from "./images"
 import { IThread } from "../interfaces/threads"
+
+// Import the generateImage function (the new one with moderation)
+import { generateImage } from "./images"
 
 export interface INavigationParams {
   user?: IUser
@@ -327,7 +330,7 @@ export default class Navigation {
           await sendMessage({ text: this.dict.getString('SETTINGS_IMAGE_LIMIT_EXCEEDED', { limit: await getPeriodImageLimit(this.user) } ), user: this.user, bot: this.bot });
           return;
         }
-
+  
         this.user = await userController.addStep(this.user, 'image');
         await sendMessage({ text: this.dict.getString('IMAGE_ASK_PROMPT'), user: this.user, bot: this.bot, });
       },
@@ -336,14 +339,14 @@ export default class Navigation {
           await sendMessage({ text: this.dict.getString('SETTINGS_IMAGE_LIMIT_EXCEEDED', { limit: await getPeriodImageLimit(this.user) } ), user: this.user, bot: this.bot });
           return;
         }
-
+  
         let prompt = this.msg.text
         if (!prompt || prompt.trim() === '') {
           await sendMessage({ text: this.dict.getString('IMAGE_ASK_PROMPT_VALIDATE_ERROR'), user: this.user, bot: this.bot, });
           return;
         }
-
-        await generateOpenAIImage(prompt, this.user, this.bot);
+  
+        await generateImage(prompt, this.user, this.bot);
       },
     }
   }
@@ -359,7 +362,7 @@ export default class Navigation {
           await sendMessage({ text: this.dict.getString('SETTINGS_IMAGE_LIMIT_EXCEEDED', { limit: await getPeriodImageLimit(this.user) } ), user: this.user, bot: this.bot });
           return;
         }
-
+  
         try {
           const imageId = this.data.id;
           
