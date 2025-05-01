@@ -16,7 +16,7 @@ import { tmplInvite } from "../templates/tmplInvite"
 import { getMinutesToNextHour, isTokenLimit, updateUserSchema } from "./tokens"
 import { isValidInviteCode, processReferral } from "./invites"
 import { sendNotificationToAllUsers } from "./notifications"
-import { generateOpenAIImage } from "./images"
+import { generateOpenAIImage, getPeriodImageLimit, isImageLimit } from "./images"
 import { IThread } from "../interfaces/threads"
 
 export interface INavigationParams {
@@ -320,15 +320,23 @@ export default class Navigation {
     }
   }
 
-  imageAskPrompt() {
+  image() {
     return {
       action: async () => {
-        this.user = await userController.addStep(this.user, 'imageAskPrompt');
+        if( await isImageLimit(this.user) ){
+          await sendMessage({ text: this.dict.getString('SETTINGS_IMAGE_LIMIT_EXCEEDED', { limit: await getPeriodImageLimit(this.user) } ), user: this.user, bot: this.bot });
+          return;
+        }
 
-        // send message to user
+        this.user = await userController.addStep(this.user, 'image');
         await sendMessage({ text: this.dict.getString('IMAGE_ASK_PROMPT'), user: this.user, bot: this.bot, });
       },
       callback: async () => {
+        if( await isImageLimit(this.user) ){
+          await sendMessage({ text: this.dict.getString('SETTINGS_IMAGE_LIMIT_EXCEEDED', { limit: await getPeriodImageLimit(this.user) } ), user: this.user, bot: this.bot });
+          return;
+        }
+
         let prompt = this.msg.text
         if (!prompt || prompt.trim() === '') {
           await sendMessage({ text: this.dict.getString('IMAGE_ASK_PROMPT_VALIDATE_ERROR'), user: this.user, bot: this.bot, });
@@ -344,13 +352,14 @@ export default class Navigation {
     return {
       action: async () => {
         // This should not be called directly as an action
-        await sendMessage({
-          text: this.dict.getString('NOT_FOUND'),
-          user: this.user,
-          bot: this.bot
-        });
+        await sendMessage({ text: this.dict.getString('NOT_FOUND'), user: this.user, bot: this.bot }) 
       },
       callback: async () => {
+        if( await isImageLimit(this.user) ){
+          await sendMessage({ text: this.dict.getString('SETTINGS_IMAGE_LIMIT_EXCEEDED', { limit: await getPeriodImageLimit(this.user) } ), user: this.user, bot: this.bot });
+          return;
+        }
+
         try {
           const imageId = this.data.id;
           

@@ -65,6 +65,18 @@ export default class Dict {
         rus: () => `Обновится через {minutes} мин.`,
         eng: () => `Refresh in {minutes} min.`
       },
+      SETTINGS_IMAGE_LIMIT_EXCEEDED: {
+        rus: () => `Лимит изображений ({limit} в день) исчерпан. Вы можете продолжить завтра.`,
+        eng: () => `You have reached the hourly image limit. You can continue tomorrow.`
+      },
+      SETTINGS_IMAGE_LIMIT: {
+        rus: () => `Лимит изображений`,
+        eng: () => `Image limit`
+      },
+      SETTINGS_IMAGE_LIMIT_RESET: {
+        rus: () => `Обновится завтра.`,
+        eng: () => `Resets tomorrow.`
+      },
       ENTER_CODE: {
         rus: () => `<strong>Введите код</strong> полученный в приглашении (или /new чтобы пропустить):`,
         eng: () => `<strong>Enter the code</strong> received in the invitation (or /new to skip):`

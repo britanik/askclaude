@@ -3,11 +3,13 @@ import { IUser } from '../interfaces/users';
 import { sendMessage } from '../templates/sendMessage';
 import TelegramBot from 'node-telegram-bot-api';
 import Image from '../models/images';
+import Invite from '../models/invites';
 import { InlineKeyboardButton } from 'node-telegram-bot-api';
 import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { ImageProvider } from '../interfaces/image';
+import moment from 'moment';
 
 // Function to save image locally
 export async function saveImageLocally(imageBuffer: Buffer): Promise<string> {
@@ -137,32 +139,45 @@ export async function handleImageGeneration(
 
 // OpenAI image generation function
 export async function generateOpenAIImage(prompt: string, user: IUser, bot: TelegramBot): Promise<void> {
-  console.log('generateOpenAIImage')
-  const generateImage = async (prompt: string): Promise<string> => {
-    const response = await axios.post(
-      'https://api.openai.com/v1/images/generations',
-      {
-        model: "dall-e-3",
-        style: 'vivid', // vivid or natural
-        prompt: prompt,
-        n: 1,
-        size: "1024x1024",
-        response_format: "url"
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+  try {
+    const generateImage = async (prompt: string): Promise<string> => {
+      const response = await axios.post(
+        'https://api.openai.com/v1/images/generations',
+        {
+          model: "dall-e-3",
+          style: 'vivid', // vivid or natural
+          prompt: prompt,
+          n: 1,
+          size: "1024x1024",
+          response_format: "url"
         },
-        timeout: 120000
-      }
-    );
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+          },
+          timeout: 120000
+        }
+      );
+      
+      // Extract image URL from response
+      return response.data.data[0].url;
+    };
     
-    // Extract image URL from response
-    return response.data.data[0].url;
-  };
-  
-  await handleImageGeneration(prompt, user, bot, generateImage, 'openai');
+    await handleImageGeneration(prompt, user, bot, generateImage, 'openai');
+
+  } catch (error) {
+
+    console.error('Error generating image:', error.response.data);
+    await sendMessage({
+      text: 'Sorry, there was an error generating the image. Please try again later.',
+      user,
+      bot
+    });
+
+    return;
+
+  }
 }
 
 // GetImg image generation function
@@ -287,5 +302,63 @@ export async function regenerateImage(imageId: string, user: IUser, bot: Telegra
       user,
       bot
     });
+  }
+}
+
+export async function isImageLimit(user: IUser) {
+  console.log('Checking token limit for user:', user._id);
+  try {
+    const usage: number = await getPeriodImageUsage(user);
+    const periodLimit: number = await getPeriodImageLimit(user);
+        
+    if (usage >= periodLimit) {
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('Error checking token limit:', error);
+    return false;
+  }
+}
+
+export async function getPeriodImageUsage(user: IUser):Promise<number> {
+  try {
+    const startOfDay = moment().startOf('day').toDate();
+    const imageCount = await Image.countDocuments({
+      user: user._id,
+      created: { $gte: startOfDay }
+    });
+    
+    return imageCount;
+  } catch (error) {
+    console.error('Error getting period image usage:', error);
+    return 0;
+  }
+}
+
+export async function getPeriodImageLimit(user: IUser): Promise<number> {
+  try {
+    // Base limit of images per day
+    const baseLimit = +process.env.IMAGES_DAILY_LIMIT;
+    
+    // Get user's invite code
+    const invite = await Invite.findOne({ owner: user._id });
+    
+    // Calculate bonus based on referrals
+    let referralBonus = 0;
+    if (invite) {
+      // Each referred user adds IMAGES_PER_REFERRAL to the limit
+      const usedInvitesCount = invite.usedBy.length;
+      referralBonus = usedInvitesCount * (+process.env.IMAGES_REFERRAL_BONUS);
+    }
+    
+    const totalLimit = baseLimit + referralBonus;
+    
+    return totalLimit;
+  } catch (error) {
+    console.error('Error calculating period image limit:', error);
+    // Return default limit in case of error
+    return +(process.env.IMAGES_DAY_LIMIT || 10);
   }
 }

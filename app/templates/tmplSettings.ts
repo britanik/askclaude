@@ -3,11 +3,16 @@ import { sendMessage } from "./sendMessage"
 import TelegramBot from "node-telegram-bot-api"
 import Dict from "../helpers/dict"
 import { getMinutesToNextHour, getPeriodTokenLimit, getPeriodTokenUsage } from "../controllers/tokens";
+import { getPeriodImageLimit, getPeriodImageUsage } from "../controllers/images";
 
 export async function tmplSettings(user: IUser, bot: TelegramBot, dict: Dict) {
   // Get token usage statistics
   const tokenUsage:number = await getPeriodTokenUsage(user);
   const tokenLimit:number = await getPeriodTokenLimit(user);
+  
+  // Get image usage statistics
+  const imageUsage:number = await getPeriodImageUsage(user);
+  const imageLimit:number = await getPeriodImageLimit(user);
   
   // Format token numbers with thousands separator and handle undefined values
   const formatNumber = (num: number | undefined) => {
@@ -23,6 +28,14 @@ export async function tmplSettings(user: IUser, bot: TelegramBot, dict: Dict) {
       return ''
     }
   }
+
+  const stringImageRefresh = () => {
+    if( imageUsage > imageLimit ){
+      return `${dict.getString('SETTINGS_IMAGE_LIMIT_RESET')}`
+    } else {
+      return ''
+    }
+  }
   
   let text = `<b>${dict.getString('SETTINGS_TITLE')}</b>
  
@@ -34,6 +47,9 @@ ${user.prefs.lang === 'eng' ? 'English' : 'Русский'}
 
 <b>${dict.getString('SETTINGS_USAGE')}:</b>
 ${formatNumber(tokenUsage)} / ${formatNumber(tokenLimit)} в час. ${stringTokensRefresh()}
+
+<b>${dict.getString('SETTINGS_IMAGE_LIMIT')}:</b>
+${formatNumber(imageUsage)} / ${formatNumber(imageLimit)} в день. ${stringImageRefresh()}
 
 ℹ️ <i>${dict.getString('SETTINGS_USAGE_ADVICE')}</i>
 

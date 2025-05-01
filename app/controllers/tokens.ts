@@ -132,7 +132,7 @@ export async function logTokenUsage(user: IUser, thread: any, inputTokens: numbe
         thread: thread._id,
         type: 'completion',
         amount: outputTokens,
-        model: model,
+        modelName: model,
         description: `Output tokens for thread ${thread._id}`
       }).save();
     }
