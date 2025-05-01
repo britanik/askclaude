@@ -1,7 +1,7 @@
 import { IUser } from '../interfaces/users';
 import Invite, { IInvite } from '../models/invites'
-import { addTokens } from './tokens';
 
+// Generate a random 5-digit code
 function generateRandomCode(): string {
   return Math.floor(10000 + Math.random() * 90000).toString();
 }
@@ -39,6 +39,7 @@ export async function generateInviteCode(user: IUser): Promise<string> {
   }
 }
 
+// Check if an invite code is valid and retrieve the associated invite
 export async function isValidInviteCode(code: string): Promise<IInvite | null> {
   return await Invite.findOne({ code }).populate('owner');
 }
@@ -61,15 +62,7 @@ export async function processReferral(newUser: IUser, invite: IInvite): Promise<
     // Add new user to the list of users who used this code
     invite.usedBy.push(newUser);
     await invite.save();
-    
-    // Credit tokens to both users
-
-    // Credit the invite owner
-    await addTokens(invite.owner, 'referral_bonus');
-    
-    // Credit the new user
-    await addTokens(newUser, 'referral_welcome');
-    
+            
     return true;
   } catch (error) {
     console.error('Error processing referral:', error);
@@ -77,6 +70,7 @@ export async function processReferral(newUser: IUser, invite: IInvite): Promise<
   }
 }
 
+// Extract a referral code from the message
 export function extractReferralCode(msg: any): string | null {
   // No message or no text - no code
   if (!msg || !msg.text) {

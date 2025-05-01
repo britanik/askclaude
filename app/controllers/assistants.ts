@@ -7,7 +7,7 @@ import { IUser } from "../interfaces/users"
 import { IMessage } from "../interfaces/messages"
 import { sendMessage } from "../templates/sendMessage"
 import { claudeCall, formatMessagesWithImages, saveImagePermanently } from "../services/ai"
-import { logTokenUsage } from "./tokens"
+import { isTokenLimit, logTokenUsage } from "./tokens"
 
 export async function startAssistant(user: IUser, firstMessage: string): Promise<IThread> {
   try {
@@ -49,22 +49,14 @@ export async function createNewThread(params): Promise<IThread> {
   }
 }
 
-export async function handleUserReply(
-  user: IUser, 
-  userReply: string, 
-  bot: TelegramBot, 
-  images: string[] = [], 
-  mediaGroupId?: string
-): Promise<IThread> {
+export async function handleUserReply( user: IUser, userReply: string, bot: TelegramBot, images: string[] = [], mediaGroupId?: string ): Promise<IThread> {
   let thread: IThread = await getRecentThread(user)
   const savedImagePaths = []
   
-  // Log user message
-  console.log(`[USER MESSAGE] ${user.username || user.chatId}: ${userReply}`)
+  // console.log(`[USER MESSAGE] ${user.username || user.chatId}: ${userReply}`)
   
-  // Log photo uploads if any
   if (images.length > 0) {
-    console.log(`[PHOTOS UPLOADED] ${user.username || user.chatId}: ${images.length} photo(s)`)
+    // console.log(`[PHOTOS UPLOADED] ${user.username || user.chatId}: ${images.length} photo(s)`)
     
     for (const imageId of images) {
       try {
@@ -173,11 +165,15 @@ export async function getRecentThread(user: IUser): Promise<IThread> {
 export async function sendThreadToChatGPT(params) {
   const { thread, bot } = params
   try {
+    // Get fresh thread and owner to ensure we have the latest
+    const freshThread = await Thread.findById(thread._id).populate('owner')
+    const user = freshThread.owner
+    
     // Get all messages for this thread
     const messages = await Message.find({ thread: thread._id }).sort({ created: 1 })
     
     // Format messages for Claude API with image support
-    const formattedMessages = await formatMessagesWithImages(messages, thread.owner, bot)
+    const formattedMessages = await formatMessagesWithImages(messages, user, bot)
     
     try {
       const chatCompletion = await claudeCall({ 
@@ -190,7 +186,7 @@ export async function sendThreadToChatGPT(params) {
         const inputTokens = chatCompletion.usage.input_tokens || 0
         const outputTokens = chatCompletion.usage.output_tokens || 0
         await logTokenUsage(
-          thread.owner, 
+          user, 
           thread, 
           inputTokens, 
           outputTokens,

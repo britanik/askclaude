@@ -1,63 +1,113 @@
 import { IUser } from '../interfaces/users';
 import User from '../models/users';
 import Usage from '../models/usage';
-import { IUsage } from '../interfaces/usage';
+import Invite from '../models/invites';
 
-// Update user schema to include token_balance in prefs
+// Update user schema to remove token_balance field
 export async function updateUserSchema() {
-  // This function can be called manually with /updateUserSchema
-  // to ensure all users have the token_balance field
   try {
-    // get users with token_balance undefined or 0
-    const users = await User.find({ $or: [{ 'prefs.token_balance': { $exists: false } }, { 'prefs.token_balance': 0 }] });
+    // Remove token_balance field from all users
+    const result = await User.updateMany(
+      { 'prefs.token_balance': { $exists: true } },
+      { $unset: { 'prefs.token_balance': "" } }
+    );
     
-    let updateCount = 0;
-    for (const user of users) {
-      if (user.prefs.token_balance === undefined || user.prefs.token_balance === 0) {
-        user.prefs.token_balance = +process.env.TOKENS_START_AMOUNT || 100000;
-        await user.save();
-        updateCount++;
-      }
-    }
-    
-    if (updateCount > 0) {
-      console.log(`Updated ${updateCount} users with token_balance field`);
-    }
+    console.log(`Updated ${result.modifiedCount} users to remove token_balance field`);
   } catch (error) {
     console.error('Error updating user schema:', error);
   }
 }
 
-// Add tokens to a user's balance
-export async function addTokens(user: IUser, reason: string, amount?: number): Promise<void> {
+// Check if user is at the limit
+export async function isTokenLimit(user: IUser) {
+  console.log('Checking token limit for user:', user._id);
   try {
-    const tokensToAdd = amount || +process.env.TOKENS_PER_REFERRAL || 100000;
+    const usage: number = await getPeriodTokenUsage(user);
+    const periodLimit = await getPeriodTokenLimit(user);
     
-    // Initialize token_balance if it doesn't exist
-    if (!user.prefs.token_balance) {
-      user.prefs.token_balance = +process.env.TOKENS_START_AMOUNT || 100000;
+    console.log('Usage:', usage);
+    console.log('Period Limit:', periodLimit);
+    
+    if (usage >= periodLimit) {
+      return true;
     }
     
-    // Add tokens
-    user.prefs.token_balance += tokensToAdd;
-    
-    // Create usage record
-    await new Usage({
-      user: user._id,
-      type: reason,
-      amount: tokensToAdd,
-      description: `Added ${tokensToAdd} tokens for reason: ${reason}`
-    }).save();
-    
-    // Save user
-    await user.save();
-    
-    // Log token addition
-    console.log(`Added ${tokensToAdd} tokens to user ${user._id} for reason: ${reason}`);
-    
+    return false;
   } catch (error) {
-    console.error('Error adding tokens:', error);
-    throw error;
+    console.error('Error checking token limit:', error);
+    return false;
+  }
+}
+
+// Calculate minutes until the next hour
+export function getMinutesToNextHour() {
+  const now = new Date();
+  const minutesLeft = 60 - now.getMinutes();
+  return minutesLeft;
+}
+
+// Calculate period token limit including friend bonuses
+export async function getPeriodTokenLimit(user: IUser): Promise<number> {
+  try {    
+    // Get base limit from env or default to 50000
+    const baseLimit = +(process.env.TOKENS_HOUR_LIMIT || 10000);
+
+    console.log('Base Limit:', baseLimit);
+    
+    // Find user's invite code
+    const invite = await Invite.findOne({ owner: user._id });
+    
+    // Calculate bonus based on referrals
+    let referralBonus = 0;
+    if (invite) {
+      // Each used invite adds TOKENS_PER_REFERRAL to the limit
+      const usedInvitesCount = invite.usedBy.length;
+      referralBonus = usedInvitesCount * (+(process.env.TOKENS_PER_REFERRAL) || 10000);
+    }
+    
+    // Return the total limit
+    return baseLimit + referralBonus;
+  } catch (error) {
+    console.error('Error calculating period token limit:', error);
+    // Return default limit in case of error
+    return +(process.env.BASE_TOKEN_LIMIT || 50000);
+  }
+}
+
+export async function getPeriodTokenUsage(user: IUser) {
+  try {
+    // Determine period length (default to 60 minutes if not set)
+    const periodLengthMinutes = +(process.env.TOKENS_PERIOD_LENGTH_MIN || 60);
+    
+    // Calculate the start time for the period
+    const periodStart = new Date();
+    periodStart.setMinutes(periodStart.getMinutes() - periodLengthMinutes);
+    
+    // Get usage from the defined period
+    const result = await Usage.aggregate([
+      { 
+        $match: { 
+          user: user._id,
+          created: { $gte: periodStart },
+          type: { $in: ['prompt', 'completion'] }
+        } 
+      },
+      { 
+        $group: {
+          _id: null,
+          total: { $sum: '$amount' }
+        }
+      }
+    ]);
+    
+    console.log(result,'result')
+
+    // Return the total as a number - if no results, return 0
+    return result.length > 0 ? result[0].total : 0;
+    
+  } catch (e) {
+    console.error('Error calculating period token usage:', e);
+    return 0;
   }
 }
 

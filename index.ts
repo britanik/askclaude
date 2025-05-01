@@ -12,7 +12,7 @@ import Dict from './app/helpers/dict'
 import Navigation from './app/controllers/navigation'
 import { extractReferralCode, isValidInviteCode, processReferral } from './app/controllers/invites'
 import { sendMessage } from './app/templates/sendMessage'
-
+import { IInvite } from './app/models/invites'
 
 // Load .env
 if( fs.existsSync(path.join(__dirname, '.env')) ){
@@ -53,33 +53,22 @@ const startNavigation = async (msg = null, callbackQuery = null) => {
       username: msg.from.username || null,
       step: 'assistant',
       prefs: {
-        lang: 'rus', // Default language
-        token_balance: process.env.TOKENS_START_AMOUNT // Initialize token balance for new users
+        lang: 'rus',
       }
     }).save()
 
     const code = extractReferralCode(msg);
     if( code ){
-      const isValid = await isValidInviteCode(code);
+      const isValid:IInvite = await isValidInviteCode(code);
       if( isValid ){
-        console.log(user.prefs, 'user.prefs before processReferral')
         await processReferral(user, isValid);
-        await sendMessage({ 
-          text: "✅ Спасибо! Вы активировали код приглашения и получили 100,000 токенов!", 
-          user,
-          bot
-        });
-        await sendMessage({
-          text: "✅ Ваш друг активировал код и Вы оба получили +100,000 токенов!", 
-          user: isValid.owner,
-          bot
-        })
+        await sendMessage({ text: `✅ Спасибо! Вы активировали код приглашения и получили +${+process.env.TOKENS_PER_REFERRAL} токенов в час`, user, bot });
+        await sendMessage({ text: `✅ Ваш друг активировал код и Вы оба получили +${+process.env.TOKENS_PER_REFERRAL} к лимитам.`, user: isValid.owner, bot })
       }
     }
 
   } else if (msg && user.username !== msg.from.username) {
 
-    // console.log('Here')
     user.username = msg.from.username || null
     await user.save()
 

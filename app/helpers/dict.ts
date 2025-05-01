@@ -1,5 +1,4 @@
 import { IUser } from '../interfaces/users'
-// import * as userController from '../controllers/users'
 
 export default class Dict {
   private user: IUser
@@ -35,16 +34,16 @@ export default class Dict {
         eng: () => `⚙️ Settings`
       },
       SETTINGS_USAGE: {
-        rus: () => `Использовано токенов`,
-        eng: () => `Tokens used`
+        rus: () => `Лимит токенов`,
+        eng: () => `Token limit`
       },
       SETTINGS_USAGE_ADVICE: {
         rus: () => `Для экономии токенов создавайте /new чат каждый раз как меняете тему разговора`,
         eng: () => `To save tokens, create a /new chat each time you change the topic of conversation.`
       },
       SETTINGS_USAGE_REFS: {
-        rus: () => `Чтобы пополнить баланс токенов - пригласите друзей /invite`,
-        eng: () => `Topup tokens balance by inviting friends /invite`
+        rus: () => `Чтобы увеличить лимит токенов в час - пригласите друзей /invite`,
+        eng: () => `To increase your hourly token limit - invite friends /invite`
       },
       SETTINGS_FORMATS: {
         rus: () => `Доступные форматы`,
@@ -57,6 +56,14 @@ export default class Dict {
       SETTINGS_LANGUAGE: {
         rus: () => `Язык`,
         eng: () => `Language`
+      },
+      SETTINGS_HOUR_LIMIT_EXCEEDED: {
+        rus: () => `Лимит токенов в час исчерпан. Вы можете продолжить через {minutes} мин.`,
+        eng: () => `You have reached the hourly token limit. The limit will reset in`
+      },
+      SETTINGS_HOUR_LIMIT_REFRESH_IN: {
+        rus: () => `Обновится через {minutes} мин.`,
+        eng: () => `Refresh in {minutes} min.`
       },
       ENTER_CODE: {
         rus: () => `<strong>Введите код</strong> полученный в приглашении (или /new чтобы пропустить):`,

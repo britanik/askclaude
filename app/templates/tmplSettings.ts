@@ -2,15 +2,12 @@ import { IUser } from "../interfaces/users"
 import { sendMessage } from "./sendMessage"
 import TelegramBot from "node-telegram-bot-api"
 import Dict from "../helpers/dict"
-import { getTokenUsage } from "../controllers/users";
+import { getMinutesToNextHour, getPeriodTokenLimit, getPeriodTokenUsage } from "../controllers/tokens";
 
 export async function tmplSettings(user: IUser, bot: TelegramBot, dict: Dict) {
   // Get token usage statistics
-  const tokenUsage = await getTokenUsage(user);
-  console.log(tokenUsage,'tokenUsage')
-  
-  // Get user's token balance
-  // const tokenBalance = await getTokenBalance(user);
+  const tokenUsage:number = await getPeriodTokenUsage(user);
+  const tokenLimit:number = await getPeriodTokenLimit(user);
   
   // Format token numbers with thousands separator and handle undefined values
   const formatNumber = (num: number | undefined) => {
@@ -18,6 +15,14 @@ export async function tmplSettings(user: IUser, bot: TelegramBot, dict: Dict) {
     const safeNum = num ?? 0;
     return safeNum.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   };
+
+  const stringTokensRefresh = () => {
+    if( tokenUsage > tokenLimit ){
+      return `${dict.getString('SETTINGS_HOUR_LIMIT_REFRESH_IN', { minutes: getMinutesToNextHour() })}`
+    } else {
+      return ''
+    }
+  }
   
   let text = `<b>${dict.getString('SETTINGS_TITLE')}</b>
  
@@ -28,7 +33,7 @@ ${dict.getString('SETTINGS_FORMATS_STRING')}
 ${user.prefs.lang === 'eng' ? 'English' : 'Русский'}
 
 <b>${dict.getString('SETTINGS_USAGE')}:</b>
-${formatNumber(tokenUsage.total)} / ${formatNumber(tokenUsage.limit)}
+${formatNumber(tokenUsage)} / ${formatNumber(tokenLimit)} в час. ${stringTokensRefresh()}
 
 ℹ️ <i>${dict.getString('SETTINGS_USAGE_ADVICE')}</i>
 

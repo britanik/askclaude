@@ -13,10 +13,11 @@ import { isAdmin } from "../helpers/helpers"
 
 import { tmplSettings } from '../templates/tmplSettings'
 import { tmplInvite } from "../templates/tmplInvite"
-import { updateUserSchema } from "./tokens"
+import { getMinutesToNextHour, isTokenLimit, updateUserSchema } from "./tokens"
 import { isValidInviteCode, processReferral } from "./invites"
 import { sendNotificationToAllUsers } from "./notifications"
 import { generateOpenAIImage } from "./images"
+import { IThread } from "../interfaces/threads"
 
 export interface INavigationParams {
   user?: IUser
@@ -231,13 +232,23 @@ export default class Navigation {
   assistant() {
     return {
       action: async () => {
-        console.log('Assistant()')
+        // Check token limit
+        if( await isTokenLimit(this.user) ){
+          await sendMessage({ text: this.dict.getString('SETTINGS_HOUR_LIMIT_EXCEEDED', { minutes: getMinutesToNextHour() }), user: this.user, bot: this.bot });
+          return;
+        }
+
         this.user = await userController.addStep(this.user, 'assistant')
-        
-        let thread = await startAssistant(this.user, this.dict.getString('ASSISTANT_START'))
+        let thread:IThread = await startAssistant(this.user, this.dict.getString('ASSISTANT_START'))
         await handleAssistantReply(thread, this.bot, this.dict)
       },
       callback: async () => {
+        // Check token limit
+        if( await isTokenLimit(this.user) ){
+          await sendMessage({ text: this.dict.getString('SETTINGS_HOUR_LIMIT_EXCEEDED', { minutes: getMinutesToNextHour() }), user: this.user, bot: this.bot });
+          return;
+        }
+
         try {
           let text: string = '';
           let images: string[] = [];
@@ -247,6 +258,7 @@ export default class Navigation {
           if (this.msg.voice) {
             text = await getTranscription(this.msg, this.bot);
           } 
+
           // Handle photo messages
           else if (this.msg.photo && this.msg.photo.length > 0) {
             // Get the caption if it exists
@@ -258,6 +270,7 @@ export default class Navigation {
             
             console.log('Received image:', photoId);
           }
+
           // Handle regular text messages
           else {
             text = this.msg.text;
@@ -285,7 +298,6 @@ export default class Navigation {
           }
           
           // Now process the message normally
-          console.log('process the message normally')
           let threadWithUserMessage = await handleUserReply(this.user, text, this.bot, images, mediaGroupId);
           
           // Only send to Claude if this isn't a media group or it's the first message after waiting
