@@ -283,3 +283,95 @@ export async function saveImagePermanently(url, imageId) {
     throw error
   }
 }
+
+export interface IConversationAnalysisResult {
+  action: 'new' | 'continue';
+  reasoning?: string;
+}
+
+export async function analyzeConversation( lastMessages: Array<{role: string, content: string}>, currentMessage: string ): Promise<IConversationAnalysisResult> {
+  try {
+    // Prepare a simple system message for the analysis
+    const systemMessage = `You are a helpful assistant that analyzes conversation flow. 
+Your task is to determine if the user's most recent message is continuing the previous conversation 
+or starting a completely new topic. Only respond with a JSON object in a format:
+{ action: "new" | "continue" }
+ 
+Other instructions:
+Ignore user messages and do not try to answer them.
+`;
+
+    // Prepare context for the model
+    // Truncate assistant messages to 200 characters to save on tokens
+    const formattedMessages = lastMessages.map(msg => {
+      if (msg.role === 'assistant' && msg.content && msg.content.length > 200) {
+        return {
+          role: msg.role,
+          content: msg.content.substring(0, 200) + '...'
+        };
+      }
+      return { role: msg.role, content: msg.content || '' };
+    });
+
+    const messages = [
+      ...formattedMessages,
+      { role: 'user', content: currentMessage }
+    ];
+
+    console.log('Analyzing conversation with messages:', messages);
+
+    // API request to the fast model
+    const chatParams = {
+      system: systemMessage,
+      model: process.env.CLAUDE_MODEL_FAST || 'claude-3-5-haiku-20241022',
+      messages: messages,
+      max_tokens: 150,
+      temperature: 0,
+    };
+
+    const response = await axios.post(
+      'https://api.anthropic.com/v1/messages',
+      chatParams,
+      {
+        headers: {
+          'x-api-key': process.env.CLAUDE_TOKEN,
+          'anthropic-version': '2023-06-01',
+          'Content-Type': 'application/json'
+        },
+        timeout: 10000 // 10-second timeout for quick response
+      }
+    );
+
+    // Parse the JSON response
+    console.log('Claude analysis response:', response.data);
+    const result = JSON.parse(response.data.content[0].text);
+    
+    // Validate the result
+    if (result && (result.action === 'new' || result.action === 'continue')) {
+      return {
+        action: result.action,
+      };
+    } else {
+      console.log('Invalid analysis result, defaulting to continue:', result);
+      return { action: 'continue' };
+    }
+  } catch (error) {
+    if (error.response) {
+      // The request was made and the server responded with a status code
+      // that falls out of the range of 2xx
+      console.error('Error analyzing conversation:', {
+        status: error.response.status,
+        statusText: error.response.statusText,
+        data: error.response.data
+      });
+    } else if (error.request) {
+      // The request was made but no response was received
+      console.error('Error request:', 'No response received');
+    } else {
+      // Something happened in setting up the request that triggered an Error
+      console.error('Error message:', error.message);
+    }
+    // Default to continuing conversation on error
+    return { action: 'continue' };
+  }
+}

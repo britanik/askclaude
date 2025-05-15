@@ -6,7 +6,7 @@ import { IThread } from "../interfaces/threads"
 import { IUser } from "../interfaces/users"
 import { IMessage } from "../interfaces/messages"
 import { sendMessage } from "../templates/sendMessage"
-import { claudeCall, formatMessagesWithImages, saveImagePermanently } from "../services/ai"
+import { analyzeConversation, claudeCall, formatMessagesWithImages, saveImagePermanently } from "../services/ai"
 import { isTokenLimit, logTokenUsage } from "./tokens"
 
 export async function startAssistant(user: IUser, firstMessage: string): Promise<IThread> {
@@ -50,78 +50,110 @@ export async function createNewThread(params): Promise<IThread> {
 }
 
 export async function handleUserReply( user: IUser, userReply: string, bot: TelegramBot, images: string[] = [], mediaGroupId?: string ): Promise<IThread> {
-  let thread: IThread = await getRecentThread(user)
-  const savedImagePaths = []
+  // Get the most recent thread
+  let thread: IThread = await getRecentThread(user);
+  const savedImagePaths = [];
   
-  // console.log(`[USER MESSAGE] ${user.username || user.chatId}: ${userReply}`)
-  
+  // Process images if any
   if (images.length > 0) {
-    // console.log(`[PHOTOS UPLOADED] ${user.username || user.chatId}: ${images.length} photo(s)`)
-    
     for (const imageId of images) {
       try {
-        // Get file link from Telegram
-        const fileLink = await bot.getFileLink(imageId)
-        
-        // Save image to a permanent location
-        const savedPath = await saveImagePermanently(fileLink, imageId)
-        
-        // Store both the Telegram ID and local path
+        const fileLink = await bot.getFileLink(imageId);
+        const savedPath = await saveImagePermanently(fileLink, imageId);
         savedImagePaths.push({
           telegramId: imageId,
           localPath: savedPath
-        })
-        
-        console.log(`[PHOTO DETAILS] File ID: ${imageId}, Saved to: ${savedPath}`)
+        });
+        console.log(`[PHOTO DETAILS] File ID: ${imageId}, Saved to: ${savedPath}`);
       } catch (error) {
-        console.error(`Error saving image ${imageId}:`, error)
+        console.error(`Error saving image ${imageId}:`, error);
       }
     }
   }
 
   // If this is part of a media group
   if (mediaGroupId) {
-    // Find the last message in this thread with the same media group ID
+    // Handle media group messages as before
     const lastMediaMessage = await Message.findOne({ 
       thread: thread._id, 
       mediaGroupId: mediaGroupId,
       role: 'user'
-    }).sort({ created: -1 })
+    }).sort({ created: -1 });
     
     if (lastMediaMessage) {
-      // Add this image to the existing message
-      lastMediaMessage.images = lastMediaMessage.images || []
-      lastMediaMessage.images.push(...images)
+      lastMediaMessage.images = lastMediaMessage.images || [];
+      lastMediaMessage.images.push(...images);
       
-      // Update the content if provided and this message has content
       if (userReply && userReply.trim() !== " " && userReply.trim() !== "") {
-        lastMediaMessage.content = userReply
+        lastMediaMessage.content = userReply;
       }
       
-      await lastMediaMessage.save()
-      return thread
+      await lastMediaMessage.save();
+      return thread;
     } else {
-      // This is the first message in a new media group
       await new Message({
         thread: thread._id,
         role: 'user',
-        content: userReply || " ", // Ensure content is never empty
+        content: userReply || " ",
         images: images.length > 0 ? images : undefined,
-        mediaGroupId // Store the media group ID with the message
-      }).save()
+        mediaGroupId
+      }).save();
       
-      return thread
+      return thread;
     }
   } else {
-    // Regular message without media group
+    // This is a regular message (not part of a media group)
+    
+    // Check if conversation analysis is enabled in .env (default to disabled if not set)
+    const isAnalysisEnabled = parseInt(process.env.ENABLE_CONVERSATION_ANALYSIS || '0') === 1;
+    
+    // Skip all analysis logic if the feature is disabled
+    let shouldCreateNewThread = false;
+    
+    // Only query for messages and perform analysis if the feature is enabled
+    if (isAnalysisEnabled && images.length === 0) {
+      // Get the last few messages from the thread for analysis
+      const lastMessages = await Message.find({ thread: thread._id })
+        .sort({ created: -1 })
+        .limit(5);
+      
+      // Only analyze if there's at least one previous message
+      if (lastMessages.length > 0) {
+        // Format messages for the analysis
+        const formattedMessages = lastMessages
+          .reverse()
+          .map(msg => ({
+            role: msg.role,
+            content: msg.content || ""
+          }));
+          
+        // Analyze the conversation
+        const analysis = await analyzeConversation(formattedMessages, userReply);
+        console.log(`[CONVERSATION ANALYSIS] ${user.username || user.chatId}: ${analysis.action} - ${analysis.reasoning}`);
+        
+        // If analysis says it's a new topic, create a new thread
+        if (analysis.action === 'new') {
+          shouldCreateNewThread = true;
+        }
+      }
+    }
+    
+    // Create a new thread if analysis determined it's a new topic
+    if (shouldCreateNewThread) {
+      thread = await startAssistant(user, userReply);
+      console.log(`[NEW THREAD CREATED] For ${user.username || user.chatId} based on topic change analysis`);
+      return thread;
+    }
+    
+    // Otherwise continue with the existing thread
     await new Message({
       thread: thread._id,
       role: 'user',
-      content: userReply || " ", // Ensure content is never empty
+      content: userReply || " ",
       images: images.length > 0 ? images : undefined
-    }).save()
+    }).save();
     
-    return thread
+    return thread;
   }
 }
 
