@@ -8,6 +8,7 @@ import { IMessage } from "../interfaces/messages"
 import { sendMessage } from "../templates/sendMessage"
 import { analyzeConversation, claudeCall, formatMessagesWithImages, saveImagePermanently } from "../services/ai"
 import { isTokenLimit, logTokenUsage } from "./tokens"
+import { manageChatAction } from "../helpers/helpers"
 
 export async function startAssistant(user: IUser, firstMessage: string): Promise<IThread> {
   try {
@@ -158,26 +159,44 @@ export async function handleUserReply( user: IUser, userReply: string, bot: Tele
 }
 
 export async function handleAssistantReply(thread: IThread, bot: TelegramBot, dict: Dict): Promise<void> {
-  // Get fresh thread before processing
-  const freshThread = await Thread.findById(thread._id).populate('owner')
-  
-  // Show "Thinking" status while processing
-  await bot.sendChatAction(freshThread.owner.chatId, "typing")
-  
-  let assistantReply = await sendThreadToChatGPT({ thread: freshThread, bot })
-
-  // Log assistant reply
-  console.log(`[ASSISTANT REPLY] To ${freshThread.owner.username || freshThread.owner.chatId}: ${assistantReply}`)
-
-  // Add the assistant's message to thread
-  await new Message({
-    thread: freshThread._id,
-    role: 'assistant',
-    content: assistantReply
-  }).save()
-
-  if (assistantReply) {
-    await sendThreadToUser({ user: freshThread.owner, content: assistantReply, bot, dict })
+  try {
+    // Get fresh thread before processing
+    const freshThread = await Thread.findById(thread._id).populate('owner');
+    
+    // Start the "typing" action
+    const chatAction = manageChatAction({ bot, chatId: freshThread.owner.chatId, action: "typing" });
+    
+    try {
+      // Get response from Claude
+      let assistantReply = await sendThreadToChatGPT({ thread: freshThread, bot });
+      
+      // Stop the typing indicator before sending the message
+      chatAction.stop();
+      
+      // Log assistant reply
+      console.log(`[ASSISTANT REPLY] To ${freshThread.owner.username || freshThread.owner.chatId}: ${assistantReply}`);
+      
+      // Add the assistant's message to thread
+      await new Message({
+        thread: freshThread._id,
+        role: 'assistant',
+        content: assistantReply
+      }).save();
+      
+      if (assistantReply) {
+        await sendThreadToUser({ user: freshThread.owner, content: assistantReply, bot, dict });
+      }
+    } catch (error) {
+      // Make sure to stop the action if there's an error
+      chatAction.stop();
+      
+      console.error('Failed to handle assistant reply', error);
+      
+      // Send an error message to the user
+      await sendMessage({ text: dict.getString('ASSISTANT_ERROR'), user: freshThread.owner, bot });
+    }
+  } catch (e) {
+    console.error('Failed to get thread or handle error', e);
   }
 }
 
