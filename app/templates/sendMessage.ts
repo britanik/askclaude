@@ -6,83 +6,236 @@ import { addLog } from '../controllers/log'
 
 export interface ISendMessageParams {
   user: IUser,
-  chatId?: number, // (not used): Chat ID to send the message to 
+  chatId?: number, // Chat ID to send the message to 
   bot: TelegramBot,
   text?: string, // Optional: Text of the message to be sent
   deletable?: string, // If possible to delete - store in user.messages
   buttons?: InlineKeyboardButton[][], // Optional: Buttons to include in the message
   keyboard?: KeyboardButton[][], // Optional: Keyboard to include in the message
   gallery?: InputMediaPhoto[] // Optional: Gallery of photos to send before the message
-  placeholder?: string, // Добавляем новый параметр
-  timer?: number
+  placeholder?: string, // Placeholder text for force reply
+  timer?: number // Time in ms after which to delete the message
+}
+
+// Function to split message while preserving HTML tags
+function splitMessageWithHtml(text: string, maxLength: number = 4000): string[] {
+  if (text.length <= maxLength) {
+    return [text];
+  }
+
+  const chunks: string[] = [];
+  let currentChunk = '';
+  let activeTagStack: string[] = [];
+  let i = 0;
+
+  while (i < text.length) {
+    // Check if it's a tag
+    if (text[i] === '<') {
+      // Find where the tag ends
+      const tagEndIndex = text.indexOf('>', i);
+      if (tagEndIndex === -1) {
+        // Malformed HTML, just add the '<' character
+        currentChunk += text[i];
+        i++;
+        continue;
+      }
+
+      const tag = text.substring(i, tagEndIndex + 1);
+      const isClosingTag = tag.startsWith('</');
+      const tagName = isClosingTag 
+        ? tag.substring(2, tag.length - 1) 
+        : tag.match(/<([a-zA-Z0-9]+)(?:\s|\/|>)/)?.[1] || '';
+
+      // Update tag stack
+      if (!isClosingTag && !tag.endsWith('/>') && tagName) {
+        activeTagStack.push(tagName);
+      } else if (isClosingTag && activeTagStack.length > 0) {
+        // Remove the last matching opening tag
+        if (activeTagStack[activeTagStack.length - 1] === tagName) {
+          activeTagStack.pop();
+        }
+      }
+
+      // Add the tag to the current chunk
+      currentChunk += tag;
+      i = tagEndIndex + 1;
+    } else {
+      // Add regular character
+      currentChunk += text[i];
+      i++;
+    }
+
+    // Check if we need to end this chunk
+    if (currentChunk.length >= maxLength && (text[i] === ' ' || text[i] === '\n' || !text[i])) {
+      chunks.push(currentChunk);
+      
+      // Start a new chunk with all currently active tags
+      currentChunk = '';
+      for (const tag of activeTagStack) {
+        currentChunk += `<${tag}>`;
+      }
+    }
+  }
+
+  // Add any remaining content as the final chunk
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk);
+  }
+
+  // Close all remaining tags in the last chunk
+  if (chunks.length > 0 && activeTagStack.length > 0) {
+    for (let j = activeTagStack.length - 1; j >= 0; j--) {
+      chunks[chunks.length - 1] += `</${activeTagStack[j]}>`;
+    }
+  }
+
+  return chunks;
 }
 
 export async function sendMessage(params: ISendMessageParams) {
   let { user, chatId, bot, text = 'Test message', deletable, buttons, keyboard, gallery, placeholder, timer } = params;
   try {
-
-    let sent:TelegramBot.Message
+    let sent: TelegramBot.Message;
+    let sentMessages: TelegramBot.Message[] = [];
 
     let options = getOptions({ 
       buttons, 
       keyboard, 
       placeholder 
-    })
+    });
 
-    if( deletable && user ){
+    // Determine the target chat ID
+    const targetChatId = chatId || user.chatId;
+
+    if (deletable && user) {
       let messageId = userController.getMessage(user, deletable);
-      if( messageId ){
-
+      if (messageId) {
         // Edit existing message if it exists
         let editOptions = {
-          chat_id: chatId || user.chatId,
+          chat_id: targetChatId,
           message_id: messageId,
-          parse_mode: 'HTML' as const, // Явное указание типа ParseMode
+          parse_mode: 'HTML' as const,
           disable_web_page_preview: true
-        }
+        };
 
         // Include only inline_keyboard in editOptions if buttons are provided
-        if( buttons ){
-          editOptions['reply_markup'] = { inline_keyboard: buttons }
+        if (buttons) {
+          editOptions['reply_markup'] = { inline_keyboard: buttons };
         }
 
-        await bot.editMessageText(text, editOptions)
-
+        // Try to edit, if message is too long, delete existing and send a new one
+        try {
+          await bot.editMessageText(text, editOptions);
+        } catch (e) {
+          // If error is due to message length, delete and send new messages
+          if (e.response && e.response.body && e.response.body.description && 
+              e.response.body.description.includes('message is too long')) {
+            // Delete the old message
+            try {
+              await bot.deleteMessage(targetChatId, messageId);
+            } catch (deleteErr) {
+              console.error('Error deleting old message:', deleteErr);
+            }
+            
+            // Send as new messages
+            const chunks = splitMessageWithHtml(text);
+            
+            if (gallery && gallery.length > 0) {
+              // Send gallery in front if it exists
+              await bot.sendMediaGroup(targetChatId, gallery);
+            }
+            
+            // Send each chunk as a separate message
+            for (let i = 0; i < chunks.length; i++) {
+              // Only add buttons to the last chunk
+              const useOptions = i === chunks.length - 1 ? options : getOptions({});
+              try {
+                sent = await bot.sendMessage(targetChatId, chunks[i], useOptions);
+                sentMessages.push(sent);
+              } catch (sendErr) {
+                console.error(`Error sending message chunk ${i}:`, sendErr);
+              }
+            }
+            
+            // Update the user's message ID with the last sent message
+            if (sentMessages.length > 0) {
+              user = await userController.updateMessage(user, deletable, sentMessages[sentMessages.length - 1].message_id);
+            }
+          } else {
+            throw e; // Re-throw other types of errors
+          }
+        }
       } else {
-
+        // Send new message since no existing message to update
         if (gallery && gallery.length > 0) {
           // Send gallery in front if it exists
-          await bot.sendMediaGroup(chatId || user.chatId, gallery);
-        }  
-  
-        // Send new message if no existing message to update
-        try {
-          sent = await bot.sendMessage(chatId || user.chatId, text, options)
-        } catch(e){
-          console.log(e, 'e')
+          await bot.sendMediaGroup(targetChatId, gallery);
         }
-
-        user = await userController.updateMessage(user, deletable, sent.message_id)
-
+        
+        // Check if the message needs to be split
+        const chunks = splitMessageWithHtml(text);
+        
+        if (chunks.length === 1) {
+          // Send as a single message
+          try {
+            sent = await bot.sendMessage(targetChatId, text, options);
+            sentMessages.push(sent);
+          } catch (e) {
+            console.error('Error sending message:', e);
+          }
+        } else {
+          // Send multiple chunks
+          for (let i = 0; i < chunks.length; i++) {
+            // Only add buttons to the last chunk
+            const useOptions = i === chunks.length - 1 ? options : getOptions({});
+            try {
+              sent = await bot.sendMessage(targetChatId, chunks[i], useOptions);
+              sentMessages.push(sent);
+            } catch (e) {
+              console.error(`Error sending message chunk ${i}:`, e);
+            }
+          }
+        }
+        
+        // Store the last message ID for later reference
+        if (sentMessages.length > 0) {
+          user = await userController.updateMessage(user, deletable, sentMessages[sentMessages.length - 1].message_id);
+        }
       }
     } else {
-
+      // Send new message without considering it deletable
       if (gallery && gallery.length > 0) {
         // Send gallery in front if it exists
-        await bot.sendMediaGroup(chatId || user.chatId, gallery);
-      }  
-
-      // Send new message without considering it deletable
-      let chatIdToSent = chatId || user.chatId
-      sent = await bot.sendMessage(chatIdToSent, text, options)
+        await bot.sendMediaGroup(targetChatId, gallery);
+      }
+      
+      // Check if the message needs to be split
+      const chunks = splitMessageWithHtml(text);
+      
+      if (chunks.length === 1) {
+        // Send as a single message
+        sent = await bot.sendMessage(targetChatId, text, options);
+        sentMessages.push(sent);
+      } else {
+        // Send multiple chunks
+        for (let i = 0; i < chunks.length; i++) {
+          // Only add buttons to the last chunk
+          const useOptions = i === chunks.length - 1 ? options : getOptions({});
+          sent = await bot.sendMessage(targetChatId, chunks[i], useOptions);
+          sentMessages.push(sent);
+        }
+      }
     }
 
-    if( timer && sent ){
+    // Set a timer to delete the message(s) if requested
+    if (timer && sentMessages.length > 0) {
       setTimeout(async () => {
         try {
-          await bot.deleteMessage(user.chatId, sent.message_id);
+          for (const message of sentMessages) {
+            await bot.deleteMessage(targetChatId, message.message_id);
+          }
         } catch (err) {
-          console.error('Failed to delete message:', err);
+          console.error('Failed to delete message(s):', err);
         }
       }, timer);
     }
@@ -99,7 +252,7 @@ export async function sendMessage(params: ISendMessageParams) {
       });
     }
     
-    // Error handling
+    // Block user if they blocked the bot
     if (e.response && e.response.body && e.response.body.error_code === 403) {
       user = await userController.blocked(user);
       await addLog({ method: 'sendMessageErrorBlocked', user, bot });
@@ -169,11 +322,10 @@ export async function sendPhoto( options: ISendPhotoParams ){
 
   } catch( e ){
     // catch
-    if( e.response.body.error_code && e.response.body.error_code === 403 ){
-      user = await userController.blocked(this.user)
+    if( e.response && e.response.body && e.response.body.error_code === 403 ){
+      user = await userController.blocked(user)
       console.log(e.response.body.error_code, 'Send text error')
     }
-
   } 
 }
 
