@@ -18,45 +18,85 @@ export interface ISendMessageParams {
 }
 
 // Function to split message while preserving HTML tags
-function splitMessageWithHtml(text: string, maxLength: number = 4000): string[] {
+function splitMessageWithHtml(text: string, maxLength: number = 3700): string[] {
   if (text.length <= maxLength) {
     return [text];
   }
 
+  // Define valid HTML tags supported by Telegram
+  const validTagNames = ['b', 'strong', 'i', 'em', 'u', 's', 'strike', 'del', 'span', 'a', 'code', 'pre', 'blockquote'];
+  
   const chunks: string[] = [];
   let currentChunk = '';
   let activeTagStack: string[] = [];
   let i = 0;
+  
+  // Helper function to safely find end of tag
+  const findTagEnd = (start: number): number => {
+    let j = start + 1;
+    let depth = 0;
+    
+    while (j < text.length) {
+      if (text[j] === '<') depth++;
+      if (text[j] === '>') {
+        if (depth === 0) return j;
+        depth--;
+      }
+      j++;
+    }
+    
+    return -1; // No closing '>' found
+  };
+  
+  // Helper function to extract tag name safely
+  const extractTagName = (tag: string): string => {
+    // For closing tags
+    if (tag.startsWith('</')) {
+      const match = tag.match(/^<\/([a-zA-Z0-9]+)/);
+      return match ? match[1].toLowerCase() : '';
+    }
+    
+    // For opening tags
+    const match = tag.match(/^<([a-zA-Z0-9]+)(?:\s|\/|>)/);
+    return match ? match[1].toLowerCase() : '';
+  };
+  
+  // Helper function to check if a tag is self-closing
+  const isSelfClosingTag = (tag: string): boolean => {
+    return tag.endsWith('/>') || tag.match(/<(br|hr|img|input|link|meta)[\s>]/i) !== null;
+  };
 
   while (i < text.length) {
-    // Check if it's a tag
+    // Handle HTML tags
     if (text[i] === '<') {
-      // Find where the tag ends
-      const tagEndIndex = text.indexOf('>', i);
+      const tagEndIndex = findTagEnd(i);
+      
       if (tagEndIndex === -1) {
-        // Malformed HTML, just add the '<' character
+        // Malformed HTML, just add the '<' character and continue
         currentChunk += text[i];
         i++;
         continue;
       }
-
+      
       const tag = text.substring(i, tagEndIndex + 1);
       const isClosingTag = tag.startsWith('</');
-      const tagName = isClosingTag 
-        ? tag.substring(2, tag.length - 1) 
-        : tag.match(/<([a-zA-Z0-9]+)(?:\s|\/|>)/)?.[1] || '';
-
-      // Update tag stack
-      if (!isClosingTag && !tag.endsWith('/>') && tagName) {
-        activeTagStack.push(tagName);
-      } else if (isClosingTag && activeTagStack.length > 0) {
-        // Remove the last matching opening tag
-        if (activeTagStack[activeTagStack.length - 1] === tagName) {
-          activeTagStack.pop();
+      const tagName = extractTagName(tag);
+      
+      // Only track valid tags that Telegram supports
+      if (validTagNames.includes(tagName)) {
+        // Handle tag stack for proper nesting
+        if (!isClosingTag && !isSelfClosingTag(tag)) {
+          activeTagStack.push(tagName);
+        } else if (isClosingTag) {
+          // Find and remove the matching opening tag
+          const openTagIndex = activeTagStack.lastIndexOf(tagName);
+          if (openTagIndex !== -1) {
+            activeTagStack.splice(openTagIndex, 1);
+          }
         }
       }
-
-      // Add the tag to the current chunk
+      
+      // Add the tag to current chunk
       currentChunk += tag;
       i = tagEndIndex + 1;
     } else {
@@ -64,31 +104,62 @@ function splitMessageWithHtml(text: string, maxLength: number = 4000): string[] 
       currentChunk += text[i];
       i++;
     }
-
+    
     // Check if we need to end this chunk
-    if (currentChunk.length >= maxLength && (text[i] === ' ' || text[i] === '\n' || !text[i])) {
-      chunks.push(currentChunk);
+    // We split at a more conservative length and try to split at natural boundaries
+    if (currentChunk.length >= maxLength) {
+      // Try to find a good breaking point - prefer line breaks, then spaces
+      let breakPoint = -1;
       
-      // Start a new chunk with all currently active tags
-      currentChunk = '';
-      for (const tag of activeTagStack) {
-        currentChunk += `<${tag}>`;
+      // Look up to 300 characters back for a good breaking point
+      for (let lookback = 0; lookback < 300 && lookback < currentChunk.length; lookback++) {
+        const pos = currentChunk.length - lookback - 1;
+        
+        // Best: line breaks
+        if (currentChunk[pos] === '\n') {
+          breakPoint = pos + 1; // Break after the newline
+          break;
+        }
+        
+        // Second best: spaces
+        if (currentChunk[pos] === ' ' && breakPoint === -1) {
+          breakPoint = pos + 1; // Break after the space
+        }
       }
+      
+      // If no good breaking point found, create a hard break
+      if (breakPoint === -1 || breakPoint < maxLength / 2) {
+        breakPoint = maxLength;
+      }
+      
+      // Split the chunk
+      const chunkToAdd = currentChunk.substring(0, breakPoint);
+      chunks.push(chunkToAdd);
+      
+      // Create the new chunk with open tags
+      let newChunk = '';
+      for (const tag of activeTagStack) {
+        newChunk += `<${tag}>`;
+      }
+      
+      // Add the remainder to the new chunk
+      newChunk += currentChunk.substring(breakPoint);
+      currentChunk = newChunk;
     }
   }
-
+  
   // Add any remaining content as the final chunk
   if (currentChunk.length > 0) {
     chunks.push(currentChunk);
   }
-
+  
   // Close all remaining tags in the last chunk
   if (chunks.length > 0 && activeTagStack.length > 0) {
     for (let j = activeTagStack.length - 1; j >= 0; j--) {
       chunks[chunks.length - 1] += `</${activeTagStack[j]}>`;
     }
   }
-
+  
   return chunks;
 }
 
