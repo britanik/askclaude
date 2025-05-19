@@ -89,6 +89,17 @@ export async function sendMessage(params: ISendMessageParams) {
 
   } catch (e) {
     // Error handling
+    console.error(`[SEND_MESSAGE] Critical error:`, e);
+    
+    if (e.response) {
+      console.error(`[SEND_MESSAGE] Critical API Response Error:`, {
+        error_code: e.response.body?.error_code,
+        description: e.response.body?.description,
+        statusCode: e.response.statusCode
+      });
+    }
+    
+    // Error handling
     if (e.response && e.response.body && e.response.body.error_code === 403) {
       user = await userController.blocked(user);
       await addLog({ method: 'sendMessageErrorBlocked', user, bot });
