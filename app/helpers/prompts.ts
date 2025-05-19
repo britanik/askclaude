@@ -44,6 +44,5 @@ export const promptsDict = {
   - <pre>pre-formatted fixed-width code block</pre>
   - <blockquote>Block quotation started\nBlock quotation continued</blockquote>
   - <blockquote expandable>Expandable block quotation started\nExpandable block quotation continued</blockquote>
-  
   8. Remember, you are here to assist and interact with users in a helpful, ethical, and engaging manner. Adapt your personality to best serve each unique user while maintaining your core traits and ethical standards.`,
 }
