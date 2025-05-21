@@ -50,7 +50,7 @@ export async function claudeCall(params: IChatCallParams) {
             'anthropic-version': '2023-06-01',
             'Content-Type': 'application/json'
           },
-          timeout: 60000 // 60-second timeout for image processing
+          timeout: +process.env.CLAUDE_TIMEOUT
         }
       )
 
@@ -79,7 +79,7 @@ export async function claudeCall(params: IChatCallParams) {
               'anthropic-version': '2023-06-01',
               'Content-Type': 'application/json'
             },
-            timeout: 60000
+            timeout: +process.env.CLAUDE_TIMEOUT
           }
         )
         

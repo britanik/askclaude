@@ -168,7 +168,7 @@ export async function handleAssistantReply(thread: IThread, bot: TelegramBot, di
   let assistantReply = await sendThreadToChatGPT({ thread: freshThread, bot })
 
   // Save the response to file
-  await saveAIResponse(assistantReply);
+  await saveAIResponse(assistantReply, 'response');
 
   // Log assistant reply
   // console.log(`[ASSISTANT REPLY] To ${freshThread.owner.username || freshThread.owner.chatId}: ${assistantReply}`)

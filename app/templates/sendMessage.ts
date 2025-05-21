@@ -3,6 +3,8 @@ import { getOptions } from '../helpers/helpers'
 import { IUser } from '../interfaces/users'
 import * as userController from '../controllers/users'
 import { addLog } from '../controllers/log'
+import { processMessageWithCodeBlocks } from '../helpers/telegraphHandler'
+import { saveAIResponse } from '../helpers/fileLogger'
 
 export interface ISendMessageParams {
   user: IUser,
@@ -20,36 +22,39 @@ export interface ISendMessageParams {
 export async function sendMessage(params: ISendMessageParams) {
   let { user, chatId, bot, text = 'Test message', deletable, buttons, keyboard, gallery, placeholder, timer } = params;
   try {
+    let sent: TelegramBot.Message;
 
-    let sent:TelegramBot.Message
+    // Process any code blocks in the message first
+    if (text && text.includes('<pre>')) {
+      text = await processMessageWithCodeBlocks(text);
+    }
+
+    await saveAIResponse(text, 'send');
 
     let options = getOptions({ 
       buttons, 
       keyboard, 
       placeholder 
-    })
+    });
 
-    if( deletable && user ){
+    if (deletable && user) {
       let messageId = userController.getMessage(user, deletable);
-      if( messageId ){
-
+      if (messageId) {
         // Edit existing message if it exists
         let editOptions = {
           chat_id: chatId || user.chatId,
           message_id: messageId,
-          parse_mode: 'HTML' as const, // Явное указание типа ParseMode
+          parse_mode: 'HTML' as const,
           disable_web_page_preview: true
-        }
+        };
 
         // Include only inline_keyboard in editOptions if buttons are provided
-        if( buttons ){
-          editOptions['reply_markup'] = { inline_keyboard: buttons }
+        if (buttons) {
+          editOptions['reply_markup'] = { inline_keyboard: buttons };
         }
 
-        await bot.editMessageText(text, editOptions)
-
+        await bot.editMessageText(text, editOptions);
       } else {
-
         if (gallery && gallery.length > 0) {
           // Send gallery in front if it exists
           await bot.sendMediaGroup(chatId || user.chatId, gallery);
@@ -57,27 +62,44 @@ export async function sendMessage(params: ISendMessageParams) {
   
         // Send new message if no existing message to update
         try {
-          sent = await bot.sendMessage(chatId || user.chatId, text, options)
-        } catch(e){
-          console.log(e, 'e')
+          sent = await bot.sendMessage(chatId || user.chatId, text, options);
+        } catch (e) {
+          console.log(e, 'e');
+          throw e;
         }
 
-        user = await userController.updateMessage(user, deletable, sent.message_id)
-
+        user = await userController.updateMessage(user, deletable, sent.message_id);
       }
     } else {
-
       if (gallery && gallery.length > 0) {
         // Send gallery in front if it exists
         await bot.sendMediaGroup(chatId || user.chatId, gallery);
       }  
 
       // Send new message without considering it deletable
-      let chatIdToSent = chatId || user.chatId
-      sent = await bot.sendMessage(chatIdToSent, text, options)
+      let chatIdToSent = chatId || user.chatId;
+      try {
+        sent = await bot.sendMessage(chatIdToSent, text, options);
+      } catch (e) {
+        // If message is still too long, we can add additional handling here
+        if (e.response?.body?.description?.includes('too long')) {
+          // Try to truncate the message or handle it differently
+          console.log('Message still too long even after processing code blocks');
+          
+          // Send a simplified message indicating content was too long
+          sent = await bot.sendMessage(
+            chatIdToSent, 
+            "⚠️ Message is too long. Please check the links for complete code.", 
+            options
+          );
+        } else {
+          console.log(e, 'e');
+          throw e;
+        }
+      }
     }
 
-    if( timer && sent ){
+    if (timer && sent) {
       setTimeout(async () => {
         try {
           await bot.deleteMessage(user.chatId, sent.message_id);
