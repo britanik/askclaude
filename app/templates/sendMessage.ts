@@ -87,11 +87,17 @@ export async function sendMessage(params: ISendMessageParams) {
       }, timer);
     }
 
-  } catch (e) {
+  } catch (error) {
     // Error handling
-    if (e.response && e.response.body && e.response.body.error_code === 403) {
+    if (error.response && error.response.body && error.response.body.error_code === 403) {
       user = await userController.blocked(user);
       await addLog({ method: 'sendMessageErrorBlocked', user, bot });
+    }
+
+    if (error.response) {
+      // The request was made and the server responded with a status code
+      // that falls out of the range of 2xx
+      console.error('Error Telegram sending:', error.response.body);
     }
   }
 }
