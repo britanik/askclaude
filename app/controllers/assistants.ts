@@ -8,6 +8,7 @@ import { IMessage } from "../interfaces/messages"
 import { sendMessage } from "../templates/sendMessage"
 import { analyzeConversation, claudeCall, formatMessagesWithImages, saveImagePermanently } from "../services/ai"
 import { isTokenLimit, logTokenUsage } from "./tokens"
+import { saveAIResponse } from "../helpers/fileLogger"
 
 export async function startAssistant(user: IUser, firstMessage: string): Promise<IThread> {
   try {
@@ -166,8 +167,11 @@ export async function handleAssistantReply(thread: IThread, bot: TelegramBot, di
   
   let assistantReply = await sendThreadToChatGPT({ thread: freshThread, bot })
 
+  // Save the response to file
+  await saveAIResponse(assistantReply);
+
   // Log assistant reply
-  console.log(`[ASSISTANT REPLY] To ${freshThread.owner.username || freshThread.owner.chatId}: ${assistantReply}`)
+  // console.log(`[ASSISTANT REPLY] To ${freshThread.owner.username || freshThread.owner.chatId}: ${assistantReply}`)
 
   // Add the assistant's message to thread
   await new Message({
