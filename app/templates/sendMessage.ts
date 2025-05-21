@@ -3,7 +3,7 @@ import { getOptions } from '../helpers/helpers'
 import { IUser } from '../interfaces/users'
 import * as userController from '../controllers/users'
 import { addLog } from '../controllers/log'
-import { processMessageWithCodeBlocks } from '../helpers/telegraphHandler'
+import { processMessageWithCodeBlocks } from '../helpers/gistHandler'
 import { saveAIResponse } from '../helpers/fileLogger'
 
 export interface ISendMessageParams {
