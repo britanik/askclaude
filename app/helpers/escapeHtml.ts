@@ -5,7 +5,7 @@ export async function escapeHtmlForTelegram(text: string): Promise<string> {
   try {
     // Prepare the API request
     const chatParams = {
-      model: process.env.CLAUDE_MODEL_FAST || 'claude-3-5-haiku-20241022',
+      model: process.env.CLAUDE_MODEL_FAST,
       system: promptsDict.escape(),
       messages: [
         {

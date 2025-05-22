@@ -6,6 +6,7 @@ import { addLog } from '../controllers/log'
 import { processMessageWithCodeBlocks } from '../helpers/gistHandler'
 import { saveAIResponse } from '../helpers/fileLogger'
 import { escapeHtmlForTelegram } from '../helpers/escapeHtml'
+import { sendLongMessage } from '../helpers/messageChunker'
 
 export interface ISendMessageParams {
   user: IUser,
@@ -33,7 +34,7 @@ export async function sendMessage(params: ISendMessageParams) {
     await saveAIResponse(text, 'nopre');
 
     // If text is empty or doesn't contain any < or > characters, return as is
-    if (!text || (!text.includes('<') && !text.includes('>'))) {
+    if (text.includes('<') && text.includes('>')) {
       text = await escapeHtmlForTelegram(text);
       await saveAIResponse(text, 'escaped');
     }
@@ -71,8 +72,14 @@ export async function sendMessage(params: ISendMessageParams) {
         try {
           sent = await bot.sendMessage(chatId || user.chatId, text, options);
         } catch (e) {
-          console.log(e, 'e');
-          throw e;
+          // Handle message too long error by splitting into chunks
+          if (e.response?.body?.description?.includes('too long')) {
+            console.log('Message too long, splitting into chunks');
+            sent = await sendLongMessage(bot, chatId || user.chatId, text, options);
+          } else {
+            console.log(e, 'e');
+            throw e;
+          }
         }
 
         user = await userController.updateMessage(user, deletable, sent.message_id);
@@ -88,17 +95,10 @@ export async function sendMessage(params: ISendMessageParams) {
       try {
         sent = await bot.sendMessage(chatIdToSent, text, options);
       } catch (e) {
-        // If message is still too long, we can add additional handling here
+        // Handle message too long error by splitting into chunks
         if (e.response?.body?.description?.includes('too long')) {
-          // Try to truncate the message or handle it differently
-          console.log('Message still too long even after processing code blocks');
-          
-          // Send a simplified message indicating content was too long
-          sent = await bot.sendMessage(
-            chatIdToSent, 
-            "⚠️ Message is too long. Please check the links for complete code.", 
-            options
-          );
+          console.log('Message too long, splitting into chunks');
+          sent = await sendLongMessage(bot, chatIdToSent, text, options);
         } else {
           console.log(e, 'e');
           throw e;

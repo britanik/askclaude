@@ -46,22 +46,21 @@ export const promptsDict = {
   - <blockquote>Block quotation started\nBlock quotation continued</blockquote>
   - <blockquote expandable>Expandable block quotation started\nExpandable block quotation continued</blockquote>
   - It is very important - never use Markdown, for code blocks use <pre>
+  - Do not use <pre> for anything but code blocks
   - For tabs use two spaces
   8. Remember, you are here to assist and interact with users in a helpful, ethical, and engaging manner. Adapt your personality to best serve each unique user while maintaining your core traits and ethical standards.`,
   escape: () => `You will receive text that contains HTML tags. 
   Your task: all <, > and & symbols that are not a part of a tag or an HTML entity - must be replaced with the corresponding HTML entities (< with &lt;, > with &gt; and & with &amp;). 
   Do not add any notes or explanations, just return the text with replaced symbols. 
   Do not real links: <a href="https://gist.github.com/askclaude/826423834e0d96459aee161b63089a9d">Код #1</a>
-  For example:
-  
-  Text to escape:
+  Example text to escape:
   <b>Basic HTML tags & defenition:<b>
   1. <b></b> - bold text
   2. <i></i> - italic text
   <b>Basics of <html> tag:</b> 
   1. it is used to create a web page
   
-  Result:
+  Example result:
   <b>Basic HTML tags &amp; defenition:</b>
   1. &lt;b&gt;&lt;/b&gt; - bold text
   2. &lt;i&gt;&lt;/i&gt; - italic text
