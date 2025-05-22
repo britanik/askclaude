@@ -63,22 +63,43 @@ export async function processMessageWithCodeBlocks(text: string): Promise<string
   // Use a Map to store the replacements we'll make
   const replacements = new Map();
   
-  // Detect the language if present
-  const langDetectRegex = /^```([a-zA-Z0-9]+)\n/;
+  // Detect the language from markdown code blocks
+  const markdownLangDetectRegex = /^```([a-zA-Z0-9]+)\n/;
+  
+  // Detect the language from HTML code tags (with optional name attribute)
+  const htmlCodeTagRegex = /<code class="language-([a-zA-Z0-9]+)"(?:\s+name="([^"]*)")?>([\s\S]*?)<\/code>/;
   
   while ((match = preBlockRegex.exec(text)) !== null) {
     const fullMatch = match[0]; // The entire <pre>...</pre> block
     let codeContent = match[1]; // Just the content inside the pre tags
     
-    // Check if the code starts with a markdown code block with language
     let filename = 'code.txt';
-    const langMatch = codeContent.match(langDetectRegex);
+    let detectedLang = null;
     
-    if (langMatch) {
-      // Extract language and set appropriate file extension
-      const lang = langMatch[1].toLowerCase();
-      codeContent = codeContent.replace(langDetectRegex, ''); // Remove the language marker
+    // First, check if there's an HTML code tag with language class
+    const htmlCodeMatch = codeContent.match(htmlCodeTagRegex);
+    if (htmlCodeMatch) {
+      detectedLang = htmlCodeMatch[1].toLowerCase();
+      const nameAttribute = htmlCodeMatch[2]; // This will be the filename if present
+      // Extract only the content inside the <code> tags, removing the HTML tags
+      codeContent = htmlCodeMatch[3];
       
+      // Use the name attribute as filename if provided
+      if (nameAttribute && nameAttribute.trim()) {
+        filename = nameAttribute.trim();
+      }
+    } else {
+      // Check if the code starts with a markdown code block with language
+      const markdownMatch = codeContent.match(markdownLangDetectRegex);
+      if (markdownMatch) {
+        detectedLang = markdownMatch[1].toLowerCase();
+        // Remove the markdown language marker
+        codeContent = codeContent.replace(markdownLangDetectRegex, '');
+      }
+    }
+    
+    // Set appropriate file extension based on detected language (only if no name attribute was provided)
+    if (detectedLang && (!htmlCodeMatch || !htmlCodeMatch[2] || !htmlCodeMatch[2].trim())) {
       // Map common languages to file extensions
       const extMap: {[key: string]: string} = {
         'js': 'js',
@@ -102,10 +123,14 @@ export async function processMessageWithCodeBlocks(text: string): Promise<string
         'kotlin': 'kt',
         'rust': 'rs',
         'sh': 'sh',
-        'bash': 'sh'
+        'bash': 'sh',
+        'sql': 'sql',
+        'xml': 'xml',
+        'yaml': 'yml',
+        'yml': 'yml'
       };
       
-      filename = `code.${extMap[lang] || 'txt'}`;
+      filename = `code.${extMap[detectedLang] || 'txt'}`;
     }
     
     // If the code ends with a markdown code block closer, remove it
@@ -113,9 +138,12 @@ export async function processMessageWithCodeBlocks(text: string): Promise<string
       codeContent = codeContent.slice(0, -3);
     }
     
+    // Clean up any remaining whitespace
+    codeContent = codeContent.trim();
+    
     try {
       // Upload to GitHub Gist
-      const title = `Код #${index++}`;
+      const title = `Код #${index++} (GitHub)`;
       const gistUrl = await uploadToGist(title, codeContent, filename);
       
       // Store the replacement

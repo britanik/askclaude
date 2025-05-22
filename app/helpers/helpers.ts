@@ -8,11 +8,12 @@ export interface IGetOptionsParams {
   chat_id?: number,
   message_id?: number,
   placeholder?: string,
-  force_reply?: boolean
+  force_reply?: boolean,
+  parseMode?: 'HTML' | 'MarkdownV2'
 }
 
 export const getOptions = ( params?:IGetOptionsParams ) => {
-  let { buttons = [], keyboard, chat_id, message_id, placeholder, force_reply } = params
+  let { buttons = [], keyboard, chat_id, message_id, placeholder, force_reply, parseMode = 'HTML' } = params || {}
   
   if( placeholder ){
     force_reply = true
@@ -21,7 +22,7 @@ export const getOptions = ( params?:IGetOptionsParams ) => {
   let options:SendMessageOptions | EditMessageTextOptions = {
     chat_id: chat_id,
     message_id: message_id,
-    parse_mode: "HTML",
+    parse_mode: parseMode,
     disable_web_page_preview: true,
     reply_markup: {
       resize_keyboard: true,

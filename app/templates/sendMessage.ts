@@ -5,6 +5,7 @@ import * as userController from '../controllers/users'
 import { addLog } from '../controllers/log'
 import { processMessageWithCodeBlocks } from '../helpers/gistHandler'
 import { saveAIResponse } from '../helpers/fileLogger'
+import { escapeHtmlForTelegram } from '../helpers/escapeHtml'
 
 export interface ISendMessageParams {
   user: IUser,
@@ -25,11 +26,17 @@ export async function sendMessage(params: ISendMessageParams) {
     let sent: TelegramBot.Message;
 
     // Process any code blocks in the message first
-    if (text && text.includes('<pre>')) {
+    if (text && +process.env.UPLOAD_CODE_BLOCKS && text.includes('<pre>')) {
       text = await processMessageWithCodeBlocks(text);
     }
 
-    await saveAIResponse(text, 'send');
+    await saveAIResponse(text, 'nopre');
+
+    // If text is empty or doesn't contain any < or > characters, return as is
+    if (!text || (!text.includes('<') && !text.includes('>'))) {
+      text = await escapeHtmlForTelegram(text);
+      await saveAIResponse(text, 'escaped');
+    }
 
     let options = getOptions({ 
       buttons, 
@@ -44,7 +51,7 @@ export async function sendMessage(params: ISendMessageParams) {
         let editOptions = {
           chat_id: chatId || user.chatId,
           message_id: messageId,
-          parse_mode: 'HTML' as const,
+          parse_mode: 'MarkdownV2' as const,
           disable_web_page_preview: true
         };
 
