@@ -10,6 +10,7 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { ImageProvider } from '../interfaces/image';
 import moment from 'moment';
+import { withChatAction } from '../helpers/chatAction';
 
 // Function to save image locally
 export async function saveImageLocally(imageBuffer: Buffer): Promise<string> {
@@ -64,37 +65,15 @@ export async function moderateContent(prompt: string): Promise<{flagged: boolean
 }
 
 // Common function to handle image generation process
-export async function handleImageGeneration(
-  prompt: string, 
-  user: IUser, 
-  bot: TelegramBot, 
-  generationFunction: (prompt: string) => Promise<Buffer | string>,
-  provider: ImageProvider
-): Promise<void> {
-  // Create a flag to track when to stop sending typing status
-  let isGenerating = true;
-  
-  // Start a "typing" indicator that repeats every 4 seconds
-  const typingInterval = setInterval(() => {
-    if (isGenerating) {
-      bot.sendChatAction(user.chatId, "upload_photo").catch(err => {
-        console.error("Error sending chat action:", err);
-      });
-    } else {
-      clearInterval(typingInterval);
-    }
-  }, 4000); // Refresh every 4 seconds
-  
-  // Send initial typing status immediately
-  await bot.sendChatAction(user.chatId, "upload_photo");
-  
+export async function handleImageGeneration( prompt: string, user: IUser, bot: TelegramBot, generationFunction: (prompt: string) => Promise<Buffer | string>, provider: ImageProvider ): Promise<void> {
   try {
-    // Generate the image using the provided generation function
-    const imageResult = await generationFunction(prompt);
-    
-    // Stop the typing status
-    isGenerating = false;
-    clearInterval(typingInterval);
+    // Use the chat action helper for upload_photo action
+    const imageResult = await withChatAction(
+      bot,
+      user.chatId,
+      'upload_photo',
+      () => generationFunction(prompt)
+    );
     
     let imageBuffer: Buffer;
     let imageUrl: string | null = null;
@@ -155,10 +134,6 @@ export async function handleImageGeneration(
     );
     
   } catch (error) {
-    // Stop the typing status if there's an error
-    isGenerating = false;
-    clearInterval(typingInterval);
-    
     console.error('Error generating image:', error);
     await sendMessage({
       text: 'Sorry, there was an error generating the image. Please try again later.',
