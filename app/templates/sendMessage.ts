@@ -52,7 +52,7 @@ export async function sendMessage(params: ISendMessageParams) {
         let editOptions = {
           chat_id: chatId || user.chatId,
           message_id: messageId,
-          parse_mode: 'MarkdownV2' as const,
+          parse_mode: 'HTML' as const,
           disable_web_page_preview: true
         };
 

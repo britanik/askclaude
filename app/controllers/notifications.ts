@@ -10,11 +10,7 @@ interface SendNotificationResult {
   errors: Array<{ userId: string, error: any }>;
 }
 
-export async function sendNotificationToAllUsers(
-  text: string,
-  bot: TelegramBot,
-  adminUser: IUser
-): Promise<SendNotificationResult> {
+export async function sendNotificationToAllUsers( text: string, bot: TelegramBot, adminUser: IUser ): Promise<SendNotificationResult> {
   // Get all active (non-blocked) users
   const allUsers = await User.find();
   
@@ -24,6 +20,8 @@ export async function sendNotificationToAllUsers(
     user: adminUser,
     bot
   });
+
+  console.log(text,'text')
   
   // Prepare to send notifications to all users
   const sendPromises = allUsers.map(user => {
