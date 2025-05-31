@@ -252,7 +252,8 @@ export async function sendThreadToChatGPT(params) {
           thread, 
           inputTokens, 
           outputTokens,
-          chatCompletion.model || process.env.CLAUDE_MODEL
+          chatCompletion.model || process.env.CLAUDE_MODEL,
+          bot
         )
       }
       

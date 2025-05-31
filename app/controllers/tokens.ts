@@ -2,6 +2,9 @@ import { IUser } from '../interfaces/users';
 import User from '../models/users';
 import Usage from '../models/usage';
 import Invite from '../models/invites';
+import TelegramBot from 'node-telegram-bot-api';
+import { sendMessage } from '../templates/sendMessage';
+import { isAdmin } from '../helpers/helpers';
 
 // Update user schema to remove token_balance field
 export async function updateUserSchema() {
@@ -111,7 +114,7 @@ export async function getPeriodTokenUsage(user: IUser) {
   }
 }
 
-export async function logTokenUsage(user: IUser, thread: any, inputTokens: number, outputTokens: number, model: string) {
+export async function logTokenUsage(user: IUser, thread: any, inputTokens: number, outputTokens: number, model: string, bot: TelegramBot) {
   try {
     // Log input tokens (prompt)
     if (inputTokens > 0) {
@@ -136,7 +139,16 @@ export async function logTokenUsage(user: IUser, thread: any, inputTokens: numbe
         description: `Output tokens for thread ${thread._id}`
       }).save();
     }
-        
+
+    // Send notification to user via bot
+    if( isAdmin(user) ) {
+      const message = `Tokens used:\nInput: ${inputTokens}\nOutput: ${outputTokens}\nModel: ${model}`;
+      await sendMessage({
+        text: message,
+        user,
+        bot
+      })
+    }
   } catch (error) {
     console.error('Error logging token usage:', error);
   }
