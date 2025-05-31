@@ -10,6 +10,7 @@ import { analyzeConversation, claudeCall, formatMessagesWithImages, saveImagePer
 import { isTokenLimit, logTokenUsage } from "./tokens"
 import { saveAIResponse } from "../helpers/fileLogger"
 import { withChatAction } from "../helpers/chatAction"
+import { isAdmin } from "../helpers/helpers"
 
 export async function startAssistant(user: IUser, firstMessage: string): Promise<IThread> {
   try {
@@ -193,7 +194,7 @@ export async function handleAssistantReply(
     if (assistantReply) {
       await sendThreadToUser({ 
         user: thread.owner, 
-        content: (isNewThread) ? assistantReply + '\n\n🆕' : assistantReply,
+        content: (isNewThread && isAdmin(thread.owner)) ? assistantReply + '\n\n🆕' : assistantReply,
         bot, 
         dict 
       });
