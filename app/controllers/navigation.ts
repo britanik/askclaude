@@ -243,7 +243,7 @@ export default class Navigation {
 
         this.user = await userController.addStep(this.user, 'assistant')
         let thread:IThread = await startAssistant(this.user, this.dict.getString('ASSISTANT_START'))
-        await handleAssistantReply(thread, this.bot, this.dict)
+        await handleAssistantReply(thread, false, this.bot, this.dict)
       },
       callback: async () => {
         // Check token limit
@@ -301,11 +301,14 @@ export default class Navigation {
           }
           
           // Now process the message normally
-          let threadWithUserMessage = await handleUserReply(this.user, text, this.bot, images, mediaGroupId);
+          // Analyze, save new Message, start new thread or return existing one
+          let threadWithUserMessage:{ thread: IThread, isNew: boolean } = await handleUserReply(this.user, text, this.bot, images, mediaGroupId);
           
           // Only send to Claude if this isn't a media group or it's the first message after waiting
           if (!mediaGroupId || this.mediaGroups.includes(mediaGroupId)) {
-            await handleAssistantReply(threadWithUserMessage, this.bot, this.dict);
+            
+            // Send thread to Claude and it's reply to user
+            await handleAssistantReply(threadWithUserMessage.thread, threadWithUserMessage.isNew,  this.bot, this.dict);
             
             // Remove from mediaGroups array after processing
             if (mediaGroupId) {

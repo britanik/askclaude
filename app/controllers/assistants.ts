@@ -51,7 +51,13 @@ export async function createNewThread(params): Promise<IThread> {
   }
 }
 
-export async function handleUserReply( user: IUser, userReply: string, bot: TelegramBot, images: string[] = [], mediaGroupId?: string ): Promise<IThread> {
+export async function handleUserReply( 
+  user: IUser, 
+  userReply: string, 
+  bot: TelegramBot, 
+  images: string[] = [], 
+  mediaGroupId?: string 
+): Promise<{ thread: IThread, isNew: boolean }> {
   // Get the most recent thread
   let thread: IThread = await getRecentThread(user);
   const savedImagePaths = [];
@@ -91,7 +97,7 @@ export async function handleUserReply( user: IUser, userReply: string, bot: Tele
       }
       
       await lastMediaMessage.save();
-      return thread;
+      return { thread, isNew: false };
     } else {
       await new Message({
         thread: thread._id,
@@ -101,7 +107,7 @@ export async function handleUserReply( user: IUser, userReply: string, bot: Tele
         mediaGroupId
       }).save();
       
-      return thread;
+      return { thread, isNew: false };
     }
   } else {
     // This is a regular message (not part of a media group)
@@ -144,7 +150,7 @@ export async function handleUserReply( user: IUser, userReply: string, bot: Tele
     if (shouldCreateNewThread) {
       thread = await startAssistant(user, userReply);
       console.log(`[NEW THREAD CREATED] For ${user.username || user.chatId} based on topic change analysis`);
-      return thread;
+      return { thread, isNew: true };
     }
     
     // Otherwise continue with the existing thread
@@ -155,21 +161,23 @@ export async function handleUserReply( user: IUser, userReply: string, bot: Tele
       images: images.length > 0 ? images : undefined
     }).save();
     
-    return thread;
+    return { thread, isNew: false };
   }
 }
 
-export async function handleAssistantReply(thread: IThread, bot: TelegramBot, dict: Dict): Promise<void> {
-  // Get fresh thread before processing
-  const freshThread = await Thread.findById(thread._id).populate('owner');
-  
+export async function handleAssistantReply(
+  thread: IThread, 
+  isNewThread: boolean, 
+  bot: TelegramBot, 
+  dict: Dict
+): Promise<void> {
   try {
     // Use the chat action helper for typing action while processing
     const assistantReply = await withChatAction(
       bot,
-      freshThread.owner.chatId,
+      thread.owner.chatId,
       'typing',
-      () => sendThreadToChatGPT({ thread: freshThread, bot })
+      () => sendThreadToChatGPT({ thread, bot })
     );
 
     // Save the response to file
@@ -177,20 +185,26 @@ export async function handleAssistantReply(thread: IThread, bot: TelegramBot, di
 
     // Add the assistant's message to thread
     await new Message({
-      thread: freshThread._id,
+      thread: thread._id,
       role: 'assistant',
       content: assistantReply
     }).save();
 
     if (assistantReply) {
-      await sendThreadToUser({ user: freshThread.owner, content: assistantReply, bot, dict });
+      await sendThreadToUser({ 
+        user: thread.owner, 
+        content: (isNewThread) ? assistantReply + '\n\n🆕' : assistantReply,
+        bot, 
+        dict 
+      });
     }
+
   } catch (error) {
     console.error('Error in handleAssistantReply:', error);
     // Send error message to user
     await sendMessage({ 
       text: dict.getString('ASSISTANT_ERROR'), 
-      user: freshThread.owner, 
+      user: thread.owner, 
       bot 
     });
   }
@@ -261,7 +275,6 @@ export async function sendThreadToUser(params: { user: IUser, content?: string, 
   }
 }
 
-// Helper function to get all messages for a thread
 export async function getThreadMessages(threadId: string): Promise<IMessage[]> {
   return await Message.find({ thread: threadId }).sort({ created: 1 })
 }

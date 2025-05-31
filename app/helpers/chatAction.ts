@@ -57,12 +57,7 @@ export class ChatActionManager {
 /**
  * Convenience function to create and manage a chat action for an async operation
  */
-export async function withChatAction<T>(
-  bot: TelegramBot,
-  chatId: number,
-  action: ChatAction,
-  asyncOperation: () => Promise<T>
-): Promise<T> {
+export async function withChatAction<T>( bot: TelegramBot, chatId: number, action: ChatAction, asyncOperation: () => Promise<T> ): Promise<T> {
   const manager = new ChatActionManager(bot, chatId, action);
   
   try {
