@@ -2,7 +2,7 @@ import { IUser } from "../interfaces/users"
 import { sendMessage } from "./sendMessage"
 import TelegramBot from "node-telegram-bot-api"
 import Dict from "../helpers/dict"
-import { getMinutesToNextHour, getPeriodTokenLimit, getPeriodTokenUsage } from "../controllers/tokens";
+import { getMinutesToNextHour, getPeriodTokenLimit, getPeriodTokenUsage, getPeriodWebSearchUsage } from "../controllers/tokens";
 import { getPeriodImageLimit, getPeriodImageUsage } from "../controllers/images";
 
 export async function tmplSettings(user: IUser, bot: TelegramBot, dict: Dict) {
@@ -13,6 +13,10 @@ export async function tmplSettings(user: IUser, bot: TelegramBot, dict: Dict) {
   // Get image usage statistics
   const imageUsage:number = await getPeriodImageUsage(user);
   const imageLimit:number = await getPeriodImageLimit(user);
+  
+  // Get web search usage statistics
+  const webSearchUsage:number = await getPeriodWebSearchUsage(user);
+  const webSearchLimit:number = +(process.env.WEB_SEARCH_HOUR_LIMIT || 10);
   
   // Format token numbers with thousands separator and handle undefined values
   const formatNumber = (num: number | undefined) => {
@@ -36,6 +40,14 @@ export async function tmplSettings(user: IUser, bot: TelegramBot, dict: Dict) {
       return ''
     }
   }
+
+  const stringWebSearchRefresh = () => {
+    if( webSearchUsage >= webSearchLimit ){
+      return `${dict.getString('SETTINGS_HOUR_LIMIT_REFRESH_IN', { minutes: getMinutesToNextHour() })}`
+    } else {
+      return ''
+    }
+  }
   
   let text = `<b>${dict.getString('SETTINGS_TITLE')}</b>
  
@@ -50,6 +62,9 @@ ${formatNumber(tokenUsage)} / ${formatNumber(tokenLimit)} в час. ${stringTok
 
 <b>${dict.getString('SETTINGS_IMAGE_LIMIT')}:</b>
 ${formatNumber(imageUsage)} / ${formatNumber(imageLimit)} в день. ${stringImageRefresh()}
+
+<b>${dict.getString('SETTINGS_WEB_SEARCH_LIMIT')}:</b>
+${formatNumber(webSearchUsage)} / ${formatNumber(webSearchLimit)} в час. ${stringWebSearchRefresh()}
 
 ℹ️ <i>${dict.getString('SETTINGS_USAGE_ADVICE')}</i>
 

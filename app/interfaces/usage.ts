@@ -6,7 +6,7 @@ export interface IUsage extends Document {
   user: IUser | Types.ObjectId
   thread?: IThread | Types.ObjectId
   created: Date
-  type: 'prompt' | 'completion' | 'referral_bonus' | 'referral_welcome' | 'admin_grant'
+  type: 'prompt' | 'completion' | 'referral_bonus' | 'referral_welcome' | 'admin_grant' | 'web_search'
   amount: number
   modelName?: string
   description?: string

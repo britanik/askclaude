@@ -7,7 +7,7 @@ import { IUser } from "../interfaces/users"
 import { IMessage } from "../interfaces/messages"
 import { sendMessage } from "../templates/sendMessage"
 import { analyzeConversation, claudeCall, formatMessagesWithImages, saveImagePermanently } from "../services/ai"
-import { isTokenLimit, logTokenUsage } from "./tokens"
+import { isTokenLimit, logTokenUsage, logWebSearchUsage } from "./tokens"
 import { saveAIResponse } from "../helpers/fileLogger"
 import { withChatAction } from "../helpers/chatAction"
 import { isAdmin } from "../helpers/helpers"
@@ -240,7 +240,8 @@ export async function sendThreadToChatGPT(params) {
     try {
       const chatCompletion = await claudeCall({ 
         messages: formattedMessages, 
-        temperature: 1 
+        temperature: 1,
+        user // Pass user for web search limit checking
       })
       
       // Log tokens usage
@@ -255,9 +256,57 @@ export async function sendThreadToChatGPT(params) {
           chatCompletion.model || process.env.CLAUDE_MODEL,
           bot
         )
+        
+        // Log web search usage if any
+        if (chatCompletion.usage.server_tool_use?.web_search_requests) {
+          await logWebSearchUsage(
+            user,
+            thread,
+            chatCompletion.usage.server_tool_use.web_search_requests,
+            chatCompletion.model || process.env.CLAUDE_MODEL
+          );
+        }
       }
       
-      return chatCompletion.content[0].text
+      // Extract search results and format response
+      let responseText = '';
+      let searchResults = [];
+      
+      if (chatCompletion.content && Array.isArray(chatCompletion.content)) {
+        for (const contentItem of chatCompletion.content) {
+          if (contentItem.type === 'text') {
+            responseText += contentItem.text;
+          } else if (contentItem.type === 'web_search_tool_result') {
+            // Collect search results
+            if (contentItem.content) {
+              for (const result of contentItem.content) {
+                if (result.type === 'web_search_result') {
+                  searchResults.push({
+                    title: result.title,
+                    url: result.url
+                  });
+                }
+              }
+            }
+          }
+        }
+      } else {
+        // Fallback for simple text response
+        responseText = chatCompletion.content[0].text;
+      }
+      
+      // Format final response with search results at the top
+      let finalResponse = '';
+      if (searchResults.length > 0) {
+        finalResponse += '<b>🔍 Источники:</b>\n';
+        searchResults.slice(0, 3).forEach((result, index) => {
+          finalResponse += `${index + 1}. <a href="${result.url}">${result.title}</a>\n`;
+        });
+        finalResponse += '\n';
+      }
+      finalResponse += responseText;
+      
+      return finalResponse;
     } catch (error) {
       console.error('Claude API call failed:', error)
       throw error

@@ -12,7 +12,7 @@ const UsageSchema = new Schema<IUsage>({
   type: { 
     type: String, 
     required: true,
-    enum: ['prompt', 'completion', 'referral_bonus', 'referral_welcome', 'admin_grant']
+    enum: ['prompt', 'completion', 'referral_bonus', 'referral_welcome', 'admin_grant', 'web_search']
   },
   amount: { type: Number, required: true },
   modelName: { type: String },

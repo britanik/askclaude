@@ -77,6 +77,10 @@ export default class Dict {
         rus: () => `Обновится завтра.`,
         eng: () => `Resets tomorrow.`
       },
+      SETTINGS_WEB_SEARCH_LIMIT: {
+        rus: () => `Лимит поиска`,
+        eng: () => `Search limit`
+      },
       ENTER_CODE: {
         rus: () => `<strong>Введите код</strong> полученный в приглашении (или /new чтобы пропустить):`,
         eng: () => `<strong>Enter the code</strong> received in the invitation (or /new to skip):`

@@ -8,9 +8,10 @@ import { v4 as uuidv4 } from 'uuid'
 import { getReadableId } from "../helpers/helpers"
 import { IMessage } from "../interfaces/messages"
 import { logApiError } from "../helpers/errorLogger"
-import { IUser } from "../interfaces/users"
 import { sendMessage } from "../templates/sendMessage"
 import { handleImageGeneration } from "../controllers/images"
+import { IUser } from "../interfaces/users"
+import { isWebSearchLimit } from "../controllers/tokens"
 
 export interface IChatCallParams {
   messages: Array<{
@@ -26,21 +27,40 @@ export interface IChatCallParams {
     }>
   }>,
   temperature?: number,
-  response_format?: { type: 'text' | 'json_object' }
+  response_format?: { type: 'text' | 'json_object' },
+  user?: IUser
 }
 
 export async function claudeCall(params: IChatCallParams) {
-  let { messages, temperature = 0.1, response_format = { type: 'text' } } = params
+  let { messages, temperature = 0.1, response_format = { type: 'text' }, user } = params
   
-  try {    
+  try {
+    // Check if web search limit reached
+    const searchLimitReached = user ? await isWebSearchLimit(user) : false;
+    
+    // Prepare tools array
+    const tools = [];
+    if (!searchLimitReached) {
+      tools.push({
+        type: "web_search_20250305",
+        name: "web_search",
+        max_uses: +(process.env.WEB_SEARCH_MAX_USES || 5)
+      });
+    }
+    
     // Prepare API request
-    const chatParams = {
+    const chatParams: any = {
       model: process.env.CLAUDE_MODEL, // Use primary model
       system: promptsDict.system(),
       messages: messages,
       max_tokens: +(process.env.CLAUDE_MAX_OUTPUT || 1000),
       stream: false,
       temperature,
+    }
+    
+    // Only add tools if available
+    if (tools.length > 0) {
+      chatParams.tools = tools;
     }
     
     try {

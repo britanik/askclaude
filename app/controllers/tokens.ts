@@ -42,6 +42,23 @@ export async function isTokenLimit(user: IUser) {
   }
 }
 
+// Check if user is at the web search limit
+export async function isWebSearchLimit(user: IUser) {
+  try {
+    const usage: number = await getPeriodWebSearchUsage(user);
+    const periodLimit = +(process.env.WEB_SEARCH_HOUR_LIMIT || 10);
+    
+    if (usage >= periodLimit) {
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('Error checking web search limit:', error);
+    return false;
+  }
+}
+
 // Calculate minutes until the next hour
 export function getMinutesToNextHour() {
   const now = new Date();
@@ -114,6 +131,41 @@ export async function getPeriodTokenUsage(user: IUser) {
   }
 }
 
+export async function getPeriodWebSearchUsage(user: IUser) {
+  try {
+    // Determine period length (default to 60 minutes if not set)
+    const periodLengthMinutes = +(process.env.TOKENS_PERIOD_LENGTH_MIN || 60);
+    
+    // Calculate the start time for the period
+    const periodStart = new Date();
+    periodStart.setMinutes(periodStart.getMinutes() - periodLengthMinutes);
+    
+    // Get usage from the defined period
+    const result = await Usage.aggregate([
+      { 
+        $match: { 
+          user: user._id,
+          created: { $gte: periodStart },
+          type: 'web_search'
+        } 
+      },
+      { 
+        $group: {
+          _id: null,
+          total: { $sum: '$amount' }
+        }
+      }
+    ]);
+
+    // Return the total as a number - if no results, return 0
+    return result.length > 0 ? result[0].total : 0;
+    
+  } catch (e) {
+    console.error('Error calculating period web search usage:', e);
+    return 0;
+  }
+}
+
 export async function logTokenUsage(user: IUser, thread: any, inputTokens: number, outputTokens: number, model: string, bot: TelegramBot) {
   try {
     // Log input tokens (prompt)
@@ -151,5 +203,22 @@ export async function logTokenUsage(user: IUser, thread: any, inputTokens: numbe
     }
   } catch (error) {
     console.error('Error logging token usage:', error);
+  }
+}
+
+export async function logWebSearchUsage(user: IUser, thread: any, searchCount: number, model: string) {
+  try {
+    if (searchCount > 0) {
+      await new Usage({
+        user: user._id,
+        thread: thread._id,
+        type: 'web_search',
+        amount: searchCount,
+        modelName: model,
+        description: `Web searches for thread ${thread._id}`
+      }).save();
+    }
+  } catch (error) {
+    console.error('Error logging web search usage:', error);
   }
 }
