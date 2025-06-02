@@ -7,6 +7,10 @@ import path from 'path'
 import { v4 as uuidv4 } from 'uuid'
 import { getReadableId } from "../helpers/helpers"
 import { IMessage } from "../interfaces/messages"
+import { logApiError } from "../helpers/errorLogger"
+import { IUser } from "../interfaces/users"
+import { sendMessage } from "../templates/sendMessage"
+import { handleImageGeneration } from "../controllers/images"
 
 export interface IChatCallParams {
   messages: Array<{
@@ -57,6 +61,9 @@ export async function claudeCall(params: IChatCallParams) {
       return request.data
       
     } catch (primaryError) {
+      // Log the primary error
+      await logApiError('anthropic', primaryError, 'Primary model call failed')
+      
       // Check if it's a 529 error or any server error (5xx)
       if (primaryError.response && (primaryError.response.status === 529 || 
           (primaryError.response.status >= 500 && primaryError.response.status < 600))) {
@@ -69,37 +76,39 @@ export async function claudeCall(params: IChatCallParams) {
         // Update model in request
         chatParams.model = backupModel
         
-        // Try with backup model
-        const backupRequest = await axios.post(
-          'https://api.anthropic.com/v1/messages', 
-          chatParams, 
-          { 
-            headers: {
-              'x-api-key': process.env.CLAUDE_TOKEN, 
-              'anthropic-version': '2023-06-01',
-              'Content-Type': 'application/json'
-            },
-            timeout: +process.env.CLAUDE_TIMEOUT
-          }
-        )
-        
-        console.log(`Received response from backup model ${backupModel}`)
-        return backupRequest.data
+        try {
+          // Try with backup model
+          const backupRequest = await axios.post(
+            'https://api.anthropic.com/v1/messages', 
+            chatParams, 
+            { 
+              headers: {
+                'x-api-key': process.env.CLAUDE_TOKEN, 
+                'anthropic-version': '2023-06-01',
+                'Content-Type': 'application/json'
+              },
+              timeout: +process.env.CLAUDE_TIMEOUT
+            }
+          )
+          
+          console.log(`Received response from backup model ${backupModel}`)
+          return backupRequest.data
+        } catch (backupError) {
+          // Log backup error as well
+          await logApiError('anthropic', backupError, 'Backup model call failed')
+          throw backupError
+        }
       } else {
         // For other types of errors, rethrow
         throw primaryError
       }
     }
   } catch(e) { 
-    console.log('Claude API error:')
+    console.log('Claude API error - details logged to file')
     
-    if (e.response) {
-      console.log('Status:', e.response.status)
-      console.log('Data:', e.response.data)
-    } else if (e.request) {
-      console.log('No response received:', e.request)
-    } else {
-      console.log('Error:', e.message)
+    // Log the final error if not already logged
+    if (!e.logged) {
+      await logApiError('anthropic', e, 'Claude API final error')
     }
     
     throw e
@@ -141,15 +150,21 @@ export async function getTranscription(msg, bot: TelegramBot): Promise<string> {
     form.append('file', fs.createReadStream(fileName))
     form.append('model', 'whisper-1')
 
-    // Send request to OpenAI
-    const openaiResponse = await axios.post('https://api.openai.com/v1/audio/transcriptions', form, {
-      headers: {
-        ...form.getHeaders(),
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-    })
+    try {
+      // Send request to OpenAI
+      const openaiResponse = await axios.post('https://api.openai.com/v1/audio/transcriptions', form, {
+        headers: {
+          ...form.getHeaders(),
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+        },
+      })
 
-    return openaiResponse.data.text
+      return openaiResponse.data.text
+    } catch (openaiError) {
+      // Log OpenAI error
+      await logApiError('openai', openaiError, 'Whisper transcription failed')
+      throw openaiError
+    }
 
   } catch (error) {
     throw error
@@ -289,7 +304,10 @@ export interface IConversationAnalysisResult {
   reasoning?: string;
 }
 
-export async function analyzeConversation( lastMessages: Array<{role: string, content: string}>, currentMessage: string ): Promise<IConversationAnalysisResult> {
+export async function analyzeConversation( 
+  lastMessages: Array<{role: string, content: string}>, 
+  currentMessage: string 
+): Promise<IConversationAnalysisResult> {
   try {
     // Prepare context for the model
     // Truncate assistant messages to 200 characters to save on tokens
@@ -317,40 +335,115 @@ export async function analyzeConversation( lastMessages: Array<{role: string, co
       temperature: 0,
     };
 
-    const response = await axios.post(
-      'https://api.anthropic.com/v1/messages',
-      chatParams,
-      {
-        headers: {
-          'x-api-key': process.env.CLAUDE_TOKEN,
-          'anthropic-version': '2023-06-01',
-          'Content-Type': 'application/json'
-        },
-        timeout: 10000 // 10-second timeout for quick response
-      }
-    );
+    try {
+      const response = await axios.post(
+        'https://api.anthropic.com/v1/messages',
+        chatParams,
+        {
+          headers: {
+            'x-api-key': process.env.CLAUDE_TOKEN,
+            'anthropic-version': '2023-06-01',
+            'Content-Type': 'application/json'
+          },
+          timeout: 10000 // 10-second timeout for quick response
+        }
+      );
 
-    const result = JSON.parse(response.data.content[0].text);
-    
-    // Validate the result
-    if (result && (result.action === 'new' || result.action === 'continue')) {
-      return { action: result.action };
-    } else {
-      console.log('Invalid analysis result, defaulting to continue:', result);
+      const result = JSON.parse(response.data.content[0].text);
+      
+      // Validate the result
+      if (result && (result.action === 'new' || result.action === 'continue')) {
+        return { action: result.action };
+      } else {
+        console.log('Invalid analysis result, defaulting to continue:', result);
+        return { action: 'continue' };
+      }
+    } catch (analysisError) {
+      // Log analysis error
+      await logApiError('anthropic', analysisError, 'Conversation analysis failed')
       return { action: 'continue' };
     }
   } catch (error) {
-    if (error.response) {
-      console.error('Error analyzing conversation:', {
-        status: error.response.status,
-        statusText: error.response.statusText,
-        data: error.response.data
-      });
-    } else if (error.request) {
-      console.error('Error request:', 'No response received');
-    } else {
-      console.error('Error message:', error.message);
-    }
+    console.error('Error in analyzeConversation:', error.message);
     return { action: 'continue' };
+  }
+}
+
+// Function to check content with OpenAI Moderation API
+export async function moderateContent(prompt: string): Promise<{flagged: boolean, categories: any}> {
+  try {
+    const response = await axios.post(
+      'https://api.openai.com/v1/moderations',
+      {
+        input: prompt
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+        }
+      }
+    );
+    
+    // Return the moderation result
+    return {
+      flagged: response.data.results[0].flagged,
+      categories: response.data.results[0].categories
+    };
+  } catch (error) {
+    console.error('Error calling moderation API - details logged to file');
+    // Log the moderation error
+    await logApiError('openai', error, 'Content moderation failed')
+    
+    // Default to flagged: false when API call fails
+    return {
+      flagged: false,
+      categories: {}
+    };
+  }
+}
+
+// OpenAI image generation function
+export async function generateOpenAIImage(prompt: string, user: IUser, bot: TelegramBot): Promise<void> {
+  try {
+    const generateImage = async (prompt: string): Promise<string> => {
+      try {
+        const response = await axios.post(
+          'https://api.openai.com/v1/images/generations',
+          {
+            model: "dall-e-3",
+            style: 'vivid', // vivid or natural
+            prompt: prompt,
+            n: 1,
+            size: "1024x1024",
+            response_format: "url"
+          },
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+            },
+            timeout: 120000
+          }
+        );
+        
+        // Extract image URL from response
+        return response.data.data[0].url;
+      } catch (imageError) {
+        // Log OpenAI image generation error
+        await logApiError('openai', imageError, 'DALL-E image generation failed')
+        throw imageError
+      }
+    };
+    
+    await handleImageGeneration(prompt, user, bot, generateImage, 'openai');
+
+  } catch (error) {
+    console.error('Error generating image - details logged to file');
+    await sendMessage({
+      text: 'Sorry, there was an error generating the image. Please try again later.',
+      user,
+      bot
+    });
   }
 }
