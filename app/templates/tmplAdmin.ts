@@ -1,6 +1,7 @@
 import moment from 'moment'
 import User from '../models/users'
 import Invite from '../models/invites'
+import Usage from '../models/usage'
 import { sendMessage } from './sendMessage'
 import TelegramBot from 'node-telegram-bot-api'
 import { IUser } from '../interfaces/users'
@@ -29,6 +30,44 @@ export async function tmplAdmin(user: IUser, bot: TelegramBot) {
   })
   const dauYesterday = activeUserIdsYesterday.length
 
+  // Get top users by token usage
+  const topUsersByUsage = await Usage.aggregate([
+    {
+      $match: {
+        type: { $in: ['prompt', 'completion'] }
+      }
+    },
+    {
+      $group: {
+        _id: '$user',
+        totalTokens: { $sum: '$amount' }
+      }
+    },
+    {
+      $lookup: {
+        from: 'users',
+        localField: '_id',
+        foreignField: '_id',
+        as: 'userData'
+      }
+    },
+    {
+      $unwind: '$userData'
+    },
+    {
+      $project: {
+        username: '$userData.username',
+        name: '$userData.name',
+        totalTokens: 1
+      }
+    },
+    {
+      $sort: { totalTokens: -1 }
+    },
+    {
+      $limit: 30 // Show top 50 users by usage
+    }
+  ])
   // Get top referrers
   const topReferrers = await Invite.aggregate([
     {
@@ -72,6 +111,26 @@ export async function tmplAdmin(user: IUser, bot: TelegramBot) {
     return usersText
   }
 
+  const getTopUsersByUsagePart = () => {
+    if (topUsersByUsage.length === 0) {
+      return `\n\n<b>Топ по токенам:</b>\nПока нет данных по использованию токенов`
+    }
+
+    let usageText = `\n\n<b>Топ по токенам (всего):</b>`
+    
+    topUsersByUsage.forEach((userUsage, index) => {
+      const displayName = userUsage.username 
+        ? `@${userUsage.username}` 
+        : (userUsage.name || 'Неизвестный пользователь')
+      
+      // Format number with thousands separator
+      const formattedTokens = userUsage.totalTokens.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+      
+      usageText += `\n${index + 1}. ${displayName} - ${formattedTokens}`
+    })
+
+    return usageText
+  }
   const getTopReferrersPart = () => {
     if (topReferrers.length === 0) {
       return `\n\n<b>Топ по реферам:</b>\nПока нет пользователей с рефералами`
@@ -90,7 +149,7 @@ export async function tmplAdmin(user: IUser, bot: TelegramBot) {
     return referrersText
   }
 
-  let text = `${getUsersPart()}${getTopReferrersPart()}`
+  let text = `${getUsersPart()}${getTopReferrersPart()}${getTopUsersByUsagePart()}`
   
   // Add buttons for admin actions
   let buttons = [
