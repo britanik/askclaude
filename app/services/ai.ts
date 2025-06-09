@@ -355,36 +355,38 @@ export async function analyzeConversation(
       temperature: 0,
     };
 
-    try {
-      const response = await axios.post(
-        'https://api.anthropic.com/v1/messages',
-        chatParams,
-        {
-          headers: {
-            'x-api-key': process.env.CLAUDE_TOKEN,
-            'anthropic-version': '2023-06-01',
-            'Content-Type': 'application/json'
-          },
-          timeout: 10000 // 10-second timeout for quick response
-        }
-      );
-
-      const result = JSON.parse(response.data.content[0].text);
-      
-      // Validate the result
-      if (result && (result.action === 'new' || result.action === 'continue')) {
-        return { action: result.action };
-      } else {
-        console.log('Invalid analysis result, defaulting to continue:', result);
-        return { action: 'continue' };
+    const response = await axios.post(
+      'https://api.anthropic.com/v1/messages',
+      chatParams,
+      {
+        headers: {
+          'x-api-key': process.env.CLAUDE_TOKEN,
+          'anthropic-version': '2023-06-01',
+          'Content-Type': 'application/json'
+        },
+        timeout: 10000 // 10-second timeout for quick response
       }
-    } catch (analysisError) {
-      // Log analysis error
-      await logApiError('anthropic', analysisError, 'Conversation analysis failed')
+    );
+
+    const result = JSON.parse(response.data.content[0].text);
+    
+    // Validate the result
+    if (result && (result.action === 'new' || result.action === 'continue')) {
+      return { action: result.action };
+    } else {
+      console.log('Invalid analysis result, defaulting to continue:', result);
       return { action: 'continue' };
     }
+
   } catch (error) {
     console.error('Error in analyzeConversation:', error.message);
+    
+    // Log analysis error only if it's not a simple timeout or network issue
+    if (error.response?.status) {
+      logApiError('anthropic', error, 'Conversation analysis failed').catch(() => {});
+    }
+    
+    // Always return 'continue' on any error to prevent crashes
     return { action: 'continue' };
   }
 }
