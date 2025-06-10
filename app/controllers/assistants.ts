@@ -6,16 +6,23 @@ import { IThread } from "../interfaces/threads"
 import { IUser } from "../interfaces/users"
 import { IMessage } from "../interfaces/messages"
 import { sendMessage } from "../templates/sendMessage"
-import { analyzeConversation, claudeCall, formatMessagesWithImages, saveImagePermanently } from "../services/ai"
+import { analyzeConversation, claudeCall, formatMessagesWithImages, IConversationAnalysisResult, saveImagePermanently } from "../services/ai"
 import { isTokenLimit, logTokenUsage, logWebSearchUsage } from "./tokens"
 import { saveAIResponse } from "../helpers/fileLogger"
 import { withChatAction } from "../helpers/chatAction"
 import { isAdmin } from "../helpers/helpers"
 
-export async function startAssistant(user: IUser, firstMessage: string): Promise<IThread> {
+export interface IAssistantParams {
+  user: IUser
+  firstMessage?: string
+  webSearch?: boolean
+}
+
+export async function startAssistant(params:IAssistantParams): Promise<IThread> {
+  const { user, firstMessage, webSearch = false } = params
   try {
     // Create a new thread
-    const thread: IThread = await new Thread({ owner: user }).save()
+    const thread: IThread = await new Thread({ owner: user, webSearch }).save()
     
     // Create and add the first message
     await new Message({
@@ -118,6 +125,9 @@ export async function handleUserReply(
     
     // Skip all analysis logic if the feature is disabled
     let shouldCreateNewThread = false;
+
+    // Web search disabled by default
+    let webSearch = false;
     
     // Only query for messages and perform analysis if the feature is enabled
     if (isAnalysisEnabled && images.length === 0) {
@@ -137,8 +147,9 @@ export async function handleUserReply(
           }));
           
         // Analyze the conversation
-        const analysis = await analyzeConversation(formattedMessages, userReply);
-        console.log(`[CONVERSATION ANALYSIS] ${user.username || user.chatId}: ${analysis.action} - ${analysis.reasoning}`);
+        const analysis:IConversationAnalysisResult = await analyzeConversation(formattedMessages, userReply);
+        webSearch = analysis.search || false;
+        console.log(`[CONVERSATION ANALYSIS] ${user.username || user.chatId}: ${analysis.action} - ${analysis.search}`);
         
         // If analysis says it's a new topic, create a new thread
         if (analysis.action === 'new') {
@@ -148,8 +159,14 @@ export async function handleUserReply(
     }
     
     // Create a new thread if analysis determined it's a new topic
+    let startAssistantParams:IAssistantParams = {
+      user,
+      firstMessage: userReply,
+      webSearch,
+    }
+
     if (shouldCreateNewThread) {
-      thread = await startAssistant(user, userReply);
+      thread = await startAssistant(startAssistantParams);
       console.log(`[NEW THREAD CREATED] For ${user.username || user.chatId} based on topic change analysis`);
       return { thread, isNew: true };
     }
@@ -238,10 +255,11 @@ export async function sendThreadToChatGPT(params) {
     const formattedMessages = await formatMessagesWithImages(messages, user, bot)
     
     try {
-      const chatCompletion = await claudeCall({ 
+      const chatCompletion = await claudeCall({
         messages: formattedMessages, 
         temperature: 1,
-        user // Pass user for web search limit checking
+        user, // Pass user for web search limit checking
+        webSearch: thread.webSearch // Pass web search flag from thread
       })
       
       // Log tokens usage

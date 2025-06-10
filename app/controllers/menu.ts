@@ -3,6 +3,7 @@ import { IMenuButton } from "../interfaces/menu-button";
 export const menuButtons = [
   { name: '/start', method: 'start' },
   { name: '/new', method: 'new' },
+  { name: '/search', method: 'new' },
   { name: '/settings', method: 'settings' },
   { name: '/invite', method: 'invite' },
   { name: '/image', method: 'image' },

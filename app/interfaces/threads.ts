@@ -4,5 +4,6 @@ import { IUser } from "./users"
 export interface IThread extends Document {
   _id: ObjectId
   owner: IUser
+  webSearch?: boolean
   created?: Date
 }

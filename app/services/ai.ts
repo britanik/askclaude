@@ -28,11 +28,12 @@ export interface IChatCallParams {
   }>,
   temperature?: number,
   response_format?: { type: 'text' | 'json_object' },
-  user?: IUser
+  user?: IUser,
+  webSearch?: boolean
 }
 
 export async function claudeCall(params: IChatCallParams) {
-  let { messages, temperature = 0.1, response_format = { type: 'text' }, user } = params
+  let { messages, temperature = 0.1, response_format = { type: 'text' }, user, webSearch = false } = params
   
   try {
     // Check if web search limit reached
@@ -40,7 +41,7 @@ export async function claudeCall(params: IChatCallParams) {
     
     // Prepare tools array
     const tools = [];
-    if (!searchLimitReached) {
+    if (!searchLimitReached && webSearch) {
       tools.push({
         type: "web_search_20250305",
         name: "web_search",
@@ -63,7 +64,7 @@ export async function claudeCall(params: IChatCallParams) {
       chatParams.tools = tools;
     }
 
-    console.log(chatParams, 'chatParams')
+    // console.log(chatParams, 'chatParams')
     
     try {
       // Make API request with primary model
@@ -80,7 +81,7 @@ export async function claudeCall(params: IChatCallParams) {
         }
       )
 
-      console.log(request.data,'request.data')
+      // console.log(request.data,'request.data')
 
       return request.data
       
@@ -325,13 +326,10 @@ export async function saveImagePermanently(url, imageId) {
 
 export interface IConversationAnalysisResult {
   action: 'new' | 'continue';
-  reasoning?: string;
+  search: boolean;
 }
 
-export async function analyzeConversation( 
-  lastMessages: Array<{role: string, content: string}>, 
-  currentMessage: string 
-): Promise<IConversationAnalysisResult> {
+export async function analyzeConversation( lastMessages: Array<{role: string, content: string}>, currentMessage: string ): Promise<IConversationAnalysisResult> {
   try {
     // Prepare context for the model
     // Truncate assistant messages to 200 characters to save on tokens
@@ -375,11 +373,11 @@ export async function analyzeConversation(
     const result = JSON.parse(response.data.content[0].text);
     
     // Validate the result
-    if (result && (result.action === 'new' || result.action === 'continue')) {
-      return { action: result.action };
+    if (result && (result.action === 'new' || result.action === 'continue') && typeof result.search === 'boolean') {
+      return { action: result.action, search: result.search || false };
     } else {
       console.log('Invalid analysis result, defaulting to continue:', result);
-      return { action: 'continue' };
+      return { action: 'continue', search: false };
     }
 
   } catch (error) {
@@ -391,7 +389,7 @@ export async function analyzeConversation(
     }
     
     // Always return 'continue' on any error to prevent crashes
-    return { action: 'continue' };
+    return { action: 'continue', search: false };
   }
 }
 

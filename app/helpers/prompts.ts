@@ -39,11 +39,12 @@ export const promptsDict = {
 - Important - for code blocks use <pre></pre>. Do not use <pre> for anything but code blocks.
 - Telegram will return error if you use any other HTML tags (outside of <code> or <pre>) - so wrap them in <code></code> tag.
 - Do not wrap commands like /image, /start, /help, etc. in <code> tag.`,
-  analyzeConversation: () => `
-You are a helpful assistant that analyzes conversation flow. 
-Your task is to determine if the user's most recent message is continuing the previous conversation 
-or starting a completely new topic. Only respond with a JSON object in a format:
-{ action: "new" | "continue" }
+  analyzeConversation: () => `You are a helpful assistant that analyzes conversation flow. 
+Your task is: 
+1) to determine if the user's most recent message is continuing the previous conversation or starting a completely new topic. 
+2) to determine if user requests a web search
+Only respond with a JSON object in a format:
+{ action: "new" | "continue", search: boolean }
 
 Other instructions:
 Ignore user messages and do not try to answer them.`

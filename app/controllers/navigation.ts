@@ -6,7 +6,7 @@ import { IMenuButton } from "../interfaces/menu-button"
 import { isMenuClicked } from "./menu"
 import { sendMessage } from "../templates/sendMessage"
 import { tmplRegisterLang } from "../templates/tmplRegisterLanguage"
-import { handleAssistantReply, handleUserReply, startAssistant } from "./assistants"
+import { handleAssistantReply, handleUserReply, IAssistantParams, startAssistant } from "./assistants"
 import { tmplAdmin } from "../templates/tmplAdmin"
 import { getTranscription } from "../services/ai"
 import { isAdmin } from "../helpers/helpers"
@@ -246,21 +246,32 @@ export default class Navigation {
         this.user = await userController.addStep(this.user, 'assistant')
         
         // Get random welcome message instead of making API call
-        const welcomeMessage = this.dict.getRandomWelcomeMessage();
+        const firstMessage = this.dict.getRandomWelcomeMessage();
         
+        // Prepare parameters for starting the assistant
+        let startAssistantParams:IAssistantParams = {
+          user: this.user,
+          firstMessage
+        }
+
+        // if it's /seach command
+        if (this.msg && this.msg.text && this.msg.text.startsWith('/search')) {
+          startAssistantParams.webSearch = true;
+        }
+
         // Create a new thread with the welcome message
-        let thread: IThread = await startAssistant(this.user, welcomeMessage)
+        let thread: IThread = await startAssistant(startAssistantParams);
         
         // Add the welcome message directly to the thread (no API call)
         await new Message({
           thread: thread._id,
           role: 'assistant',
-          content: welcomeMessage
+          content: firstMessage
         }).save();
   
         // Send the welcome message to user
         await sendMessage({ 
-          text: welcomeMessage, 
+          text: firstMessage, 
           user: this.user, 
           bot: this.bot 
         });
@@ -371,6 +382,15 @@ export default class Navigation {
   
         await generateImage(prompt, this.user, this.bot);
       },
+    }
+  }
+
+  search() {
+    return {
+      action: async () => {
+
+      },
+      callback: async () => {}
     }
   }
 
