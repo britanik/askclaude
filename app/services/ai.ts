@@ -30,6 +30,7 @@ export interface IChatCallParams {
   response_format?: { type: 'text' | 'json_object' },
   user?: IUser,
   webSearch?: boolean
+  bot: TelegramBot
 }
 
 export async function claudeCall(params: IChatCallParams) {
@@ -39,15 +40,25 @@ export async function claudeCall(params: IChatCallParams) {
     // Check if web search limit reached
     const searchLimitReached = user ? await isWebSearchLimit(user) : false;
     
-    // Prepare tools array
     const tools = [];
-    if (!searchLimitReached && webSearch) {
-      tools.push({
-        type: "web_search_20250305",
-        name: "web_search",
-        max_uses: +(process.env.WEB_SEARCH_MAX_USES || 5)
-      });
+
+    // Prepare tools array
+    if( webSearch ){
+      if (!searchLimitReached) {
+        tools.push({
+          type: "web_search_20250305",
+          name: "web_search",
+          max_uses: +(process.env.WEB_SEARCH_MAX_USES || 5)
+        });
+      } else {
+        await sendMessage({
+          text: 'Достигнут лимит на веб-поиск. Выполняю обычный запрос.',
+          user,
+          bot: params.bot
+        })
+      }
     }
+
     
     // Prepare API request
     const chatParams: any = {
@@ -81,7 +92,7 @@ export async function claudeCall(params: IChatCallParams) {
         }
       )
 
-      // console.log(request.data,'request.data')
+      console.log(request.data, 'request.data')
 
       return request.data
       

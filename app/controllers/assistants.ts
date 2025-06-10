@@ -259,7 +259,8 @@ export async function sendThreadToChatGPT(params) {
         messages: formattedMessages, 
         temperature: 1,
         user, // Pass user for web search limit checking
-        webSearch: thread.webSearch // Pass web search flag from thread
+        webSearch: thread.webSearch, // Pass web search flag from thread
+        bot
       })
       
       // Log tokens usage
