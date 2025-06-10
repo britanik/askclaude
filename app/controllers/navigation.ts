@@ -18,6 +18,7 @@ import { isValidInviteCode, processReferral } from "./invites"
 import { sendNotificationToAllUsers } from "./notifications"
 import { getPeriodImageLimit, isImageLimit } from "./images"
 import { IThread } from "../interfaces/threads"
+import Message from "../models/messages"
 
 // Import the generateImage function (the new one with moderation)
 import { generateImage } from "./images"
@@ -240,10 +241,29 @@ export default class Navigation {
           await sendMessage({ text: this.dict.getString('SETTINGS_HOUR_LIMIT_EXCEEDED', { minutes: getMinutesToNextHour() }), user: this.user, bot: this.bot });
           return;
         }
-
+  
+        // Set user step to assistant
         this.user = await userController.addStep(this.user, 'assistant')
-        let thread:IThread = await startAssistant(this.user, this.dict.getString('ASSISTANT_START'))
-        await handleAssistantReply(thread, false, this.bot, this.dict)
+        
+        // Get random welcome message instead of making API call
+        const welcomeMessage = this.dict.getRandomWelcomeMessage();
+        
+        // Create a new thread with the welcome message
+        let thread: IThread = await startAssistant(this.user, welcomeMessage)
+        
+        // Add the welcome message directly to the thread (no API call)
+        await new Message({
+          thread: thread._id,
+          role: 'assistant',
+          content: welcomeMessage
+        }).save();
+  
+        // Send the welcome message to user
+        await sendMessage({ 
+          text: welcomeMessage, 
+          user: this.user, 
+          bot: this.bot 
+        });
       },
       callback: async () => {
         // Check token limit
@@ -261,7 +281,7 @@ export default class Navigation {
           if (this.msg.voice) {
             text = await getTranscription(this.msg, this.bot);
           } 
-
+  
           // Handle photo messages
           else if (this.msg.photo && this.msg.photo.length > 0) {
             // Get the caption if it exists
@@ -273,7 +293,7 @@ export default class Navigation {
             
             console.log('Received image:', photoId);
           }
-
+  
           // Handle regular text messages
           else {
             text = this.msg.text;

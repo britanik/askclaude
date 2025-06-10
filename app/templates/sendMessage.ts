@@ -5,7 +5,6 @@ import * as userController from '../controllers/users'
 import { addLog } from '../controllers/log'
 import { processMessageWithCodeBlocks } from '../helpers/gistHandler'
 import { saveAIResponse } from '../helpers/fileLogger'
-import { escapeHtmlForTelegram } from '../helpers/escapeHtml'
 import { sendLongMessage } from '../helpers/messageChunker'
 
 export interface ISendMessageParams {
@@ -32,12 +31,6 @@ export async function sendMessage(params: ISendMessageParams) {
     }
 
     await saveAIResponse(text, 'nopre');
-
-    // If text is empty or doesn't contain any < or > characters, return as is
-    if (text.includes('<') && text.includes('>')) {
-      text = await escapeHtmlForTelegram(text);
-      await saveAIResponse(text, 'escaped');
-    }
 
     let options = getOptions({ 
       buttons, 

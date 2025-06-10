@@ -206,7 +206,7 @@ export async function logTokenUsage(user: IUser, thread: any, inputTokens: numbe
   }
 }
 
-export async function logWebSearchUsage(user: IUser, thread: any, searchCount: number, model: string) {
+export async function logWebSearchUsage(user: IUser, thread: any, searchCount: number, model: string, bot: TelegramBot) {
   try {
     if (searchCount > 0) {
       await new Usage({
@@ -217,6 +217,17 @@ export async function logWebSearchUsage(user: IUser, thread: any, searchCount: n
         modelName: model,
         description: `Web searches for thread ${thread._id}`
       }).save();
+
+          // Send notification to user via bot
+      if( isAdmin(user) ) {
+        const message = `Search used: ${searchCount}`;
+        await sendMessage({
+          text: message,
+          user,
+          bot
+        })
+      }
+
     }
   } catch (error) {
     console.error('Error logging web search usage:', error);

@@ -263,7 +263,8 @@ export async function sendThreadToChatGPT(params) {
             user,
             thread,
             chatCompletion.usage.server_tool_use.web_search_requests,
-            chatCompletion.model || process.env.CLAUDE_MODEL
+            chatCompletion.model || process.env.CLAUDE_MODEL,
+            bot
           );
         }
       }

@@ -62,6 +62,8 @@ export async function claudeCall(params: IChatCallParams) {
     if (tools.length > 0) {
       chatParams.tools = tools;
     }
+
+    console.log(chatParams, 'chatParams')
     
     try {
       // Make API request with primary model
@@ -77,6 +79,8 @@ export async function claudeCall(params: IChatCallParams) {
           timeout: +process.env.CLAUDE_TIMEOUT
         }
       )
+
+      console.log(request.data,'request.data')
 
       return request.data
       
@@ -115,7 +119,7 @@ export async function claudeCall(params: IChatCallParams) {
           return backupRequest.data
         } catch (backupError) {
           // Log backup error as well
-          await logApiError('anthropic', backupError, 'Backup model call failed')
+          logApiError('anthropic', backupError, 'Backup model call failed').catch(() => {})
           throw backupError
         }
       } else {
