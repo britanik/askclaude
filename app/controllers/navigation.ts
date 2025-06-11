@@ -15,7 +15,7 @@ import { tmplSettings } from '../templates/tmplSettings'
 import { tmplInvite } from "../templates/tmplInvite"
 import { getMinutesToNextHour, isTokenLimit, updateUserSchema } from "./tokens"
 import { isValidInviteCode, processReferral } from "./invites"
-import { sendNotificationToAllUsers } from "./notifications"
+import { sendNotification } from "./notifications"
 import { getPeriodImageLimit, isImageLimit } from "./images"
 import { IThread } from "../interfaces/threads"
 import Message from "../models/messages"
@@ -538,20 +538,8 @@ export default class Navigation {
         });
         
         // Send notifications using the controller
-        const results = await sendNotificationToAllUsers(notificationText, this.bot, this.user);
-        
-        // Send statistics back to admin
-        const statsMessage = `Результаты:
-Успешно: ${results.success}
-Ошибки: ${results.failed}
-Всего пользователей: ${results.total}`;
-        
-        await sendMessage({
-          text: statsMessage,
-          user: this.user,
-          bot: this.bot,
-        });
-        
+        const results = await sendNotification(notificationText, this.user, this.bot);
+                
         // Reset the step
         this.user = await userController.addStep(this.user, 'assistant');
       }

@@ -3,70 +3,56 @@ import User from '../models/users';
 import { sendMessage } from '../templates/sendMessage';
 import TelegramBot from 'node-telegram-bot-api';
 
-interface SendNotificationResult {
-  success: number;
-  failed: number;
-  total: number;
-  errors: Array<{ userId: string, error: any }>;
-}
+export async function sendNotification(text: string, adminUser:IUser, bot:TelegramBot): Promise<void> {
 
-export async function sendNotificationToAllUsers( text: string, bot: TelegramBot, adminUser: IUser ): Promise<SendNotificationResult> {
-  // Get all active (non-blocked) users
-  const allUsers = await User.find();
-  
+  let users = await User.find()
+
   // Send in-progress message to admin
   await sendMessage({
-    text: `Отправка уведомлений ${allUsers.length} пользователям...`,
+    text: `Отправка уведомлений ${users.length} пользователям...`,
     user: adminUser,
     bot
   });
+  
 
-  console.log(text,'text')
-  
-  // Prepare to send notifications to all users
-  const sendPromises = allUsers.map(user => {
-    return new Promise<{ success: boolean, user: IUser, error?: any }>(resolve => {
-      sendMessage({
-        text,
-        user,
-        bot
-      })
-      .then(() => {
-        resolve({ success: true, user });
-      })
-      .catch(error => {
-        resolve({ success: false, user, error });
-      });
+  if (users.length > 0) {
+    const results = await Promise.allSettled(
+      users.map((user) =>
+        sendMessage({
+          user,
+          text,
+          bot,
+        }).then(() => ({ user, success: true }))
+          .catch((e) => {
+            if (e.response.body.error_code === 403) {
+              console.log(e.response.body.error_code, 'Send text error');
+              user.blocked = true;
+              user.save();
+            }
+            return { user, success: false };
+          })
+        
+      )
+    );
+
+    // console.log(results,'results'):
+    // [
+    //   { status: 'fulfilled', value: { user: [Object], success: true } },
+    //   { status: 'fulfilled', value: { user: [Object], success: true } },
+    //   { status: 'fulfilled', value: { user: [Object], success: true } }
+    // ] results
+
+    const fulfilledResults = results.filter(result => result.status === 'fulfilled') as PromiseFulfilledResult<{ user: IUser; success: boolean; }>[];
+    const success = fulfilledResults.filter((result) => result.value.success).length;
+    const failed = fulfilledResults.length - success;
+
+    console.log();
+
+    await sendMessage({
+      text: `Результаты: ${success} успешно, ${failed} остальные не доставлены.`,
+      user: adminUser,
+      bot
     });
-  });
   
-  // Send all notifications and collect results
-  const results = await Promise.allSettled(sendPromises);
-  
-  // Process the results
-  const successfulResults = results
-    .filter(r => r.status === 'fulfilled' && (r.value as any).success)
-    .map(r => (r as PromiseFulfilledResult<any>).value);
-  
-  const failedResults = results
-    .filter(r => r.status === 'fulfilled' && !(r.value as any).success)
-    .map(r => (r as PromiseFulfilledResult<any>).value);
-  
-  const rejectedResults = results
-    .filter(r => r.status === 'rejected')
-    .map(r => ({ success: false, error: (r as PromiseRejectedResult).reason }));
-  
-  // Prepare error information
-  const errors = [
-    ...failedResults.map(r => ({ userId: r.user._id.toString(), error: r.error })),
-    ...rejectedResults.map(r => ({ userId: 'unknown', error: r.error }))
-  ];
-  
-  // Return statistics
-  return {
-    success: successfulResults.length,
-    failed: failedResults.length + rejectedResults.length,
-    total: allUsers.length,
-    errors
-  };
+  }
 }
