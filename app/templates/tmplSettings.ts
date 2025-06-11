@@ -2,7 +2,7 @@ import { IUser } from "../interfaces/users"
 import { sendMessage } from "./sendMessage"
 import TelegramBot from "node-telegram-bot-api"
 import Dict from "../helpers/dict"
-import { getMinutesToNextHour, getPeriodTokenLimit, getPeriodTokenUsage, getPeriodWebSearchUsage } from "../controllers/tokens";
+import { getMinutesToNextHour, getMinutesToNextDay, getPeriodTokenLimit, getPeriodTokenUsage, getDailyWebSearchUsage, getDailyWebSearchLimit } from "../controllers/tokens";
 import { getPeriodImageLimit, getPeriodImageUsage } from "../controllers/images";
 
 export async function tmplSettings(user: IUser, bot: TelegramBot, dict: Dict) {
@@ -14,9 +14,9 @@ export async function tmplSettings(user: IUser, bot: TelegramBot, dict: Dict) {
   const imageUsage:number = await getPeriodImageUsage(user);
   const imageLimit:number = await getPeriodImageLimit(user);
   
-  // Get web search usage statistics
-  const webSearchUsage:number = await getPeriodWebSearchUsage(user);
-  const webSearchLimit:number = +(process.env.WEB_SEARCH_HOUR_LIMIT || 10);
+  // Get web search usage statistics (CHANGED TO DAILY)
+  const webSearchUsage:number = await getDailyWebSearchUsage(user);
+  const webSearchLimit:number = await getDailyWebSearchLimit(user);
   
   // Format token numbers with thousands separator and handle undefined values
   const formatNumber = (num: number | undefined) => {
@@ -41,9 +41,10 @@ export async function tmplSettings(user: IUser, bot: TelegramBot, dict: Dict) {
     }
   }
 
+  // UPDATED: Web search refresh is now daily
   const stringWebSearchRefresh = () => {
     if( webSearchUsage >= webSearchLimit ){
-      return `${dict.getString('SETTINGS_HOUR_LIMIT_REFRESH_IN', { minutes: getMinutesToNextHour() })}`
+      return `${dict.getString('SETTINGS_DAILY_LIMIT_REFRESH_IN', { minutes: getMinutesToNextDay() })}`
     } else {
       return ''
     }
@@ -63,8 +64,8 @@ ${formatNumber(tokenUsage)} / ${formatNumber(tokenLimit)} в час. ${stringTok
 <b>${dict.getString('SETTINGS_IMAGE_LIMIT')}:</b>
 ${formatNumber(imageUsage)} / ${formatNumber(imageLimit)} в день. ${stringImageRefresh()}
 
-<b>${dict.getString('SETTINGS_WEB_SEARCH_LIMIT')}:</b>
-${formatNumber(webSearchUsage)} / ${formatNumber(webSearchLimit)} в час. ${stringWebSearchRefresh()}
+<b>${dict.getString('SETTINGS_WEB_SEARCH_DAILY_LIMIT')}:</b>
+${formatNumber(webSearchUsage)} / ${formatNumber(webSearchLimit)} в день. ${stringWebSearchRefresh()}
 
 ℹ️ <i>${dict.getString('SETTINGS_USAGE_ADVICE')}</i>
 

@@ -5,6 +5,7 @@ import Invite from '../models/invites';
 import TelegramBot from 'node-telegram-bot-api';
 import { sendMessage } from '../templates/sendMessage';
 import { isAdmin } from '../helpers/helpers';
+import moment from 'moment';
 
 // Update user schema to remove token_balance field
 export async function updateUserSchema() {
@@ -42,13 +43,13 @@ export async function isTokenLimit(user: IUser) {
   }
 }
 
-// Check if user is at the web search limit
+// Check if user is at the web search limit (CHANGED TO DAILY)
 export async function isWebSearchLimit(user: IUser) {
   try {
-    const usage: number = await getPeriodWebSearchUsage(user);
-    const periodLimit = +(process.env.WEB_SEARCH_HOUR_LIMIT || 10);
+    const usage: number = await getDailyWebSearchUsage(user);
+    const dailyLimit = await getDailyWebSearchLimit(user);
     
-    if (usage >= periodLimit) {
+    if (usage >= dailyLimit) {
       return true;
     }
     
@@ -64,6 +65,13 @@ export function getMinutesToNextHour() {
   const now = new Date();
   const minutesLeft = 60 - now.getMinutes();
   return minutesLeft;
+}
+
+// Calculate minutes until tomorrow (for daily limits)
+export function getMinutesToNextDay() {
+  const now = moment();
+  const tomorrow = moment().add(1, 'day').startOf('day');
+  return tomorrow.diff(now, 'minutes');
 }
 
 // Calculate period token limit including friend bonuses
@@ -91,6 +99,32 @@ export async function getPeriodTokenLimit(user: IUser): Promise<number> {
     console.error('Error calculating period token limit:', error);
     // Return default limit in case of error
     return +(process.env.BASE_TOKEN_LIMIT || 50000);
+  }
+}
+
+// Calculate daily web search limit including friend bonuses
+export async function getDailyWebSearchLimit(user: IUser): Promise<number> {
+  try {
+    // Get base daily limit from env or default to 50
+    const baseLimit = +(process.env.WEB_SEARCH_DAILY_LIMIT || 50);
+    
+    // Find user's invite code
+    const invite = await Invite.findOne({ owner: user._id });
+    
+    // Calculate bonus based on referrals
+    let referralBonus = 0;
+    if (invite) {
+      // Each used invite adds WEB_SEARCH_REFERRAL_BONUS to the daily limit
+      const usedInvitesCount = invite.usedBy.length;
+      referralBonus = usedInvitesCount * (+(process.env.WEB_SEARCH_REFERRAL_BONUS) || 5);
+    }
+    
+    // Return the total daily limit
+    return baseLimit + referralBonus;
+  } catch (error) {
+    console.error('Error calculating daily web search limit:', error);
+    // Return default limit in case of error
+    return +(process.env.WEB_SEARCH_DAILY_LIMIT || 50);
   }
 }
 
@@ -131,21 +165,18 @@ export async function getPeriodTokenUsage(user: IUser) {
   }
 }
 
-export async function getPeriodWebSearchUsage(user: IUser) {
+// NEW: Get daily web search usage
+export async function getDailyWebSearchUsage(user: IUser) {
   try {
-    // Determine period length (default to 60 minutes if not set)
-    const periodLengthMinutes = +(process.env.TOKENS_PERIOD_LENGTH_MIN || 60);
+    // Calculate the start of the current day
+    const startOfDay = moment().startOf('day').toDate();
     
-    // Calculate the start time for the period
-    const periodStart = new Date();
-    periodStart.setMinutes(periodStart.getMinutes() - periodLengthMinutes);
-    
-    // Get usage from the defined period
+    // Get usage from the current day
     const result = await Usage.aggregate([
       { 
         $match: { 
           user: user._id,
-          created: { $gte: periodStart },
+          created: { $gte: startOfDay },
           type: 'web_search'
         } 
       },
@@ -161,9 +192,15 @@ export async function getPeriodWebSearchUsage(user: IUser) {
     return result.length > 0 ? result[0].total : 0;
     
   } catch (e) {
-    console.error('Error calculating period web search usage:', e);
+    console.error('Error calculating daily web search usage:', e);
     return 0;
   }
+}
+
+// DEPRECATED: Keep for backward compatibility but now uses daily
+export async function getPeriodWebSearchUsage(user: IUser) {
+  // Redirect to daily usage for web search
+  return await getDailyWebSearchUsage(user);
 }
 
 export async function logTokenUsage(user: IUser, thread: any, inputTokens: number, outputTokens: number, model: string, bot: TelegramBot) {

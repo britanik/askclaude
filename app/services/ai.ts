@@ -52,7 +52,7 @@ export async function claudeCall(params: IChatCallParams) {
         });
       } else {
         await sendMessage({
-          text: 'Достигнут лимит на веб-поиск. Выполняю обычный запрос.',
+          text: 'Достигнут дневной лимит на веб-поиск. Выполняю обычный запрос.',
           user,
           bot: params.bot
         })

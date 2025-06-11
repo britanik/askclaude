@@ -77,9 +77,21 @@ export default class Dict {
         rus: () => `Обновится завтра.`,
         eng: () => `Resets tomorrow.`
       },
-      SETTINGS_WEB_SEARCH_LIMIT: {
+      SETTINGS_DAILY_LIMIT_EXCEEDED: {
+        rus: () => `Лимит веб-поиска ({limit} в день) исчерпан. Вы можете продолжить завтра.`,
+        eng: () => `You have reached the daily web search limit ({limit} per day). You can continue tomorrow.`
+      },
+      SETTINGS_DAILY_LIMIT_REFRESH_IN: {
+        rus: () => `Обновится через {minutes} мин.`,
+        eng: () => `Resets in {minutes} min.`
+      },
+      SETTINGS_WEB_SEARCH_DAILY_LIMIT: {
         rus: () => `Лимит поиска в интернете`,
-        eng: () => `Web search limit`
+        eng: () => `Daily web search limit`
+      },
+      SETTINGS_WEB_SEARCH_DAILY_LIMIT_RESET: {
+        rus: () => `Обновится завтра.`,
+        eng: () => `Resets tomorrow.`
       },
       ENTER_CODE: {
         rus: () => `<strong>Введите код</strong> полученный в приглашении (или /new чтобы пропустить):`,
