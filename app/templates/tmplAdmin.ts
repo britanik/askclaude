@@ -30,6 +30,20 @@ export async function tmplAdmin(user: IUser, bot: TelegramBot) {
   })
   const dauYesterday = activeUserIdsYesterday.length
 
+  // Calculate Web Search usage - users who used web search today
+  const webSearchUsersToday = await Usage.distinct('user', {
+    type: 'web_search',
+    created: { $gte: startOfToday }
+  })
+  const webSearchCountToday = webSearchUsersToday.length
+
+  // Calculate Web Search usage - users who used web search yesterday
+  const webSearchUsersYesterday = await Usage.distinct('user', {
+    type: 'web_search',
+    created: { $gte: startOfYesterday, $lt: endOfYesterday }
+  })
+  const webSearchCountYesterday = webSearchUsersYesterday.length
+
   // Get top users by token usage
   const topUsersByUsage = await Usage.aggregate([
     {
@@ -65,9 +79,49 @@ export async function tmplAdmin(user: IUser, bot: TelegramBot) {
       $sort: { totalTokens: -1 }
     },
     {
-      $limit: 30 // Show top 50 users by usage
+      $limit: 30 // Show top 30 users by usage
     }
   ])
+
+  // Get top users by web search usage (all time)
+  const topUsersByWebSearch = await Usage.aggregate([
+    {
+      $match: {
+        type: 'web_search'
+      }
+    },
+    {
+      $group: {
+        _id: '$user',
+        totalSearches: { $sum: '$amount' }
+      }
+    },
+    {
+      $lookup: {
+        from: 'users',
+        localField: '_id',
+        foreignField: '_id',
+        as: 'userData'
+      }
+    },
+    {
+      $unwind: '$userData'
+    },
+    {
+      $project: {
+        username: '$userData.username',
+        name: '$userData.name',
+        totalSearches: 1
+      }
+    },
+    {
+      $sort: { totalSearches: -1 }
+    },
+    {
+      $limit: 15 // Show top 15 users by web search usage
+    }
+  ])
+
   // Get top referrers
   const topReferrers = await Invite.aggregate([
     {
@@ -107,7 +161,9 @@ export async function tmplAdmin(user: IUser, bot: TelegramBot) {
 Сегодня новых: ${usersTodayTotal.length}
 Вчера новых: ${yesterdayTotal.length}
 Активных за сегодня (DAU): ${dauToday}
-Активных за вчера (DAU): ${dauYesterday}`
+Активных за вчера (DAU): ${dauYesterday}
+Веб-поиск сегодня: ${webSearchCountToday} польз.
+Веб-поиск вчера: ${webSearchCountYesterday} польз.`
     return usersText
   }
 
@@ -131,6 +187,25 @@ export async function tmplAdmin(user: IUser, bot: TelegramBot) {
 
     return usageText
   }
+
+  const getTopUsersByWebSearchPart = () => {
+    if (topUsersByWebSearch.length === 0) {
+      return `\n\n<b>Топ по веб-поиску:</b>\nПока нет данных по использованию веб-поиска`
+    }
+
+    let webSearchText = `\n\n<b>Топ по веб-поиску (всего):</b>`
+    
+    topUsersByWebSearch.forEach((userUsage, index) => {
+      const displayName = userUsage.username 
+        ? `@${userUsage.username}` 
+        : (userUsage.name || 'Неизвестный пользователь')
+      
+      webSearchText += `\n${index + 1}. ${displayName} - ${userUsage.totalSearches}`
+    })
+
+    return webSearchText
+  }
+
   const getTopReferrersPart = () => {
     if (topReferrers.length === 0) {
       return `\n\n<b>Топ по реферам:</b>\nПока нет пользователей с рефералами`
@@ -149,7 +224,7 @@ export async function tmplAdmin(user: IUser, bot: TelegramBot) {
     return referrersText
   }
 
-  let text = `${getUsersPart()}${getTopReferrersPart()}${getTopUsersByUsagePart()}`
+  let text = `${getUsersPart()}${getTopReferrersPart()}${getTopUsersByWebSearchPart()}${getTopUsersByUsagePart()}`
   
   // Add buttons for admin actions
   let buttons = [
