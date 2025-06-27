@@ -229,7 +229,8 @@ export async function tmplAdmin(user: IUser, bot: TelegramBot) {
   // Add buttons for admin actions
   let buttons = [
     [
-      { text: "📢 Уведомление", callback_data: '{"a":"admin","v":"notifications"}' }
+      { text: "📢 Уведомление", callback_data: '{"a":"admin","v":"notifications"}' },
+      { text: "📁 Загрузить файл", callback_data: '{"a":"admin","v":"adminUploadFile"}' },
     ]
   ]
   

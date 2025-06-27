@@ -19,8 +19,6 @@ import { sendNotification } from "./notifications"
 import { getPeriodImageLimit, isImageLimit } from "./images"
 import { IThread } from "../interfaces/threads"
 import Message from "../models/messages"
-
-// Import the generateImage function (the new one with moderation)
 import { generateImage } from "./images"
 
 export interface INavigationParams {
@@ -172,6 +170,12 @@ export default class Navigation {
         }
         if (this.data.v === 'invite') {
           await this.invite().action();
+        }
+        if (this.data.v === 'manual') {
+          this.bot.sendDocument(
+            this.user.chatId,
+            process.env.DOCUMENT_PDF_MANUAL
+          )  
         }
       },
     }
@@ -444,6 +448,10 @@ export default class Navigation {
         if(this.data.v === 'notifications') {
           await this.notifications().action();
         }
+
+        if(this.data.v === 'adminUploadFile') {
+          await this.adminUploadFile().action()
+        }
       },
     }
   }
@@ -509,6 +517,36 @@ export default class Navigation {
       },
       callback: async () => {
       },
+    }
+  }
+
+  adminUploadFile() {
+    return {
+      action: async () => {
+        if (!isAdmin(this.user)) return;
+        this.user = await userController.addStep(this.user, 'adminUploadFile');
+        await sendMessage({
+          text: "Отправьте файл",
+          user: this.user,
+          bot: this.bot,
+        });
+      },
+      callback: async () => {
+        if( this.msg.document && this.msg.document.file_id ){
+          await sendMessage({
+            text: this.msg.document.file_id,
+            user: this.user,
+            bot: this.bot,
+          });
+          this.resetUser()
+        } else {
+          await sendMessage({
+            text: 'No document found in your message',
+            user: this.user,
+            bot: this.bot,
+          })
+        }
+      }
     }
   }
 

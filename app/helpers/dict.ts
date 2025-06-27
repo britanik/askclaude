@@ -50,8 +50,8 @@ export default class Dict {
         eng: () => `Available formats`
       },
       SETTINGS_FORMATS_STRING: {
-        rus: () => `Текст, Фото, Голосовые сообщения`,
-        eng: () => `Text, Photo, Voice messages`
+        rus: () => `Текст, Фото, Голосовые сообщения, Поиск в интернете`,
+        eng: () => `Text, Photo, Voice messages, Web Search`
       },
       SETTINGS_LANGUAGE: {
         rus: () => `Язык`,
@@ -106,8 +106,8 @@ export default class Dict {
         eng: () => `Please enter text`
       },
       BUTTON_NEW_CHAT: {
-        rus: () => `💬 Новый чат`,
-        eng: () => `💬 New Chat`
+        rus: () => `✅ Новый чат`,
+        eng: () => `✅ New Chat`
       },
       BUTTON_CODE: {
         rus: () => `🤑 Ввести код`,
@@ -116,6 +116,10 @@ export default class Dict {
       BUTTON_INVITE_FRIEND: {
         rus: () => `🎁 Пригласить`,
         eng: () => `🎁 Invite`
+      },
+      BUTTON_PDF_MANUAL: {
+        rus: () => `🆘 Инструкция`,
+        eng: () => `🆘 Manual`
       },
       NOT_FOUND: {
         rus: () => `Извините, произошла ошибка. Попробуйте начать заново /start или начните новый диалогк /new`,

@@ -74,6 +74,7 @@ ${formatNumber(webSearchUsage)} / ${formatNumber(webSearchLimit)} в день. $
   let buttons = [
     [
       { text: dict.getString('BUTTON_NEW_CHAT'), callback_data: '{"a":"new"}' },
+      { text: dict.getString('BUTTON_PDF_MANUAL'), callback_data: '{"a":"settings","v":"manual"}' },
     ],
     [
       { text: dict.getString('BUTTON_INVITE_FRIEND'), callback_data: '{"a":"settings","v":"invite"}' },
