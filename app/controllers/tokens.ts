@@ -63,7 +63,12 @@ export async function isWebSearchLimit(user: IUser) {
 // Calculate minutes until the next hour
 export function getMinutesToNextHour() {
   const now = new Date();
-  const minutesLeft = 60 - now.getMinutes();
+  const nextHour = new Date();
+  nextHour.setHours(nextHour.getHours() + 1, 0, 0, 0);
+  
+  const diffMs = nextHour.getTime() - now.getTime();
+  const minutesLeft = Math.ceil(diffMs / (1000 * 60));
+  
   return minutesLeft;
 }
 
@@ -130,19 +135,16 @@ export async function getDailyWebSearchLimit(user: IUser): Promise<number> {
 
 export async function getPeriodTokenUsage(user: IUser) {
   try {
-    // Determine period length (default to 60 minutes if not set)
-    const periodLengthMinutes = +(process.env.TOKENS_PERIOD_LENGTH_MIN || 60);
+    // Calculate the start of the current hour (fixed window)
+    const currentHourStart = new Date();
+    currentHourStart.setMinutes(0, 0, 0); // Set to XX:00:00.000
     
-    // Calculate the start time for the period
-    const periodStart = new Date();
-    periodStart.setMinutes(periodStart.getMinutes() - periodLengthMinutes);
-    
-    // Get usage from the defined period
+    // Get usage from the current hour only
     const result = await Usage.aggregate([
       { 
         $match: { 
           user: user._id,
-          created: { $gte: periodStart },
+          created: { $gte: currentHourStart },
           type: { $in: ['prompt', 'completion'] }
         } 
       },
@@ -153,8 +155,8 @@ export async function getPeriodTokenUsage(user: IUser) {
         }
       }
     ]);
-    
-    console.log(result,'result')
+
+    console.log(`Token usage for user ${user._id} since ${currentHourStart.toISOString()}:`, result);
 
     // Return the total as a number - if no results, return 0
     return result.length > 0 ? result[0].total : 0;
