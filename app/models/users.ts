@@ -20,6 +20,9 @@ const UserSchema = new Schema<IUser>({
   prefs: {
     lang: { type: String },
     token_balance: { type: Number }
+  },
+  keys: {
+    notion: { type: String }
   }
 })
 

@@ -4,7 +4,6 @@ import TelegramBot from "node-telegram-bot-api"
 import fs from 'fs'
 import FormData from 'form-data'
 import path from 'path'
-import { v4 as uuidv4 } from 'uuid'
 import { getReadableId } from "../helpers/helpers"
 import { IMessage } from "../interfaces/messages"
 import { logApiError } from "../helpers/errorLogger"
@@ -12,6 +11,7 @@ import { sendMessage } from "../templates/sendMessage"
 import { handleImageGeneration } from "../controllers/images"
 import { IUser } from "../interfaces/users"
 import { isWebSearchLimit } from "../controllers/tokens"
+import { getAllNotionPages } from '../controllers/notion';
 
 export interface IChatCallParams {
   messages: Array<{
@@ -29,12 +29,13 @@ export interface IChatCallParams {
   temperature?: number,
   response_format?: { type: 'text' | 'json_object' },
   user?: IUser,
-  webSearch?: boolean
+  webSearch?: boolean,
+  notion?: boolean,
   bot: TelegramBot
 }
 
 export async function claudeCall(params: IChatCallParams) {
-  let { messages, temperature = 0.1, response_format = { type: 'text' }, user, webSearch = false } = params
+  let { messages, temperature = 0.1, response_format = { type: 'text' }, user, webSearch = false, notion = false } = params
   
   try {
     // Check if web search limit reached
@@ -59,11 +60,48 @@ export async function claudeCall(params: IChatCallParams) {
       }
     }
 
+    let notionContext = '';
+    if (notion && user?.keys?.notion) {
+      try {
+        console.log(`[NOTION] Fetching ALL pages for user`);
+        
+        // Import the updated function
+        const allNotionPages = await getAllNotionPages(user);
+        
+        if (allNotionPages.length > 0) {
+          notionContext = '\n\n--- Complete Export from Users Notion Workspace ---\n';
+          notionContext += `Total pages available: ${allNotionPages.length}\n\n`;
+          
+          allNotionPages.forEach((page, index) => {
+            notionContext += `\n## Page ${index + 1}: ${page.title}\n`;
+            notionContext += `URL: ${page.url}\n`;
+            notionContext += `Content:\n${page.content}\n`;
+            notionContext += '\n---\n';
+          });
+          
+          notionContext += '\n--- End of Notion Workspace Export ---\n\n';
+          
+          console.log(`[NOTION] Loaded ${allNotionPages.length} total pages into context`);
+        } else {
+          notionContext = '\n\n--- Notion Workspace ---\nNo pages found in the user\'s Notion workspace or all pages are empty.\n--- End of Notion Workspace ---\n\n';
+          console.log(`[NOTION] No pages found in user's workspace`);
+        }
+      } catch (notionError) {
+        console.error('Notion fetch failed:', notionError.message);
+        await sendMessage({
+          text: '⚠️ Ошибка при загрузке страниц Notion. Проверьте настройки API ключа. Выполняю обычный запрос.',
+          user,
+          bot: params.bot
+        });
+        
+        notionContext = '\n\n--- Notion Workspace ---\nError loading Notion pages. Please check your API key settings.\n--- End of Notion Workspace ---\n\n';
+      }
+    }
     
     // Prepare API request
     const chatParams: any = {
       model: process.env.CLAUDE_MODEL, // Use primary model
-      system: promptsDict.system(),
+      system: promptsDict.system() + notionContext, // Add ALL Notion pages to system prompt
       messages: messages,
       max_tokens: +(process.env.CLAUDE_MAX_OUTPUT || 1000),
       stream: false,

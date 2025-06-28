@@ -7,6 +7,7 @@ import { isMenuClicked } from "./menu"
 import { sendMessage } from "../templates/sendMessage"
 import { tmplRegisterLang } from "../templates/tmplRegisterLanguage"
 import { handleAssistantReply, handleUserReply, IAssistantParams, startAssistant } from "./assistants"
+import { validateNotionKey, searchNotionPages } from './notion'
 import { tmplAdmin } from "../templates/tmplAdmin"
 import { getTranscription } from "../services/ai"
 import { isAdmin } from "../helpers/helpers"
@@ -257,12 +258,22 @@ export default class Navigation {
           user: this.user,
           firstMessage
         }
-
-        // if it's /seach command
+  
+        // if it's /search command
         if (this.msg && this.msg.text && this.msg.text.startsWith('/search')) {
           startAssistantParams.webSearch = true;
         }
-
+        
+        // if it's /notion command
+        if (this.msg && this.msg.text && this.msg.text.startsWith('/notion')) {
+          startAssistantParams.notion = true;
+          // Check if user has API key
+          if (!this.user.keys?.notion) {
+            await this.notionSetup().action();
+            return;
+          }
+        }
+  
         // Create a new thread with the welcome message
         let thread: IThread = await startAssistant(startAssistantParams);
         
@@ -286,7 +297,7 @@ export default class Navigation {
           await sendMessage({ text: this.dict.getString('SETTINGS_HOUR_LIMIT_EXCEEDED', { minutes: getMinutesToNextHour() }), user: this.user, bot: this.bot });
           return;
         }
-
+  
         try {
           let text: string = '';
           let images: string[] = [];
@@ -437,6 +448,107 @@ export default class Navigation {
         }
       },
     };
+  }
+
+  notion() {
+    return {
+      action: async () => {
+        // Check if user has Notion API key
+        if (!this.user.keys?.notion) {
+          // No API key, redirect to setup
+          await this.notionSetup().action();
+          return;
+        }
+        
+        // Has API key, start assistant with Notion
+        await this.assistant().action();
+      },
+      callback: async () => {
+        // Same logic as action
+        if (!this.user.keys?.notion) {
+          await this.notionSetup().action();
+          return;
+        }
+        
+        await this.assistant().action();
+      },
+    }
+  }
+
+  notionSetup() {
+    return {
+      action: async () => {
+        // Set step to wait for API key input
+        this.user = await userController.addStep(this.user, 'notionSetup');
+        await sendMessage({
+          text: '🔑 <b>Настройка Notion</b>\n\nДля работы с вашими страницами Notion нужен API ключ.\n\n<b>Как получить ключ:</b>\n1. Откройте https://www.notion.so/profile/integrations\n2. Нажмите "New integration"\n3. Дайте имя интеграции и выберите workspace\n4. Скопируйте "Internal Integration Secret"\n5. Не забудьте добавить интеграцию к нужным страницам в Notion\n\n<b>Отправьте ваш API ключ:</b>',
+          user: this.user,
+          bot: this.bot,
+        })
+      },
+      callback: async () => {
+        // Process the entered API key
+        const apiKey = this.msg.text?.trim();
+        
+        if (!apiKey) {
+          await sendMessage({
+            text: '❌ Неверный формат API ключа.Попробуйте снова:',
+            user: this.user,
+            bot: this.bot,
+          });
+          return;
+        }
+        
+        // Validate the API key
+        const isValid = await validateNotionKey(apiKey);
+        
+        if (isValid) {
+          // Save the API key
+          this.user.keys = this.user.keys || {};
+          this.user.keys.notion = apiKey;
+          await this.user.save();
+          
+          await sendMessage({
+            text: '✅ <b>API ключ сохранен!</b>\n\nТеперь вы можете использовать команду /notion для поиска по вашим страницам Notion.\n\nПопробуйте задать вопрос:',
+            user: this.user,
+            bot: this.bot,
+          });
+          
+          // Reset step and start assistant with Notion
+          this.user = await userController.addStep(this.user, 'assistant');
+          
+          // Start a new Notion-enabled thread
+          let startAssistantParams: IAssistantParams = {
+            user: this.user,
+            firstMessage: 'Привет! Теперь я могу искать информацию в ваших страницах Notion. О чём хотите узнать?',
+            notion: true
+          };
+          
+          let thread: IThread = await startAssistant(startAssistantParams);
+          
+          // Add the welcome message directly to the thread
+          await new Message({
+            thread: thread._id,
+            role: 'assistant',
+            content: startAssistantParams.firstMessage
+          }).save();
+          
+          // Send the welcome message to user
+          await sendMessage({ 
+            text: startAssistantParams.firstMessage, 
+            user: this.user, 
+            bot: this.bot 
+          });
+          
+        } else {
+          await sendMessage({
+            text: '❌ <b>Ошибка проверки API ключа</b>\n\nПроверьте:\n• Ключ скопирован полностью\n• Интеграция создана правильно\n• У интеграции есть доступ к workspace\n\nПопробуйте ещё раз:',
+            user: this.user,
+            bot: this.bot,
+          });
+        }
+      },
+    }
   }
 
   admin() {

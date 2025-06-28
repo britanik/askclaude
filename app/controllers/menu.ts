@@ -4,6 +4,7 @@ export const menuButtons = [
   { name: '/start', method: 'start' },
   { name: '/new', method: 'new' },
   { name: '/search', method: 'new' },
+  { name: '/notion', method: 'notion' },
   { name: '/settings', method: 'settings' },
   { name: '/invite', method: 'invite' },
   { name: '/image', method: 'image' },

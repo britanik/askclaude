@@ -14,5 +14,8 @@ export interface IUser extends Document {
   prefs: {
     lang: 'eng' | 'rus',
     token_balance?: number,
+  },
+  keys?: {
+    notion?: string,
   }
 }

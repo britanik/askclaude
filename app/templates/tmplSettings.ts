@@ -79,7 +79,7 @@ ${formatNumber(webSearchUsage)} / ${formatNumber(webSearchLimit)} в день. $
     [
       { text: dict.getString('BUTTON_INVITE_FRIEND'), callback_data: '{"a":"settings","v":"invite"}' },
       { text: dict.getString('BUTTON_CODE'), callback_data: '{"a":"settings","v":"code"}' },
-    ]
+    ],
   ];
 
   await sendMessage({ text, user, bot, buttons });

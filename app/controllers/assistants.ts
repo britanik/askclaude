@@ -11,18 +11,24 @@ import { isTokenLimit, logTokenUsage, logWebSearchUsage } from "./tokens"
 import { saveAIResponse } from "../helpers/fileLogger"
 import { withChatAction } from "../helpers/chatAction"
 import { isAdmin } from "../helpers/helpers"
+import { searchNotionPages } from "./notion"
 
 export interface IAssistantParams {
   user: IUser
   firstMessage?: string
   webSearch?: boolean
+  notion?: boolean
 }
 
 export async function startAssistant(params:IAssistantParams): Promise<IThread> {
-  const { user, firstMessage, webSearch = false } = params
+  const { user, firstMessage, webSearch = false, notion = false } = params
   try {
     // Create a new thread
-    const thread: IThread = await new Thread({ owner: user, webSearch }).save()
+    const thread: IThread = await new Thread({ 
+      owner: user, 
+      webSearch, 
+      notion // Add this line
+    }).save()
     
     // Create and add the first message
     await new Message({
@@ -126,8 +132,9 @@ export async function handleUserReply(
     // Skip all analysis logic if the feature is disabled
     let shouldCreateNewThread = false;
 
-    // Web search disabled by default
+    // Web search and Notion disabled by default
     let webSearch = false;
+    let notion = false;
     
     // Only query for messages and perform analysis if the feature is enabled
     if (isAnalysisEnabled && images.length === 0) {
@@ -163,6 +170,7 @@ export async function handleUserReply(
       user,
       firstMessage: userReply,
       webSearch,
+      notion,
     }
 
     if (shouldCreateNewThread) {
@@ -260,6 +268,7 @@ export async function sendThreadToChatGPT(params) {
         temperature: 1,
         user, // Pass user for web search limit checking
         webSearch: thread.webSearch, // Pass web search flag from thread
+        notion: thread.notion, // Pass notion flag from thread
         bot
       })
       
@@ -291,6 +300,7 @@ export async function sendThreadToChatGPT(params) {
       // Extract search results and format response
       let responseText = '';
       let searchResults = [];
+      let notionResults = [];
       
       if (chatCompletion.content && Array.isArray(chatCompletion.content)) {
         for (const contentItem of chatCompletion.content) {
@@ -315,8 +325,10 @@ export async function sendThreadToChatGPT(params) {
         responseText = chatCompletion.content[0].text;
       }
       
-      // Format final response with search results at the top
+      // Format final response with search results and notion results at the top
       let finalResponse = '';
+      
+      // Add web search results if any
       if (searchResults.length > 0) {
         finalResponse += '<b>🔍 Источники:</b>\n';
         searchResults.slice(0, 3).forEach((result, index) => {
@@ -324,6 +336,16 @@ export async function sendThreadToChatGPT(params) {
         });
         finalResponse += '\n';
       }
+      
+      // Add notion results if any
+      if (notionResults.length > 0) {
+        finalResponse += '<b>📄 Из ваших Notion страниц:</b>\n';
+        notionResults.slice(0, 3).forEach((result, index) => {
+          finalResponse += `${index + 1}. <a href="${result.url}">${result.title}</a>\n`;
+        });
+        finalResponse += '\n';
+      }
+      
       finalResponse += responseText;
       
       return finalResponse;

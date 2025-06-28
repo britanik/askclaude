@@ -5,5 +5,6 @@ export interface IThread extends Document {
   _id: ObjectId
   owner: IUser
   webSearch?: boolean
+  notion?: boolean
   created?: Date
 }

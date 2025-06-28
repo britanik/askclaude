@@ -2,4 +2,5 @@ new - Новый чат
 image - Картинки
 search - Поиск в интернете
 settings - Настройки
+notion - Ваш Notion
 invite - Пригласить друзей

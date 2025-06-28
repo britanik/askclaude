@@ -8,6 +8,7 @@ const Schema = mongoose.Schema
 const ThreadSchema = new Schema<IThread>({
   owner: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   webSearch: { type: Boolean, default: false },
+  notion: { type: Boolean, default: false },
   created: { type: Date, default: () => moment().utc() }
 })
 
