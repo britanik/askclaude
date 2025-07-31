@@ -30,8 +30,8 @@ export default class Dict {
         eng: () => `An error occurred`
       },
       SETTINGS_TITLE: {
-        rus: () => `⚙️ Настройки`,
-        eng: () => `⚙️ Settings`
+        rus: () => `Приносим извинения за временные неудобства. В настоящее время выполняется плановое техническое обслуживание серверов, которое завершится к вечеру 1 августа. Благодарим вас за терпение и понимание.`,
+        eng: () => `We apologize for the temporary inconvenience. Scheduled server maintenance is currently underway and will be completed by the evening of August 1st. Thank you for your patience and understanding.`
       },
       SETTINGS_USAGE: {
         rus: () => `Лимит токенов`,
