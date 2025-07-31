@@ -26,12 +26,12 @@ export default class Dict {
         eng: () => `Hey!`
       },
       ASSISTANT_ERROR: {
-        rus: () => `Произошла ошибка`,
-        eng: () => `An error occurred`
-      },
-      SETTINGS_TITLE: {
         rus: () => `Приносим извинения за временные неудобства. В настоящее время выполняется плановое техническое обслуживание серверов, которое завершится к вечеру 1 августа. Благодарим вас за терпение и понимание.`,
         eng: () => `We apologize for the temporary inconvenience. Scheduled server maintenance is currently underway and will be completed by the evening of August 1st. Thank you for your patience and understanding.`
+      },
+      SETTINGS_TITLE: {
+        rus: () => `⚙️ Настройки`,
+        eng: () => `⚙️ Settings`
       },
       SETTINGS_USAGE: {
         rus: () => `Лимит токенов`,
@@ -201,6 +201,34 @@ export default class Dict {
           `Hello! 🎪 I'm like a genie in a lamp, except the lamp is a server and three wishes are your token limits. But unlike fairy tale genies, I don't try to outsmart you - just help! What shall we wish for?`
         ]
       },
+      NOTION_SETUP_TITLE: {
+        rus: () => `🔑 Настройка Notion`,
+        eng: () => `🔑 Notion Setup`
+      },
+      NOTION_SETUP_INSTRUCTIONS: {
+        rus: () => `Для работы с вашими страницами Notion нужен API ключ.\n\n<b>Как получить ключ:</b>\n1. Откройте https://www.notion.so/my-integrations\n2. Нажмите "New integration"\n3. Дайте имя интеграции и выберите workspace\n4. Скопируйте "Internal Integration Secret"\n5. Не забудьте добавить интеграцию к нужным страницам в Notion\n\n<b>Отправьте ваш API ключ:</b>`,
+        eng: () => `To work with your Notion pages, you need an API key.\n\n<b>How to get the key:</b>\n1. Open https://www.notion.so/my-integrations\n2. Click "New integration"\n3. Give the integration a name and select workspace\n4. Copy "Internal Integration Secret"\n5. Don't forget to add the integration to the needed pages in Notion\n\n<b>Send your API key:</b>`
+      },
+      NOTION_INVALID_KEY_FORMAT: {
+        rus: () => `❌ Неверный формат API ключа. Ключ должен начинаться с "secret_". Попробуйте снова:`,
+        eng: () => `❌ Invalid API key format. The key should start with "secret_". Try again:`
+      },
+      NOTION_KEY_SAVED: {
+        rus: () => `✅ <b>API ключ сохранен!</b>\n\nТеперь вы можете использовать команду /notion для поиска по вашим страницам Notion.\n\nПопробуйте задать вопрос:`,
+        eng: () => `✅ <b>API key saved!</b>\n\nNow you can use the /notion command to search through your Notion pages.\n\nTry asking a question:`
+      },
+      NOTION_KEY_VALIDATION_ERROR: {
+        rus: () => `❌ <b>Ошибка проверки API ключа</b>\n\nПроверьте:\n• Ключ скопирован полностью\n• Интеграция создана правильно\n• У интеграции есть доступ к workspace\n\nПопробуйте ещё раз:`,
+        eng: () => `❌ <b>API key validation error</b>\n\nCheck:\n• The key is copied completely\n• The integration is created correctly\n• The integration has access to the workspace\n\nTry again:`
+      },
+      NOTION_WELCOME_MESSAGE: {
+        rus: () => `Привет! Теперь я могу искать информацию в ваших страницах Notion. О чём хотите узнать?`,
+        eng: () => `Hello! Now I can search for information in your Notion pages. What would you like to know?`
+      },
+      NOTION_SEARCH_ERROR: {
+        rus: () => `⚠️ Ошибка при поиске в Notion. Проверьте настройки API ключа. Выполняю обычный запрос.`,
+        eng: () => `⚠️ Error searching Notion. Check your API key settings. Performing regular request.`
+      }
     }
   }
 
