@@ -22,17 +22,21 @@ export async function updateUserSchema() {
   }
 }
 
-// Check if user is at the limit
+// Check if user is at the hourly limit
 export async function isTokenLimit(user: IUser) {
   console.log('Checking token limit for user:', user._id);
   try {
-    const usage: number = await getPeriodTokenUsage(user);
-    const periodLimit = await getPeriodTokenLimit(user);
+    const hourlyUsage: number = await getPeriodTokenUsage(user);
+    const hourlyLimit = await getPeriodTokenLimit(user);
     
-    console.log('Usage:', usage);
-    console.log('Period Limit:', periodLimit);
+    // Check daily limit as well
+    const dailyUsage: number = await getDailyTokenUsage(user);
+    const dailyLimit = await getDailyTokenLimit(user);
     
-    if (usage >= periodLimit) {
+    console.log('Hourly Usage:', hourlyUsage, 'Hourly Limit:', hourlyLimit);
+    console.log('Daily Usage:', dailyUsage, 'Daily Limit:', dailyLimit);
+    
+    if (hourlyUsage >= hourlyLimit || dailyUsage >= dailyLimit) {
       return true;
     }
     
@@ -43,7 +47,33 @@ export async function isTokenLimit(user: IUser) {
   }
 }
 
-// Check if user is at the web search limit (CHANGED TO DAILY)
+// Check which limit was reached and return appropriate message
+export async function getTokenLimitMessage(user: IUser): Promise<string> {
+  try {
+    const hourlyUsage: number = await getPeriodTokenUsage(user);
+    const hourlyLimit = await getPeriodTokenLimit(user);
+    const dailyUsage: number = await getDailyTokenUsage(user);
+    const dailyLimit = await getDailyTokenLimit(user);
+    
+    const hourlyExceeded = hourlyUsage >= hourlyLimit;
+    const dailyExceeded = dailyUsage >= dailyLimit;
+    
+    if (hourlyExceeded && dailyExceeded) {
+      return `Достигнуты лимиты токенов в час и в день. Обновится через ${getMinutesToNextHour()} мин. (час) и через ${getTimeToNextDay()} (день).`;
+    } else if (hourlyExceeded) {
+      return `Лимит токенов в час исчерпан. Вы можете продолжить через ${getMinutesToNextHour()} мин.`;
+    } else if (dailyExceeded) {
+      return `Лимит токенов в день исчерпан. Вы можете продолжить через ${getTimeToNextDay()}.`;
+    }
+    
+    return 'Лимит токенов исчерпан.'; // Fallback
+  } catch (error) {
+    console.error('Error getting token limit message:', error);
+    return 'Лимит токенов исчерпан.';
+  }
+}
+
+// Check if user is at the web search limit (DAILY)
 export async function isWebSearchLimit(user: IUser) {
   try {
     const usage: number = await getDailyWebSearchUsage(user);
@@ -72,20 +102,36 @@ export function getMinutesToNextHour() {
   return minutesLeft;
 }
 
-// Calculate minutes until tomorrow (for daily limits)
+// Calculate time until tomorrow (for daily limits) - returns formatted string
+export function getTimeToNextDay(): string {
+  const now = moment();
+  const tomorrow = moment().add(1, 'day').startOf('day');
+  const duration = moment.duration(tomorrow.diff(now));
+  
+  const hours = Math.floor(duration.asHours());
+  const minutes = duration.minutes();
+  
+  if (hours > 0) {
+    return `${hours} ч. ${minutes} мин.`;
+  } else {
+    return `${minutes} мин.`;
+  }
+}
+
+// Calculate minutes until tomorrow (for daily limits) - for backward compatibility
 export function getMinutesToNextDay() {
   const now = moment();
   const tomorrow = moment().add(1, 'day').startOf('day');
   return tomorrow.diff(now, 'minutes');
 }
 
-// Calculate period token limit including friend bonuses
+// Calculate period token limit including friend bonuses (HOURLY)
 export async function getPeriodTokenLimit(user: IUser): Promise<number> {
   try {    
-    // Get base limit from env or default to 50000
+    // Get base limit from env or default to 10000
     const baseLimit = +(process.env.TOKENS_HOUR_LIMIT || 10000);
 
-    console.log('Base Limit:', baseLimit);
+    console.log('Base Hourly Limit:', baseLimit);
     
     // Find user's invite code
     const invite = await Invite.findOne({ owner: user._id });
@@ -103,7 +149,35 @@ export async function getPeriodTokenLimit(user: IUser): Promise<number> {
   } catch (error) {
     console.error('Error calculating period token limit:', error);
     // Return default limit in case of error
-    return +(process.env.BASE_TOKEN_LIMIT || 50000);
+    return +(process.env.TOKENS_HOUR_LIMIT || 10000);
+  }
+}
+
+// Calculate daily token limit including friend bonuses (NEW)
+export async function getDailyTokenLimit(user: IUser): Promise<number> {
+  try {    
+    // Get base daily limit from env or default to 100000
+    const baseLimit = +(process.env.TOKENS_DAILY_LIMIT || 100000);
+
+    console.log('Base Daily Limit:', baseLimit);
+    
+    // Find user's invite code
+    const invite = await Invite.findOne({ owner: user._id });
+    
+    // Calculate bonus based on referrals
+    let referralBonus = 0;
+    if (invite) {
+      // Each used invite adds TOKENS_DAILY_PER_REFERRAL to the daily limit
+      const usedInvitesCount = invite.usedBy.length;
+      referralBonus = usedInvitesCount * (+(process.env.TOKENS_DAILY_PER_REFERRAL) || 20000);
+    }
+    
+    // Return the total daily limit
+    return baseLimit + referralBonus;
+  } catch (error) {
+    console.error('Error calculating daily token limit:', error);
+    // Return default limit in case of error
+    return +(process.env.TOKENS_DAILY_LIMIT || 100000);
   }
 }
 
@@ -133,6 +207,7 @@ export async function getDailyWebSearchLimit(user: IUser): Promise<number> {
   }
 }
 
+// Get hourly token usage (existing function)
 export async function getPeriodTokenUsage(user: IUser) {
   try {
     // Calculate the start of the current hour (fixed window)
@@ -156,7 +231,7 @@ export async function getPeriodTokenUsage(user: IUser) {
       }
     ]);
 
-    console.log(`Token usage for user ${user._id} since ${currentHourStart.toISOString()}:`, result);
+    console.log(`Hourly token usage for user ${user._id} since ${currentHourStart.toISOString()}:`, result);
 
     // Return the total as a number - if no results, return 0
     return result.length > 0 ? result[0].total : 0;
@@ -167,7 +242,41 @@ export async function getPeriodTokenUsage(user: IUser) {
   }
 }
 
-// NEW: Get daily web search usage
+// Get daily token usage (NEW)
+export async function getDailyTokenUsage(user: IUser) {
+  try {
+    // Calculate the start of the current day
+    const startOfDay = moment().startOf('day').toDate();
+    
+    // Get usage from the current day
+    const result = await Usage.aggregate([
+      { 
+        $match: { 
+          user: user._id,
+          created: { $gte: startOfDay },
+          type: { $in: ['prompt', 'completion'] }
+        } 
+      },
+      { 
+        $group: {
+          _id: null,
+          total: { $sum: '$amount' }
+        }
+      }
+    ]);
+
+    console.log(`Daily token usage for user ${user._id} since ${startOfDay.toISOString()}:`, result);
+
+    // Return the total as a number - if no results, return 0
+    return result.length > 0 ? result[0].total : 0;
+    
+  } catch (e) {
+    console.error('Error calculating daily token usage:', e);
+    return 0;
+  }
+}
+
+// Get daily web search usage
 export async function getDailyWebSearchUsage(user: IUser) {
   try {
     // Calculate the start of the current day
@@ -257,7 +366,7 @@ export async function logWebSearchUsage(user: IUser, thread: any, searchCount: n
         description: `Web searches for thread ${thread._id}`
       }).save();
 
-          // Send notification to user via bot
+      // Send notification to user via bot
       if( isAdmin(user) ) {
         const message = `Search used: ${searchCount}`;
         await sendMessage({

@@ -13,7 +13,7 @@ import { isAdmin } from "../helpers/helpers"
 
 import { tmplSettings } from '../templates/tmplSettings'
 import { tmplInvite } from "../templates/tmplInvite"
-import { getMinutesToNextHour, isTokenLimit, updateUserSchema } from "./tokens"
+import { getTokenLimitMessage, isTokenLimit, updateUserSchema } from "./tokens"
 import { isValidInviteCode, processReferral } from "./invites"
 import { sendNotification } from "./notifications"
 import { getPeriodImageLimit, isImageLimit } from "./images"
@@ -241,9 +241,10 @@ export default class Navigation {
   assistant() {
     return {
       action: async () => {
-        // Check token limit
+        // Check token limit (both hourly and daily)
         if( await isTokenLimit(this.user) ){
-          await sendMessage({ text: this.dict.getString('SETTINGS_HOUR_LIMIT_EXCEEDED', { minutes: getMinutesToNextHour() }), user: this.user, bot: this.bot });
+          const limitMessage = await getTokenLimitMessage(this.user);
+          await sendMessage({ text: limitMessage, user: this.user, bot: this.bot });
           return;
         }
   
@@ -259,7 +260,7 @@ export default class Navigation {
           firstMessage
         }
 
-        // if it's /seach command
+        // if it's /search command
         if (this.msg && this.msg.text && this.msg.text.startsWith('/search')) {
           startAssistantParams.webSearch = true;
         }
@@ -282,9 +283,10 @@ export default class Navigation {
         });
       },
       callback: async () => {
-        // Check token limit
+        // Check token limit (both hourly and daily)
         if( await isTokenLimit(this.user) ){
-          await sendMessage({ text: this.dict.getString('SETTINGS_HOUR_LIMIT_EXCEEDED', { minutes: getMinutesToNextHour() }), user: this.user, bot: this.bot });
+          const limitMessage = await getTokenLimitMessage(this.user);
+          await sendMessage({ text: limitMessage, user: this.user, bot: this.bot });
           return;
         }
 

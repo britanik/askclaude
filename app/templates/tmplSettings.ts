@@ -2,19 +2,23 @@ import { IUser } from "../interfaces/users"
 import { sendMessage } from "./sendMessage"
 import TelegramBot from "node-telegram-bot-api"
 import Dict from "../helpers/dict"
-import { getMinutesToNextHour, getMinutesToNextDay, getPeriodTokenLimit, getPeriodTokenUsage, getDailyWebSearchUsage, getDailyWebSearchLimit } from "../controllers/tokens";
+import { getMinutesToNextHour, getTimeToNextDay, getPeriodTokenLimit, getPeriodTokenUsage, getDailyTokenLimit, getDailyTokenUsage, getDailyWebSearchUsage, getDailyWebSearchLimit } from "../controllers/tokens";
 import { getPeriodImageLimit, getPeriodImageUsage } from "../controllers/images";
 
 export async function tmplSettings(user: IUser, bot: TelegramBot, dict: Dict) {
-  // Get token usage statistics
-  const tokenUsage:number = await getPeriodTokenUsage(user);
-  const tokenLimit:number = await getPeriodTokenLimit(user);
+  // Get hourly token usage statistics
+  const hourlyTokenUsage:number = await getPeriodTokenUsage(user);
+  const hourlyTokenLimit:number = await getPeriodTokenLimit(user);
+  
+  // Get daily token usage statistics
+  const dailyTokenUsage:number = await getDailyTokenUsage(user);
+  const dailyTokenLimit:number = await getDailyTokenLimit(user);
   
   // Get image usage statistics
   const imageUsage:number = await getPeriodImageUsage(user);
   const imageLimit:number = await getPeriodImageLimit(user);
   
-  // Get web search usage statistics (CHANGED TO DAILY)
+  // Get web search usage statistics
   const webSearchUsage:number = await getDailyWebSearchUsage(user);
   const webSearchLimit:number = await getDailyWebSearchLimit(user);
   
@@ -25,26 +29,33 @@ export async function tmplSettings(user: IUser, bot: TelegramBot, dict: Dict) {
     return safeNum.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   };
 
-  const stringTokensRefresh = () => {
-    if( tokenUsage > tokenLimit ){
-      return `${dict.getString('SETTINGS_HOUR_LIMIT_REFRESH_IN', { minutes: getMinutesToNextHour() })}`
+  const stringHourlyTokensRefresh = () => {
+    if( hourlyTokenUsage >= hourlyTokenLimit ){
+      return `Обновится через ${getMinutesToNextHour()} мин.`
+    } else {
+      return ''
+    }
+  }
+
+  const stringDailyTokensRefresh = () => {
+    if( dailyTokenUsage >= dailyTokenLimit ){
+      return `Обновится через ${getTimeToNextDay()}.`
     } else {
       return ''
     }
   }
 
   const stringImageRefresh = () => {
-    if( imageUsage > imageLimit ){
+    if( imageUsage >= imageLimit ){
       return `${dict.getString('SETTINGS_IMAGE_LIMIT_RESET')}`
     } else {
       return ''
     }
   }
 
-  // UPDATED: Web search refresh is now daily
   const stringWebSearchRefresh = () => {
     if( webSearchUsage >= webSearchLimit ){
-      return `${dict.getString('SETTINGS_DAILY_LIMIT_REFRESH_IN', { minutes: getMinutesToNextDay() })}`
+      return `Обновится через ${getTimeToNextDay()}.`
     } else {
       return ''
     }
@@ -58,8 +69,11 @@ ${dict.getString('SETTINGS_FORMATS_STRING')}
 <b>${dict.getString('SETTINGS_LANGUAGE')}:</b>
 ${user.prefs.lang === 'eng' ? 'English' : 'Русский'}
 
-<b>${dict.getString('SETTINGS_USAGE')}:</b>
-${formatNumber(tokenUsage)} / ${formatNumber(tokenLimit)} в час. ${stringTokensRefresh()}
+<b>Лимит токенов (час):</b>
+${formatNumber(hourlyTokenUsage)} / ${formatNumber(hourlyTokenLimit)} в час. ${stringHourlyTokensRefresh()}
+
+<b>Лимит токенов (день):</b>
+${formatNumber(dailyTokenUsage)} / ${formatNumber(dailyTokenLimit)} в день. ${stringDailyTokensRefresh()}
 
 <b>${dict.getString('SETTINGS_IMAGE_LIMIT')}:</b>
 ${formatNumber(imageUsage)} / ${formatNumber(imageLimit)} в день. ${stringImageRefresh()}

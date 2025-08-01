@@ -42,8 +42,8 @@ export default class Dict {
         eng: () => `To save tokens, create a /new chat each time you change the topic of conversation.`
       },
       SETTINGS_USAGE_REFS: {
-        rus: () => `Чтобы увеличить лимит токенов в час - пригласите друзей /invite`,
-        eng: () => `To increase your hourly token limit - invite friends /invite`
+        rus: () => `Чтобы увеличить лимит токенов - пригласите друзей /invite`,
+        eng: () => `To increase your token limit - invite friends /invite`
       },
       SETTINGS_FORMATS: {
         rus: () => `Доступные форматы`,
@@ -82,8 +82,8 @@ export default class Dict {
         eng: () => `You have reached the daily web search limit ({limit} per day). You can continue tomorrow.`
       },
       SETTINGS_DAILY_LIMIT_REFRESH_IN: {
-        rus: () => `Обновится через {minutes} мин.`,
-        eng: () => `Resets in {minutes} min.`
+        rus: () => `Обновится через {time}.`,
+        eng: () => `Resets in {time}.`
       },
       SETTINGS_WEB_SEARCH_DAILY_LIMIT: {
         rus: () => `Лимит поиска в интернете`,
@@ -92,6 +92,22 @@ export default class Dict {
       SETTINGS_WEB_SEARCH_DAILY_LIMIT_RESET: {
         rus: () => `Обновится завтра.`,
         eng: () => `Resets tomorrow.`
+      },
+      SETTINGS_DAILY_TOKEN_LIMIT_EXCEEDED: {
+        rus: () => `Дневной лимит токенов исчерпан. Вы можете продолжить через {time}.`,
+        eng: () => `Daily token limit exceeded. You can continue in {time}.`
+      },
+      SETTINGS_DAILY_TOKEN_LIMIT: {
+        rus: () => `Дневной лимит токенов`,
+        eng: () => `Daily token limit`
+      },
+      SETTINGS_DAILY_TOKEN_LIMIT_RESET: {
+        rus: () => `Обновится завтра.`,
+        eng: () => `Resets tomorrow.`
+      },
+      SETTINGS_HOURLY_TOKEN_LIMIT: {
+        rus: () => `Почасовой лимит токенов`,
+        eng: () => `Hourly token limit`
       },
       ENTER_CODE: {
         rus: () => `<strong>Введите код</strong> полученный в приглашении (или /new чтобы пропустить):`,
