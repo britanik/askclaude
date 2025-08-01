@@ -20,6 +20,7 @@ import { getPeriodImageLimit, isImageLimit } from "./images"
 import { IThread } from "../interfaces/threads"
 import Message from "../models/messages"
 import { generateImage } from "./images"
+import { generateUserStats } from "./stats"
 
 export interface INavigationParams {
   user?: IUser
@@ -502,6 +503,71 @@ export default class Navigation {
       },
       callback: async () => {}
     }
+  }
+
+  stat() {
+    return {
+      action: async () => {
+        if (!isAdmin(this.user)) {
+          await sendMessage({ text: 'Access denied', user: this.user, bot: this.bot });
+          return;
+        }
+  
+        // Set step to wait for username input
+        this.user = await userController.addStep(this.user, 'stat');
+        await sendMessage({
+          text: 'Enter username to analyze (without @):',
+          user: this.user,
+          bot: this.bot,
+        });
+      },
+      callback: async () => {
+        if (!isAdmin(this.user)) {
+          await sendMessage({ text: 'Access denied', user: this.user, bot: this.bot });
+          return;
+        }
+  
+        const username = this.msg.text.trim();
+        
+        if (!username) {
+          await sendMessage({
+            text: 'Please enter a valid username',
+            user: this.user,
+            bot: this.bot,
+          });
+          return;
+        }
+  
+        try {          
+          // Generate stats for the user
+          const result = await generateUserStats(username);
+          
+          if (result.success) {
+            await sendMessage({
+              text: `✅ Stats generated successfully!\n\nUser: @${username}\nTotal entries: ${result.totalEntries}\nFile saved to: ${result.filePath}`,
+              user: this.user,
+              bot: this.bot,
+            });
+          } else {
+            await sendMessage({
+              text: `❌ ${result.error}`,
+              user: this.user,
+              bot: this.bot,
+            });
+          }
+          
+          // Reset step
+          this.user = await userController.addStep(this.user, 'assistant');
+        } catch (error) {
+          console.error('Error generating stats:', error);
+          await sendMessage({
+            text: 'Error generating stats. Please try again.',
+            user: this.user,
+            bot: this.bot,
+          });
+        }
+      },
+    };
   }
 
   notifications() {
