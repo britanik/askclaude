@@ -32,7 +32,7 @@ export async function generateUserStats(username: string): Promise<StatsResult> 
       user: user._id,
     }
     console.log(params,'params')
-    const usageRecords = await Usage.find().sort({ created: 1 }).limit(0);
+    const usageRecords = await Usage.find(params).sort({ created: 1 }).limit(0);
 
     console.log(usageRecords.length,'usageRecords.length')
 
@@ -54,12 +54,14 @@ export async function generateUserStats(username: string): Promise<StatsResult> 
     const filename = `${username}_tokens_${timestamp}.csv`;
     const filePath = path.join(statsDir, filename);
 
-    // Prepare CSV content - every single record
-    let csvContent = 'Date/Time,Tokens\n';
+    // Prepare CSV content with pipe delimiters and proper header
+    let csvContent = 'Date|Time|Tokens|Type\n';
     
     usageRecords.forEach(record => {
-      const dateTime = moment(record.created).format('DD.MM HH:mm');
-      csvContent += `${dateTime},${record.amount}\n`;
+      const dateTime = moment(record.created);
+      const date = dateTime.format('DD.MM');
+      const time = dateTime.format('HH:mm');
+      csvContent += `${date}|${time}|${record.amount}|${record.type}\n`;
     });
 
     // Write CSV file
