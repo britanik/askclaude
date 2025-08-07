@@ -518,7 +518,7 @@ export default class Navigation {
         // Set step to wait for username input
         this.user = await userController.addStep(this.user, 'stat');
         await sendMessage({
-          text: 'Enter username to analyze (without @):',
+          text: 'Enter username to analyze (without @) or type "all" for all users (last 10 days):',
           user: this.user,
           bot: this.bot,
         });
@@ -529,11 +529,11 @@ export default class Navigation {
           return;
         }
   
-        const username = this.msg.text.trim();
+        const input = this.msg.text.trim().toLowerCase();
         
-        if (!username) {
+        if (!input) {
           await sendMessage({
-            text: 'Please enter a valid username',
+            text: 'Please enter a valid username or "all"',
             user: this.user,
             bot: this.bot,
           });
@@ -541,15 +541,23 @@ export default class Navigation {
         }
   
         try {          
-          // Generate stats for the user
-          const result = await generateUserStats(username);
+          // Generate stats for the user or all users
+          const result = await generateUserStats(input);
           
           if (result.success) {
-            await sendMessage({
-              text: `✅ Stats generated successfully!\n\nUser: @${username}\nTotal entries: ${result.totalEntries}\nFile saved to: ${result.filePath}`,
-              user: this.user,
-              bot: this.bot,
-            });
+            if (input === 'all') {
+              await sendMessage({
+                text: `✅ All users stats generated successfully!\n\n📊 Last 10 days data\nTotal entries: ${result.totalEntries}\nFile saved to: ${result.filePath}`,
+                user: this.user,
+                bot: this.bot,
+              });
+            } else {
+              await sendMessage({
+                text: `✅ Stats generated successfully!\n\nUser: @${input}\nTotal entries: ${result.totalEntries}\nFile saved to: ${result.filePath}`,
+                user: this.user,
+                bot: this.bot,
+              });
+            }
           } else {
             await sendMessage({
               text: `❌ ${result.error}`,
