@@ -39,7 +39,7 @@ export async function tmplSettings(user: IUser, bot: TelegramBot, dict: Dict) {
 
   const stringDailyTokensRefresh = () => {
     if( dailyTokenUsage >= dailyTokenLimit ){
-      return `Обновится через ${getTimeToNextDay()}.`
+      return `Обновится через ${getTimeToNextDay()}`
     } else {
       return ''
     }
