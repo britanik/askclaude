@@ -6,6 +6,8 @@ dist
 .lh
 old
 docs
+*.csv
+*.txt
 app/images
 app/text
 app/errors
