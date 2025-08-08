@@ -529,8 +529,7 @@ export default class Navigation {
           return;
         }
   
-        const input = this.msg.text.trim().toLowerCase();
-        
+        const input = this.msg.text
         if (!input) {
           await sendMessage({
             text: 'Please enter a valid username or "all"',
