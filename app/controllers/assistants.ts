@@ -11,18 +11,24 @@ import { isTokenLimit, getTokenLimitMessage, logTokenUsage, logWebSearchUsage } 
 import { saveAIResponse } from "../helpers/fileLogger"
 import { withChatAction } from "../helpers/chatAction"
 import { isAdmin } from "../helpers/helpers"
+import { createAccount, updateAccount, trackExpense } from "./expense"
 
 export interface IAssistantParams {
   user: IUser
   firstMessage?: string
   webSearch?: boolean
+  assistantType?: 'normal' | 'expense'
 }
 
 export async function startAssistant(params:IAssistantParams): Promise<IThread> {
-  const { user, firstMessage, webSearch = false } = params
+  const { user, firstMessage, webSearch = false, assistantType = 'normal' } = params
   try {
     // Create a new thread
-    const thread: IThread = await new Thread({ owner: user, webSearch }).save()
+    const thread: IThread = await new Thread({ 
+      owner: user, 
+      webSearch, 
+      assistantType
+    }).save()
     
     // Create and add the first message
     await new Message({
@@ -125,6 +131,7 @@ export async function handleUserReply(
     
     // Skip all analysis logic if the feature is disabled
     let shouldCreateNewThread = false;
+    let assistantType: 'normal' | 'expense' = 'normal';
 
     // Web search disabled by default
     let webSearch = false;
@@ -149,7 +156,8 @@ export async function handleUserReply(
         // Analyze the conversation
         const analysis:IConversationAnalysisResult = await analyzeConversation(formattedMessages, userReply);
         webSearch = analysis.search || false;
-        console.log(`[CONVERSATION ANALYSIS] ${user.username || user.chatId}: ${analysis.action} - ${analysis.search}`);
+        assistantType = analysis.assistant === 'expense' ? 'expense' : 'normal';
+        console.log(`[CONVERSATION ANALYSIS] ${user.username || user.chatId}: ${analysis.action} - ${analysis.search} - ${analysis.assistant}`);
         
         // If analysis says it's a new topic, create a new thread
         if (analysis.action === 'new') {
@@ -158,16 +166,19 @@ export async function handleUserReply(
       }
     }
     
+    console.log(assistantType, 'assistantType')
+
     // Create a new thread if analysis determined it's a new topic
     let startAssistantParams:IAssistantParams = {
       user,
       firstMessage: userReply,
       webSearch,
+      assistantType,
     }
 
     if (shouldCreateNewThread) {
       thread = await startAssistant(startAssistantParams);
-      console.log(`[NEW THREAD CREATED] For ${user.username || user.chatId} based on topic change analysis`);
+      console.log(`[NEW THREAD CREATED] For ${user.username || user.chatId} based on topic change analysis - Type: ${thread.assistantType}`);
       return { thread, isNew: true };
     }
     
@@ -243,6 +254,7 @@ export async function getRecentThread(user: IUser): Promise<IThread> {
 
 export async function sendThreadToChatGPT(params) {
   const { thread, bot } = params
+
   try {
     // Get fresh thread and owner to ensure we have the latest
     const freshThread = await Thread.findById(thread._id).populate('owner')
@@ -260,6 +272,7 @@ export async function sendThreadToChatGPT(params) {
         temperature: 1,
         user, // Pass user for web search limit checking
         webSearch: thread.webSearch, // Pass web search flag from thread
+        assistantType: thread.assistantType,
         bot
       })
       
@@ -288,16 +301,45 @@ export async function sendThreadToChatGPT(params) {
         }
       }
       
-      // Extract search results and format response
+      // Process tool uses and collect results
       let responseText = '';
       let searchResults = [];
+      let toolResults = []; // New: collect tool results
       
       if (chatCompletion.content && Array.isArray(chatCompletion.content)) {
         for (const contentItem of chatCompletion.content) {
           if (contentItem.type === 'text') {
             responseText += contentItem.text;
+          } else if (contentItem.type === 'tool_use') {
+            // Handle tool use
+            console.log(contentItem,'contentItem')
+            let toolResult = null;
+            
+            if (contentItem.name === 'createAccount') {
+              console.log('Call create account')
+              const { name, type, currency, initial_balance, isDefault } = contentItem.input;
+              toolResult = await createAccount({ user, name, type, currency, initial_balance, isDefault });
+            } else if (contentItem.name === 'updateAccount') {
+              console.log('Call update account')
+              const { account_id, name, type, currency, isDefault } = contentItem.input;
+              toolResult = await updateAccount({ user, account_id, name, type, currency, isDefault });
+            } else if (contentItem.name === 'trackExpense') {
+              console.log('Call track expense')
+              const { account_id, amount, description, date } = contentItem.input;
+              toolResult = await trackExpense({ user, account_id, amount, description, date });
+            }
+            
+            // Store tool result for potential follow-up
+            if (toolResult) {
+              toolResults.push({
+                tool_use_id: contentItem.id,
+                type: "tool_result",
+                content: toolResult
+              });
+            }
+            
           } else if (contentItem.type === 'web_search_tool_result') {
-            // Collect search results
+            // Handle web search results
             if (contentItem.content) {
               for (const result of contentItem.content) {
                 if (result.type === 'web_search_result') {
@@ -310,9 +352,15 @@ export async function sendThreadToChatGPT(params) {
             }
           }
         }
-      } else {
-        // Fallback for simple text response
-        responseText = chatCompletion.content[0].text;
+      }
+      
+      // If we have tool results, make another call to Claude with the tool results
+      console.log(toolResults,'toolResults')
+      console.log(responseText,'responseText')
+
+      if (toolResults.length > 0) {
+        console.log('Making follow-up call with tool results...');
+                        
       }
       
       // Format final response with search results at the top

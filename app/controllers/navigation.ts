@@ -13,7 +13,7 @@ import { isAdmin } from "../helpers/helpers"
 
 import { tmplSettings } from '../templates/tmplSettings'
 import { tmplInvite } from "../templates/tmplInvite"
-import { getTokenLimitMessage, isTokenLimit, updateUserSchema } from "./tokens"
+import { getTokenLimitMessage, isTokenLimit, isWebSearchLimit, updateUserSchema } from "./tokens"
 import { isValidInviteCode, processReferral } from "./invites"
 import { sendNotification } from "./notifications"
 import { getPeriodImageLimit, isImageLimit } from "./images"
@@ -340,13 +340,27 @@ export default class Navigation {
           
           // Now process the message normally
           // Analyze, save new Message, start new thread or return existing one
-          let threadWithUserMessage:{ thread: IThread, isNew: boolean } = await handleUserReply(this.user, text, this.bot, images, mediaGroupId);
+          let threadWithUserMessage: { 
+            thread: IThread, 
+            isNew: boolean 
+          } = await handleUserReply(this.user, text, this.bot, images, mediaGroupId);
           
           // Only send to Claude if this isn't a media group or it's the first message after waiting
           if (!mediaGroupId || this.mediaGroups.includes(mediaGroupId)) {
             
-            // Send thread to Claude and it's reply to user
-            await handleAssistantReply(threadWithUserMessage.thread, threadWithUserMessage.isNew,  this.bot, this.dict);
+            const searchLimitReached = await isWebSearchLimit(this.user) || false;
+            if( !searchLimitReached ){
+              // Continue 
+              // Send thread to Claude and it's reply to user
+              await handleAssistantReply(threadWithUserMessage.thread, threadWithUserMessage.isNew, this.bot, this.dict);
+            } else {
+              // Exit
+              await sendMessage({
+                text: 'Достигнут дневной лимит на веб-поиск. Выполняю обычный запрос.',
+                user: this.user,
+                bot: this.bot
+              })
+            }
             
             // Remove from mediaGroups array after processing
             if (mediaGroupId) {

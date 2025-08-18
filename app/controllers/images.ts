@@ -316,7 +316,6 @@ export async function regenerateImage(imageId: string, user: IUser, bot: Telegra
 }
 
 export async function isImageLimit(user: IUser) {
-  console.log('Checking token limit for user:', user._id);
   try {
     const usage: number = await getPeriodImageUsage(user);
     const periodLimit: number = await getPeriodImageLimit(user);

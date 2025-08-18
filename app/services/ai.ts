@@ -11,7 +11,8 @@ import { logApiError } from "../helpers/errorLogger"
 import { sendMessage } from "../templates/sendMessage"
 import { handleImageGeneration } from "../controllers/images"
 import { IUser } from "../interfaces/users"
-import { isWebSearchLimit } from "../controllers/tokens"
+import { expenseTools, searchTool } from "../helpers/tools"
+import { getUserAccountsString } from "../controllers/expense"
 
 export interface IChatCallParams {
   messages: Array<{
@@ -30,40 +31,32 @@ export interface IChatCallParams {
   response_format?: { type: 'text' | 'json_object' },
   user?: IUser,
   webSearch?: boolean
+  assistantType: 'normal' | 'expense'
   bot: TelegramBot
 }
 
 export async function claudeCall(params: IChatCallParams) {
-  let { messages, temperature = 0.1, response_format = { type: 'text' }, user, webSearch = false } = params
+  let { messages, temperature = 0.1, response_format = { type: 'text' }, user, webSearch = false, assistantType = 'normal' } = params
   
   try {
-    // Check if web search limit reached
-    const searchLimitReached = user ? await isWebSearchLimit(user) : false;
     
-    const tools = [];
-
-    // Prepare tools array
+    // Prepare tools array and context
+    let tools = [];
+    let accountsInfo = '';
+    
     if( webSearch ){
-      if (!searchLimitReached) {
-        tools.push({
-          type: "web_search_20250305",
-          name: "web_search",
-          max_uses: +(process.env.WEB_SEARCH_MAX_USES || 5)
-        });
-      } else {
-        await sendMessage({
-          text: 'Достигнут дневной лимит на веб-поиск. Выполняю обычный запрос.',
-          user,
-          bot: params.bot
-        })
-      }
+      tools = [searchTool, ...tools]
     }
 
+    if( assistantType == 'expense' ){
+      tools = [...expenseTools, ...tools]
+      accountsInfo = await getUserAccountsString(user)
+    }
     
     // Prepare API request
     const chatParams: any = {
       model: process.env.CLAUDE_MODEL, // Use primary model
-      system: promptsDict.system(),
+      system: assistantType == 'expense' ? promptsDict.expense(accountsInfo) : promptsDict.system() ,
       messages: messages,
       max_tokens: +(process.env.CLAUDE_MAX_OUTPUT || 1000),
       stream: false,
@@ -75,7 +68,7 @@ export async function claudeCall(params: IChatCallParams) {
       chatParams.tools = tools;
     }
 
-    // console.log(chatParams, 'chatParams')
+    // console.log(chatParams.system, 'chatParams.system')
     
     try {
       // Make API request with primary model
@@ -91,8 +84,6 @@ export async function claudeCall(params: IChatCallParams) {
           timeout: +process.env.CLAUDE_TIMEOUT
         }
       )
-
-      console.log(request.data, 'request.data')
 
       return request.data
       
@@ -338,9 +329,10 @@ export async function saveImagePermanently(url, imageId) {
 export interface IConversationAnalysisResult {
   action: 'new' | 'continue';
   search: boolean;
+  assistant: 'normal' | 'expense';
 }
 
-export async function analyzeConversation( lastMessages: Array<{role: string, content: string}>, currentMessage: string ): Promise<IConversationAnalysisResult> {
+export async function analyzeConversation( lastMessages: Array<{role: string, content: string}>, currentMessage: string  ): Promise<IConversationAnalysisResult> {
   try {
     // Prepare context for the model
     // Truncate assistant messages to 200 characters to save on tokens
@@ -384,12 +376,11 @@ export async function analyzeConversation( lastMessages: Array<{role: string, co
     const result = JSON.parse(response.data.content[0].text);
     
     // Validate the result
-    if (result && (result.action === 'new' || result.action === 'continue') && typeof result.search === 'boolean') {
-      return { action: result.action, search: result.search || false };
-    } else {
-      console.log('Invalid analysis result, defaulting to continue:', result);
-      return { action: 'continue', search: false };
-    }
+    return { 
+      action: result.action || 'continue', 
+      search: result.search || false, 
+      assistant: result.assistant || 'normal' 
+    };
 
   } catch (error) {
     console.error('Error in analyzeConversation:', error.message);
@@ -400,7 +391,7 @@ export async function analyzeConversation( lastMessages: Array<{role: string, co
     }
     
     // Always return 'continue' on any error to prevent crashes
-    return { action: 'continue', search: false };
+    return { action: 'continue', search: false, assistant: 'normal' };
   }
 }
 

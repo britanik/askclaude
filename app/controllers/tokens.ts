@@ -24,7 +24,6 @@ export async function updateUserSchema() {
 
 // Check if user is at the hourly limit
 export async function isTokenLimit(user: IUser) {
-  console.log('Checking token limit for user:', user._id);
   try {
     const hourlyUsage: number = await getPeriodTokenUsage(user);
     const hourlyLimit = await getPeriodTokenLimit(user);
@@ -32,10 +31,7 @@ export async function isTokenLimit(user: IUser) {
     // Check daily limit as well
     const dailyUsage: number = await getDailyTokenUsage(user);
     const dailyLimit = await getDailyTokenLimit(user);
-    
-    console.log('Hourly Usage:', hourlyUsage, 'Hourly Limit:', hourlyLimit);
-    console.log('Daily Usage:', dailyUsage, 'Daily Limit:', dailyLimit);
-    
+        
     if (hourlyUsage >= hourlyLimit || dailyUsage >= dailyLimit) {
       return true;
     }
@@ -74,7 +70,7 @@ export async function getTokenLimitMessage(user: IUser): Promise<string> {
 }
 
 // Check if user is at the web search limit (DAILY)
-export async function isWebSearchLimit(user: IUser) {
+export async function isWebSearchLimit(user: IUser):Promise<boolean> {
   try {
     const usage: number = await getDailyWebSearchUsage(user);
     const dailyLimit = await getDailyWebSearchLimit(user);
@@ -131,7 +127,7 @@ export async function getPeriodTokenLimit(user: IUser): Promise<number> {
     // Get base limit from env or default to 10000
     const baseLimit = +(process.env.TOKENS_HOUR_LIMIT || 10000);
 
-    console.log('Base Hourly Limit:', baseLimit);
+    // console.log('Base Hourly Limit:', baseLimit);
     
     // Find user's invite code
     const invite = await Invite.findOne({ owner: user._id });
@@ -158,8 +154,6 @@ export async function getDailyTokenLimit(user: IUser): Promise<number> {
   try {    
     // Get base daily limit from env or default to 100000
     const baseLimit = +(process.env.TOKENS_DAILY_LIMIT || 100000);
-
-    console.log('Base Daily Limit:', baseLimit);
     
     // Find user's invite code
     const invite = await Invite.findOne({ owner: user._id });
@@ -231,8 +225,6 @@ export async function getPeriodTokenUsage(user: IUser) {
       }
     ]);
 
-    console.log(`Hourly token usage for user ${user._id} since ${currentHourStart.toISOString()}:`, result);
-
     // Return the total as a number - if no results, return 0
     return result.length > 0 ? result[0].total : 0;
     
@@ -264,8 +256,6 @@ export async function getDailyTokenUsage(user: IUser) {
         }
       }
     ]);
-
-    console.log(`Daily token usage for user ${user._id} since ${startOfDay.toISOString()}:`, result);
 
     // Return the total as a number - if no results, return 0
     return result.length > 0 ? result[0].total : 0;
