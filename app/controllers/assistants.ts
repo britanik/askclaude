@@ -6,12 +6,16 @@ import { IThread } from "../interfaces/threads"
 import { IUser } from "../interfaces/users"
 import { IMessage } from "../interfaces/messages"
 import { sendMessage } from "../templates/sendMessage"
-import { analyzeConversation, claudeCall, formatMessagesWithImages, IConversationAnalysisResult, saveImagePermanently } from "../services/ai"
+import { analyzeConversation, formatMessagesWithImages, IConversationAnalysisResult, saveImagePermanently } from "../services/ai"
 import { isTokenLimit, getTokenLimitMessage, logTokenUsage, logWebSearchUsage } from "./tokens"
 import { saveAIResponse } from "../helpers/fileLogger"
 import { withChatAction } from "../helpers/chatAction"
 import { isAdmin } from "../helpers/helpers"
-import { createAccount, updateAccount, trackExpense } from "./expense"
+import { createAccount, updateAccount, trackExpense, getUserAccountsString } from "./expense"
+import { expenseTools, searchTool } from "../helpers/tools"
+import { promptsDict } from "../helpers/prompts"
+import axios from "axios"
+import { logApiError } from "../helpers/errorLogger"
 
 export interface IAssistantParams {
   user: IUser
@@ -166,7 +170,7 @@ export async function handleUserReply(
       }
     }
     
-    console.log(assistantType, 'assistantType')
+    console.log(assistantType, 'assistantType 1')
 
     // Create a new thread if analysis determined it's a new topic
     let startAssistantParams:IAssistantParams = {
@@ -229,7 +233,7 @@ export async function handleAssistantReply(
     }
 
   } catch (error) {
-    console.error('Error in handleAssistantReply:', error);
+    console.error('Error in handleAssistantReply:', error.response.data);
     // Send error message to user
     await sendMessage({ 
       text: dict.getString('ASSISTANT_ERROR'), 
@@ -266,122 +270,249 @@ export async function sendThreadToChatGPT(params) {
     // Format messages for Claude API with image support
     const formattedMessages = await formatMessagesWithImages(messages, user, bot)
     
+    // Start the conversation loop
+    const finalResponse = await chatWithFunctionCalling(formattedMessages, user, thread, bot)
+    
+    return finalResponse
+
+  } catch(e) {
+    console.log('Failed to send message to Anthropic API or other error:', e)
+    throw e
+  }
+}
+
+async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
+  const messages = [...initialMessages] // Copy initial messages
+  
+  while (true) {
     try {
-      const chatCompletion = await claudeCall({
-        messages: formattedMessages, 
-        temperature: 1,
-        user, // Pass user for web search limit checking
-        webSearch: thread.webSearch, // Pass web search flag from thread
-        assistantType: thread.assistantType,
-        bot
-      })
+      // Prepare tools array and context
+      let tools = [];
+      let accountsInfo = '';
       
-      // Log tokens usage
-      if (chatCompletion.usage) {
-        const inputTokens = chatCompletion.usage.input_tokens || 0
-        const outputTokens = chatCompletion.usage.output_tokens || 0
+      if (thread.webSearch) {
+        tools = [...searchTool, ...tools]
+      }
+
+      if (thread.assistantType === 'expense') {
+        tools = [...expenseTools, ...tools]
+        accountsInfo = await getUserAccountsString(user)
+      }
+      
+      // Prepare API request
+      const chatParams: any = {
+        model: process.env.CLAUDE_MODEL,
+        system: thread.assistantType === 'expense' ? promptsDict.expense(accountsInfo) : promptsDict.system(),
+        messages: messages,
+        max_tokens: +(process.env.CLAUDE_MAX_OUTPUT || 1000),
+        stream: false,
+        temperature: 1,
+      }
+
+      console.warn(chatParams.system,'chatParams.system')
+      
+      // Only add tools if available
+      if (tools.length > 0) {
+        chatParams.tools = tools;
+      }
+
+      // Send message to Claude
+      const response = await makeClaudeAPICall(chatParams)
+      
+      // Log token usage
+      if (response.usage) {
+        const inputTokens = response.usage.input_tokens || 0
+        const outputTokens = response.usage.output_tokens || 0
         await logTokenUsage(
           user, 
           thread, 
           inputTokens, 
           outputTokens,
-          chatCompletion.model || process.env.CLAUDE_MODEL,
+          response.model || process.env.CLAUDE_MODEL,
           bot
         )
         
         // Log web search usage if any
-        if (chatCompletion.usage.server_tool_use?.web_search_requests) {
+        if (response.usage.server_tool_use?.web_search_requests) {
           await logWebSearchUsage(
             user,
             thread,
-            chatCompletion.usage.server_tool_use.web_search_requests,
-            chatCompletion.model || process.env.CLAUDE_MODEL,
+            response.usage.server_tool_use.web_search_requests,
+            response.model || process.env.CLAUDE_MODEL,
             bot
           );
         }
       }
+
+      // Add Claude's response to conversation
+      messages.push({
+        role: "assistant",
+        content: response.content
+      });
+
+      // Check if Claude wants to use any tools
+      const toolUse = response.content.find(content => content.type === 'tool_use');
       
-      // Process tool uses and collect results
-      let responseText = '';
-      let searchResults = [];
-      let toolResults = []; // New: collect tool results
-      
-      if (chatCompletion.content && Array.isArray(chatCompletion.content)) {
-        for (const contentItem of chatCompletion.content) {
-          if (contentItem.type === 'text') {
-            responseText += contentItem.text;
-          } else if (contentItem.type === 'tool_use') {
-            // Handle tool use
-            console.log(contentItem,'contentItem')
-            let toolResult = null;
-            
-            if (contentItem.name === 'createAccount') {
-              console.log('Call create account')
-              const { name, type, currency, initial_balance, isDefault } = contentItem.input;
-              toolResult = await createAccount({ user, name, type, currency, initial_balance, isDefault });
-            } else if (contentItem.name === 'updateAccount') {
-              console.log('Call update account')
-              const { account_id, name, type, currency, isDefault } = contentItem.input;
-              toolResult = await updateAccount({ user, account_id, name, type, currency, isDefault });
-            } else if (contentItem.name === 'trackExpense') {
-              console.log('Call track expense')
-              const { account_id, amount, description, date } = contentItem.input;
-              toolResult = await trackExpense({ user, account_id, amount, description, date });
-            }
-            
-            // Store tool result for potential follow-up
-            if (toolResult) {
-              toolResults.push({
-                tool_use_id: contentItem.id,
-                type: "tool_result",
-                content: toolResult
-              });
-            }
-            
-          } else if (contentItem.type === 'web_search_tool_result') {
-            // Handle web search results
-            if (contentItem.content) {
-              for (const result of contentItem.content) {
-                if (result.type === 'web_search_result') {
-                  searchResults.push({
-                    title: result.title,
-                    url: result.url
-                  });
+      if (!toolUse) {
+        // No tool use, we're done - extract text response and search results
+        let responseText = '';
+        let searchResults = [];
+        
+        if (response.content && Array.isArray(response.content)) {
+          for (const contentItem of response.content) {
+            if (contentItem.type === 'text') {
+              responseText += contentItem.text;
+            } else if (contentItem.type === 'web_search_tool_result') {
+              // Handle web search results
+              if (contentItem.content) {
+                for (const result of contentItem.content) {
+                  if (result.type === 'web_search_result') {
+                    searchResults.push({
+                      title: result.title,
+                      url: result.url
+                    });
+                  }
                 }
               }
             }
           }
         }
+        
+        // Format final response with search results at the top
+        let finalResponse = '';
+        if (searchResults.length > 0) {
+          finalResponse += '<b>🔍 Источники:</b>\n';
+          searchResults.slice(0, 3).forEach((result, index) => {
+            finalResponse += `${index + 1}. <a href="${result.url}">${result.title}</a>\n`;
+          });
+          finalResponse += '\n';
+        }
+        finalResponse += responseText;
+        
+        return finalResponse;
       }
-      
-      // If we have tool results, make another call to Claude with the tool results
-      console.log(toolResults,'toolResults')
-      console.log(responseText,'responseText')
 
-      if (toolResults.length > 0) {
-        console.log('Making follow-up call with tool results...');
-                        
-      }
-      
-      // Format final response with search results at the top
-      let finalResponse = '';
-      if (searchResults.length > 0) {
-        finalResponse += '<b>🔍 Источники:</b>\n';
-        searchResults.slice(0, 3).forEach((result, index) => {
-          finalResponse += `${index + 1}. <a href="${result.url}">${result.title}</a>\n`;
+      // Execute the tool
+      try {
+        console.log(`Executing tool: ${toolUse.name}`, toolUse.input);
+        const toolResult = await executeFunction(toolUse.name, toolUse.input, user);
+        
+        // Send tool result back to Claude
+        messages.push({
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: toolUse.id,
+              content: toolResult
+            }
+          ]
         });
-        finalResponse += '\n';
+        
+      } catch (error) {
+        console.error(`Error executing tool ${toolUse.name}:`, error);
+        
+        // Send error back to Claude
+        messages.push({
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: toolUse.id,
+              content: `Error: ${error.message}`,
+              is_error: true
+            }
+          ]
+        });
       }
-      finalResponse += responseText;
-      
-      return finalResponse;
+
+      // Continue the loop to get Claude's response with the tool result
     } catch (error) {
       console.error('Claude API call failed:', error)
       throw error
     }
-  } catch(e) {
-    console.log('Failed to send message to Anthropic API or other error:', e)
-    throw e
+  }
+}
+
+async function executeFunction(functionName: string, input: any, user: IUser): Promise<string> {
+  switch (functionName) {
+    case 'createAccount':
+      const { name, type, currency, initial_balance, isDefault } = input;
+      return await createAccount({ user, name, type, currency, initial_balance, isDefault });
+      
+    case 'updateAccount':
+      const { account_id, name: updateName, type: updateType, currency: updateCurrency, isDefault: updateIsDefault } = input;
+      return await updateAccount({ user, account_id, name: updateName, type: updateType, currency: updateCurrency, isDefault: updateIsDefault });
+      
+    case 'trackExpense':
+      const { account_id: expenseAccountId, amount, description, date } = input;
+      return await trackExpense({ user, account_id: expenseAccountId, amount, description, date });
+      
+    default:
+      throw new Error(`Unknown function: ${functionName}`);
+  }
+}
+
+async function makeClaudeAPICall(chatParams: any) {
+  try {
+    // Make API request with primary model
+    const request = await axios.post(
+      'https://api.anthropic.com/v1/messages', 
+      chatParams, 
+      { 
+        headers: {
+          'x-api-key': process.env.CLAUDE_TOKEN, 
+          'anthropic-version': '2023-06-01',
+          'Content-Type': 'application/json'
+        },
+        timeout: +process.env.CLAUDE_TIMEOUT
+      }
+    )
+
+    return request.data
+    
+  } catch (primaryError) {
+    // Log the primary error
+    await logApiError('anthropic', primaryError, 'Primary model call failed')
+    
+    // Check if it's a 529 error or any server error (5xx)
+    if (primaryError.response && (primaryError.response.status === 529 || 
+        (primaryError.response.status >= 500 && primaryError.response.status < 600))) {
+      
+      console.log(`Primary model ${process.env.CLAUDE_MODEL} failed with status ${primaryError.response.status}, trying backup model...`)
+      
+      // Use backup model if primary fails
+      const backupModel = process.env.CLAUDE_MODEL_BACKUP
+              
+      // Update model in request
+      chatParams.model = backupModel
+      
+      try {
+        // Try with backup model
+        const backupRequest = await axios.post(
+          'https://api.anthropic.com/v1/messages', 
+          chatParams, 
+          { 
+            headers: {
+              'x-api-key': process.env.CLAUDE_TOKEN, 
+              'anthropic-version': '2023-06-01',
+              'Content-Type': 'application/json'
+            },
+            timeout: +process.env.CLAUDE_TIMEOUT
+          }
+        )
+        
+        console.log(`Received response from backup model ${backupModel}`)
+        return backupRequest.data
+      } catch (backupError) {
+        // Log backup error as well
+        logApiError('anthropic', backupError, 'Backup model call failed').catch(() => {})
+        throw backupError
+      }
+    } else {
+      // For other types of errors, rethrow
+      throw primaryError
+    }
   }
 }
 
