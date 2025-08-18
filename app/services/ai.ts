@@ -239,34 +239,36 @@ export async function analyzeConversation( lastMessages: Array<{role: string, co
       return { role: msg.role, content: msg.content || '' };
     });
 
+    // Build messages array for OpenAI format (system message first, then conversation)
     const messages = [
+      { role: 'system', content: promptsDict.analyzeConversation() },
       ...formattedMessages,
       { role: 'user', content: currentMessage }
     ];
 
-    // API request to the fast model
+    // API request to OpenAI GPT-5 nano
     const chatParams = {
-      system: promptsDict.analyzeConversation(),
-      model: process.env.CLAUDE_MODEL_FAST || 'claude-3-5-haiku-20241022',
+      model: process.env.OPENAI_MODEL_FAST || 'gpt-5-nano',
       messages: messages,
-      max_tokens: 150,
-      temperature: 0,
+      max_completion_tokens: 200,
+      temperature: 1,
+      reasoning_effort: 'minimal', // New GPT-5 parameter for faster responses
+      response_format: { type: 'json_object' }
     };
 
     const response = await axios.post(
-      'https://api.anthropic.com/v1/messages',
+      'https://api.openai.com/v1/chat/completions',
       chatParams,
       {
         headers: {
-          'x-api-key': process.env.CLAUDE_TOKEN,
-          'anthropic-version': '2023-06-01',
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
           'Content-Type': 'application/json'
         },
         timeout: 10000 // 10-second timeout for quick response
       }
     );
 
-    const result = JSON.parse(response.data.content[0].text);
+    const result = JSON.parse(response.data.choices[0].message.content);
     
     // Validate the result
     return { 
@@ -280,7 +282,7 @@ export async function analyzeConversation( lastMessages: Array<{role: string, co
     
     // Log analysis error only if it's not a simple timeout or network issue
     if (error.response?.status) {
-      logApiError('anthropic', error, 'Conversation analysis failed').catch(() => {});
+      logApiError('openai', error, 'Conversation analysis with GPT-5 nano failed').catch(() => {});
     }
     
     // Always return 'continue' on any error to prevent crashes

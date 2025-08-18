@@ -185,6 +185,13 @@ export async function handleUserReply(
       console.log(`[NEW THREAD CREATED] For ${user.username || user.chatId} based on topic change analysis - Type: ${thread.assistantType}`);
       return { thread, isNew: true };
     }
+
+    // If continuing with existing thread but assistant type changed to expense, update it
+    if (assistantType === 'expense' && thread.assistantType !== 'expense') {
+      thread.assistantType = 'expense';
+      await thread.save();
+      console.log(`[THREAD UPDATED] Changed to expense type for ${user.username || user.chatId}`);
+    }
     
     // Otherwise continue with the existing thread
     await new Message({
@@ -298,6 +305,8 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
         tools = [...expenseTools, ...tools]
         accountsInfo = await getUserAccountsString(user)
       }
+
+      console.log(accountsInfo,'accountsInfo')
       
       // Prepare API request
       const chatParams: any = {
@@ -309,7 +318,7 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
         temperature: 1,
       }
 
-      console.warn(chatParams.system,'chatParams.system')
+      // console.warn(chatParams.system,'chatParams.system')
       
       // Only add tools if available
       if (tools.length > 0) {
