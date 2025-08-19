@@ -3,6 +3,7 @@ import { IUser } from "../interfaces/users";
 import { ITransaction } from "../interfaces/transactions";
 import Account from "../models/accounts";
 import Transaction from "../models/transactions";
+import moment from "moment";
 
 export interface ICreateAccountParams {
   user: IUser;
@@ -43,6 +44,30 @@ export async function getUserAccountsString(user: IUser): Promise<string> {
   } catch (error) {
     console.error('Error formatting user accounts:', error);
     return "Error retrieving accounts.";
+  }
+}
+
+export async function getRecentTransactionsString(user: IUser): Promise<string> {
+  try {
+    const transactions = await Transaction.find({ user: user._id })
+      .populate('account', 'name')
+      .sort({ date: -1 })
+      .limit(50);
+    
+    if (transactions.length === 0) {
+      return "No recent transactions found.";
+    }
+    
+    return transactions.map((transaction, index) => {
+      const date = moment(transaction.date).format('MM/DD');
+      const accountName = (transaction.account as any)?.name || 'Unknown Account';
+      const typeSymbol = transaction.type === 'income' ? '+' : '-';
+      
+      return `${index + 1}. ${date} ${typeSymbol}${transaction.amount} ${transaction.currency} (${accountName}) - ${transaction.description}`;
+    }).join('\n');
+  } catch (error) {
+    console.error('Error formatting recent transactions:', error);
+    return "Error retrieving transactions.";
   }
 }
 

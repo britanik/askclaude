@@ -11,7 +11,7 @@ import { isTokenLimit, getTokenLimitMessage, logTokenUsage, logWebSearchUsage } 
 import { saveAIResponse } from "../helpers/fileLogger"
 import { withChatAction } from "../helpers/chatAction"
 import { isAdmin } from "../helpers/helpers"
-import { createAccount, updateAccount, trackExpense, getUserAccountsString } from "./expense"
+import { createAccount, updateAccount, trackExpense, getUserAccountsString, getRecentTransactionsString } from "./expense"
 import { expenseTools, searchTool } from "../helpers/tools"
 import { promptsDict } from "../helpers/prompts"
 import axios from "axios"
@@ -296,6 +296,7 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
       // Prepare tools array and context
       let tools = [];
       let accountsInfo = '';
+      let transactionsInfo = '';
       
       if (thread.webSearch) {
         tools = [...searchTool, ...tools]
@@ -304,14 +305,16 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
       if (thread.assistantType === 'expense') {
         tools = [...expenseTools, ...tools]
         accountsInfo = await getUserAccountsString(user)
+        transactionsInfo = await getRecentTransactionsString(user)
       }
 
       console.log(accountsInfo,'accountsInfo')
+      console.log(transactionsInfo,'transactionsInfo')
       
       // Prepare API request
       const chatParams: any = {
         model: process.env.CLAUDE_MODEL,
-        system: thread.assistantType === 'expense' ? promptsDict.expense(accountsInfo) : promptsDict.system(),
+        system: thread.assistantType === 'expense' ? promptsDict.expense(accountsInfo, transactionsInfo) : promptsDict.system(),
         messages: messages,
         max_tokens: +(process.env.CLAUDE_MAX_OUTPUT || 1000),
         stream: false,
