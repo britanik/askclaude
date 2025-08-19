@@ -6,7 +6,7 @@ export const searchTool = [
   }
 ]
 
-export const expenseTools = [
+export const financeTools = [
   {
     name: "trackExpense",
     description: "Record a financial transaction (expense, income, or transfer)",

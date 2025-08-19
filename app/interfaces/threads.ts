@@ -5,6 +5,6 @@ export interface IThread extends Document {
   _id: ObjectId
   owner: IUser
   webSearch?: boolean
-  assistantType?: 'normal' | 'expense'
+  assistantType?: 'normal' | 'finance'
   created?: Date
 }

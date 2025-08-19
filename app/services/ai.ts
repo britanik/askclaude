@@ -4,15 +4,12 @@ import TelegramBot from "node-telegram-bot-api"
 import fs from 'fs'
 import FormData from 'form-data'
 import path from 'path'
-import { v4 as uuidv4 } from 'uuid'
 import { getReadableId } from "../helpers/helpers"
 import { IMessage } from "../interfaces/messages"
 import { logApiError } from "../helpers/errorLogger"
 import { sendMessage } from "../templates/sendMessage"
 import { handleImageGeneration } from "../controllers/images"
 import { IUser } from "../interfaces/users"
-import { expenseTools, searchTool } from "../helpers/tools"
-import { getUserAccountsString } from "../controllers/expense"
 
 export interface IChatCallParams {
   messages: Array<{
@@ -222,7 +219,7 @@ export async function saveImagePermanently(url, imageId) {
 export interface IConversationAnalysisResult {
   action: 'new' | 'continue',
   search: boolean,
-  assistant: 'normal' | 'expense',
+  assistant: 'normal' | 'finance',
   why: string
 }
 

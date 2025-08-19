@@ -13,7 +13,7 @@ import { saveAIResponse } from "../helpers/fileLogger"
 import { withChatAction } from "../helpers/chatAction"
 import { isAdmin } from "../helpers/helpers"
 import { createAccount, updateAccount, trackExpense, getUserAccountsString, getRecentTransactionsString } from "./expense"
-import { expenseTools, searchTool } from "../helpers/tools"
+import { financeTools, searchTool } from "../helpers/tools"
 import { promptsDict } from "../helpers/prompts"
 import axios from "axios"
 import { logApiError } from "../helpers/errorLogger"
@@ -22,7 +22,7 @@ export interface IAssistantParams {
   user: IUser
   firstMessage?: string
   webSearch?: boolean
-  assistantType?: 'normal' | 'expense'
+  assistantType?: 'normal' | 'finance'
 }
 
 export async function startAssistant(params:IAssistantParams): Promise<IThread> {
@@ -136,7 +136,7 @@ export async function handleUserReply(
     
     // Skip all analysis logic if the feature is disabled
     let shouldCreateNewThread = false;
-    let assistantType: 'normal' | 'expense' = 'normal';
+    let assistantType: 'normal' | 'finance' = 'normal';
 
     // Web search disabled by default
     let webSearch = false;
@@ -163,7 +163,7 @@ export async function handleUserReply(
         console.log(`[CONVERSATION ANALYSIS]`, analysis);
         
         webSearch = analysis.search || false;
-        assistantType = analysis.assistant === 'expense' ? 'expense' : 'normal';
+        assistantType = analysis.assistant === 'finance' ? 'finance' : 'normal';
         
         // If analysis says it's a new topic, create a new thread
         if (analysis.action === 'new') {
@@ -186,11 +186,11 @@ export async function handleUserReply(
       return { thread, isNew: true };
     }
 
-    // If continuing with existing thread but assistant type changed to expense, update it
-    if (assistantType === 'expense' && thread.assistantType !== 'expense') {
-      thread.assistantType = 'expense';
+    // If continuing with existing thread but assistant type changed to finance, update it
+    if (assistantType === 'finance' && thread.assistantType !== 'finance') {
+      thread.assistantType = 'finance';
       await thread.save();
-      console.log(`[THREAD UPDATED] Changed to expense type`);
+      console.log(`[THREAD UPDATED] Changed to finance type`);
     }
     
     // Otherwise continue with the existing thread
@@ -303,8 +303,8 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
         tools = [...searchTool, ...tools]
       }
 
-      if (thread.assistantType === 'expense') {
-        tools = [...expenseTools, ...tools]
+      if (thread.assistantType === 'finance') {
+        tools = [...financeTools, ...tools]
         accountsInfo = await getUserAccountsString(user)
         transactionsInfo = await getRecentTransactionsString(user)
       }
@@ -318,7 +318,7 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
       // Prepare API request
       const chatParams: any = {
         model: process.env.CLAUDE_MODEL,
-        system: thread.assistantType === 'expense' ? promptsDict.expense(currentDate, accountsInfo, transactionsInfo) : promptsDict.system(),
+        system: thread.assistantType === 'finance' ? promptsDict.finance(currentDate, accountsInfo, transactionsInfo) : promptsDict.system(),
         messages: messages,
         max_tokens: +(process.env.CLAUDE_MAX_OUTPUT || 1000),
         stream: false,
