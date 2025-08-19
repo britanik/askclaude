@@ -4,6 +4,7 @@ import { IAccount } from "./accounts"
 
 export interface ITransaction extends Document {
   _id: Types.ObjectId
+  ID: number
   user: IUser | Types.ObjectId
   account: IAccount | Types.ObjectId
   type: 'income' | 'expense' | 'transfer'

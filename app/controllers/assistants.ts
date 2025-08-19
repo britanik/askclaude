@@ -1,4 +1,5 @@
 import TelegramBot from "node-telegram-bot-api"
+import moment from "moment"
 import Dict from "../helpers/dict"
 import Thread from '../models/threads'
 import Message from '../models/messages'
@@ -159,9 +160,10 @@ export async function handleUserReply(
           
         // Analyze the conversation
         const analysis:IConversationAnalysisResult = await analyzeConversation(formattedMessages, userReply);
+        console.log(`[CONVERSATION ANALYSIS]`, analysis);
+        
         webSearch = analysis.search || false;
         assistantType = analysis.assistant === 'expense' ? 'expense' : 'normal';
-        console.log(`[CONVERSATION ANALYSIS] ${user.username || user.chatId}: ${analysis.action} - ${analysis.search} - ${analysis.assistant}`);
         
         // If analysis says it's a new topic, create a new thread
         if (analysis.action === 'new') {
@@ -170,8 +172,6 @@ export async function handleUserReply(
       }
     }
     
-    console.log(assistantType, 'assistantType 1')
-
     // Create a new thread if analysis determined it's a new topic
     let startAssistantParams:IAssistantParams = {
       user,
@@ -190,7 +190,7 @@ export async function handleUserReply(
     if (assistantType === 'expense' && thread.assistantType !== 'expense') {
       thread.assistantType = 'expense';
       await thread.save();
-      console.log(`[THREAD UPDATED] Changed to expense type for ${user.username || user.chatId}`);
+      console.log(`[THREAD UPDATED] Changed to expense type`);
     }
     
     // Otherwise continue with the existing thread
@@ -297,6 +297,7 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
       let tools = [];
       let accountsInfo = '';
       let transactionsInfo = '';
+      const currentDate = moment().format('YY.MM.DD');
       
       if (thread.webSearch) {
         tools = [...searchTool, ...tools]
@@ -308,13 +309,16 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
         transactionsInfo = await getRecentTransactionsString(user)
       }
 
-      console.log(accountsInfo,'accountsInfo')
-      console.log(transactionsInfo,'transactionsInfo')
-      
+      console.log('----')
+      console.info(accountsInfo,'accountsInfo')
+      console.log('----')
+      console.info(transactionsInfo,'transactionsInfo')
+      console.log('----')
+
       // Prepare API request
       const chatParams: any = {
         model: process.env.CLAUDE_MODEL,
-        system: thread.assistantType === 'expense' ? promptsDict.expense(accountsInfo, transactionsInfo) : promptsDict.system(),
+        system: thread.assistantType === 'expense' ? promptsDict.expense(currentDate, accountsInfo, transactionsInfo) : promptsDict.system(),
         messages: messages,
         max_tokens: +(process.env.CLAUDE_MAX_OUTPUT || 1000),
         stream: false,
@@ -330,6 +334,7 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
 
       // Send message to Claude
       const response = await makeClaudeAPICall(chatParams)
+      console.log(response.content,'response.content')
       
       // Log token usage
       if (response.usage) {
@@ -449,16 +454,13 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
 async function executeFunction(functionName: string, input: any, user: IUser): Promise<string> {
   switch (functionName) {
     case 'createAccount':
-      const { name, type, currency, initial_balance, isDefault } = input;
-      return await createAccount({ user, name, type, currency, initial_balance, isDefault });
+      return await createAccount( user, input );
       
     case 'updateAccount':
-      const { account_id, name: updateName, type: updateType, currency: updateCurrency, isDefault: updateIsDefault } = input;
-      return await updateAccount({ user, account_id, name: updateName, type: updateType, currency: updateCurrency, isDefault: updateIsDefault });
+      return await updateAccount( user, input );
       
     case 'trackExpense':
-      const { account_id: expenseAccountId, amount, description, date } = input;
-      return await trackExpense({ user, account_id: expenseAccountId, amount, description, date });
+      return await trackExpense( user, input );
       
     default:
       throw new Error(`Unknown function: ${functionName}`);

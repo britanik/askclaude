@@ -3,6 +3,7 @@ import { IUser } from "./users"
 
 export interface IAccount extends Document {
   _id: Types.ObjectId
+  ID: number
   user: IUser | Types.ObjectId
   name: string
   type: 'bank' | 'cash' | 'crypto'

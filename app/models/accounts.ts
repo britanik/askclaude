@@ -6,6 +6,7 @@ import { IAccount } from '../interfaces/accounts'
 const Schema = mongoose.Schema
 
 const AccountSchema = new Schema<IAccount>({
+  ID: { type: Number, unique: true, required: true },
   user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   name: { type: String, required: true },
   type: { 
@@ -23,5 +24,6 @@ const AccountSchema = new Schema<IAccount>({
 // Add indexes for faster queries
 AccountSchema.index({ user: 1, isActive: 1 })
 AccountSchema.index({ user: 1, currency: 1 })
+AccountSchema.index({ ID: 1 }, { unique: true })
 
 export default mongoose.model('Account', AccountSchema)

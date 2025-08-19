@@ -220,9 +220,10 @@ export async function saveImagePermanently(url, imageId) {
 }
 
 export interface IConversationAnalysisResult {
-  action: 'new' | 'continue';
-  search: boolean;
-  assistant: 'normal' | 'expense';
+  action: 'new' | 'continue',
+  search: boolean,
+  assistant: 'normal' | 'expense',
+  why: string
 }
 
 export async function analyzeConversation( lastMessages: Array<{role: string, content: string}>, currentMessage: string  ): Promise<IConversationAnalysisResult> {
@@ -250,7 +251,7 @@ export async function analyzeConversation( lastMessages: Array<{role: string, co
     const chatParams = {
       model: process.env.OPENAI_MODEL_FAST || 'gpt-5-nano',
       messages: messages,
-      max_completion_tokens: 200,
+      max_completion_tokens: 500,
       temperature: 1,
       reasoning_effort: 'minimal', // New GPT-5 parameter for faster responses
       response_format: { type: 'json_object' }
@@ -274,7 +275,8 @@ export async function analyzeConversation( lastMessages: Array<{role: string, co
     return { 
       action: result.action || 'continue', 
       search: result.search || false, 
-      assistant: result.assistant || 'normal' 
+      assistant: result.assistant || 'normal' ,
+      why: result.why || "default"
     };
 
   } catch (error) {
@@ -286,7 +288,7 @@ export async function analyzeConversation( lastMessages: Array<{role: string, co
     }
     
     // Always return 'continue' on any error to prevent crashes
-    return { action: 'continue', search: false, assistant: 'normal' };
+    return { action: 'continue', search: false, assistant: 'normal', "why": "default" };
   }
 }
 

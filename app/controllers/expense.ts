@@ -4,24 +4,7 @@ import { ITransaction } from "../interfaces/transactions";
 import Account from "../models/accounts";
 import Transaction from "../models/transactions";
 import moment from "moment";
-
-export interface ICreateAccountParams {
-  user: IUser;
-  name: string;
-  type: string;
-  currency: string;
-  initial_balance?: number;
-  isDefault?: boolean;
-}
-
-export interface IUpdateAccountParams {
-  user: IUser;
-  account_id: string;
-  name?: string;
-  type?: string;
-  currency?: string;
-  isDefault?: boolean;
-}
+import { getReadableId } from "../helpers/helpers";
 
 export async function getUserAccounts(user: IUser): Promise<IAccount[]> {
   try {
@@ -38,9 +21,16 @@ export async function getUserAccountsString(user: IUser): Promise<string> {
     if (accounts.length === 0) {
       return "No accounts found.";
     }
-    return accounts.map((account, index) => 
-      `${index + 1}. ${account.name}${account.isDefault ? ' (Default)' : ''} - ID: ${account._id}`
+    
+    // CSV header
+    let result = "ID|Name|Type|Currency|Balance|Default\n";
+    
+    // CSV data rows
+    result += accounts.map(account => 
+      `${account.ID}|${account.name}|${account.type}|${account.currency}|${account.balance}|${account.isDefault ? 'Yes' : 'No'}`
     ).join('\n');
+    
+    return result;
   } catch (error) {
     console.error('Error formatting user accounts:', error);
     return "Error retrieving accounts.";
@@ -58,29 +48,34 @@ export async function getRecentTransactionsString(user: IUser): Promise<string> 
       return "No recent transactions found.";
     }
     
-    return transactions.map((transaction, index) => {
-      const date = moment(transaction.date).format('MM/DD');
+    // CSV header
+    let result = "ID|Date|Type|Amount|Currency|Account|Description\n";
+    
+    // CSV data rows
+    result += transactions.map(transaction => {
+      const date = moment(transaction.date).format('MM/DD/YYYY');
       const accountName = (transaction.account as any)?.name || 'Unknown Account';
-      const typeSymbol = transaction.type === 'income' ? '+' : '-';
       
-      return `${index + 1}. ${date} ${typeSymbol}${transaction.amount} ${transaction.currency} (${accountName}) - ${transaction.description}`;
+      return `${transaction.ID}|${date}|${transaction.type}|${transaction.amount}|${transaction.currency}|${accountName}|${transaction.description}`;
     }).join('\n');
+    
+    return result;
   } catch (error) {
     console.error('Error formatting recent transactions:', error);
     return "Error retrieving transactions.";
   }
 }
 
-export async function createAccount(params: ICreateAccountParams): Promise<string> {
-  console.log(params, 'createAccount')
+export async function createAccount(user: IUser, input): Promise<string> {
   try {
-    const { user, name, type, currency, initial_balance, isDefault } = params;
+    const { name, type, currency, initial_balance, isDefault } = input;
     
     if (isDefault) {
       await Account.updateMany({ user: user._id }, { isDefault: false });
     }
 
     const account = new Account({
+      ID: getReadableId(),
       user: user._id,
       name,
       type,
@@ -90,20 +85,20 @@ export async function createAccount(params: ICreateAccountParams): Promise<strin
     });
 
     await account.save();
-    return `Account "${name}" created successfully with ID: ${account._id}`;
+    return `Account "${name}" created successfully with ID: ${account.ID}`;
   } catch (error) {
     console.error('Error creating account:', error);
     return "Error creating account.";
   }
 }
 
-export async function updateAccount(params: IUpdateAccountParams): Promise<string> {
-  console.log(params, 'updateAccount')
+export async function updateAccount(user: IUser, input): Promise<string> {
   try {
-    const { user, account_id, name, type, currency, isDefault } = params;
+    const { user, accountId, name, type, currency, isDefault } = input;
     const updates = { name, type, currency, isDefault };
     
-    const account = await Account.findOne({ _id: account_id, user: user._id });
+    // Try to find by readable ID first, then by ObjectId
+    const account = await findAccountByReadableId(user, accountId);
     if (!account) {
       return "Account not found.";
     }
@@ -112,7 +107,7 @@ export async function updateAccount(params: IUpdateAccountParams): Promise<strin
       await Account.updateMany({ user: user._id }, { isDefault: false });
     }
 
-    await Account.findByIdAndUpdate(account_id, updates);
+    await Account.findByIdAndUpdate(account._id, updates);
     return `Account updated successfully.`;
   } catch (error) {
     console.error('Error updating account:', error);
@@ -120,30 +115,22 @@ export async function updateAccount(params: IUpdateAccountParams): Promise<strin
   }
 }
 
-export interface ITrackExpenseParams {
-  user: IUser;
-  account_id: string;
-  amount: number;
-  description: string;
-  date?: Date;
-}
+export async function trackExpense(user: IUser, input): Promise<string> {
+  try {    
+    const { amount, description, accountId, type, currency } = input;
 
-export async function trackExpense(params: ITrackExpenseParams): Promise<string> {
-  try {
-    const { user, account_id, amount, description, date } = params;
-    
-    const account = await Account.findOne({ _id: account_id, user: user._id });
+    const account = await findAccountByReadableId(user, accountId);
     if (!account) {
       return "Account not found.";
     }
 
     const transaction = new Transaction({
+      ID: getReadableId(),
       user: user._id,
-      account: account_id,
-      type: 'expense',
+      account: account._id,
+      type,
       amount: Math.abs(amount),
-      currency: account.currency,
-      date: date || new Date(),
+      currency,
       description
     });
 
@@ -152,9 +139,39 @@ export async function trackExpense(params: ITrackExpenseParams): Promise<string>
     account.balance -= Math.abs(amount);
     await account.save();
 
-    return `Expense of ${Math.abs(amount)} ${account.currency} tracked successfully.`;
+    return `Expense of ${Math.abs(amount)} ${account.currency} tracked successfully with ID: ${transaction.ID}`;
   } catch (error) {
     console.error('Error tracking expense:', error);
     return "Error tracking expense.";
+  }
+}
+
+// Helper function to find account by readable ID
+export async function findAccountByReadableId(user: IUser, readableId: string): Promise<IAccount | null> {
+  try {
+    // Check if the ID is numeric (readable ID)
+    const numericId = parseInt(readableId);
+    if (!isNaN(numericId)) {
+      return await Account.findOne({ ID: numericId, user: user._id });
+    }
+    return null;
+  } catch (error) {
+    console.error('Error finding account by readable ID:', error);
+    return null;
+  }
+}
+
+// Helper function to find transaction by readable ID
+export async function findTransactionByReadableId(user: IUser, readableId: string): Promise<ITransaction | null> {
+  try {
+    // Check if the ID is numeric (readable ID)
+    const numericId = parseInt(readableId);
+    if (!isNaN(numericId)) {
+      return await Transaction.findOne({ ID: numericId, user: user._id });
+    }
+    return null;
+  } catch (error) {
+    console.error('Error finding transaction by readable ID:', error);
+    return null;
   }
 }

@@ -21,9 +21,9 @@ export const expenseTools = [
           type: "string",
           description: "Description of the transaction"
         },
-        account_id: {
+        accountId: {
           type: "string",
-          description: "ID of the account to use for this transaction"
+          description: "ID of the account to use for this transaction (e.g., 240119001)"
         },
         type: {
           type: "string",
@@ -35,7 +35,7 @@ export const expenseTools = [
           description: "Currency code (USD, EUR, GEL, etc.)"
         }
       },
-      required: ["amount", "description", "account_id", "type", "currency"]
+      required: ["amount", "description", "account", "type", "currency"]
     }
   },
   {
@@ -75,9 +75,9 @@ export const expenseTools = [
     input_schema: {
       type: "object",
       properties: {
-        account_id: {
+        accountId: {
           type: "string",
-          description: "ID of the account to update"
+          description: "Readable ID of the account to update (e.g., 240119001)"
         },
         name: {
           type: "string",
@@ -97,7 +97,7 @@ export const expenseTools = [
           description: "Whether this account should be set as the default account (optional)"
         }
       },
-      required: ["account_id"]
+      required: ["accountId"]
     }
   }
 ];

@@ -357,14 +357,14 @@ export async function logWebSearchUsage(user: IUser, thread: any, searchCount: n
       }).save();
 
       // Send notification to user via bot
-      if( isAdmin(user) ) {
-        const message = `Search used: ${searchCount}`;
-        await sendMessage({
-          text: message,
-          user,
-          bot
-        })
-      }
+      // if( isAdmin(user) ) {
+      //   const message = `Search used: ${searchCount}`;
+      //   await sendMessage({
+      //     text: message,
+      //     user,
+      //     bot
+      //   })
+      // }
 
     }
   } catch (error) {
