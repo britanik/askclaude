@@ -177,6 +177,113 @@ export async function trackExpense(user: IUser, input): Promise<string> {
   }
 }
 
+export async function editTransaction(user: IUser, input): Promise<string> {
+  try {
+    const { transactionId, amount, description, type, currency, accountId, date } = input;
+    
+    // Validate that we have a transaction ID
+    if (!transactionId) {
+      return "Не указан ID транзакции для редактирования.";
+    }
+    
+    // Find the transaction by readable ID
+    const transaction = await findTransactionByReadableId(user, transactionId);
+    if (!transaction) {
+      return `Транзакция с ID ${transactionId} не найдена.`;
+    }
+
+    // Get the current account for balance adjustments
+    const currentAccount = await Account.findById(transaction.account);
+    if (!currentAccount) {
+      return "Связанный счет не найден.";
+    }
+
+    // Store original values for balance calculations
+    const originalAmount = transaction.amount;
+    const originalType = transaction.type;
+
+    // Build update object with only provided fields
+    const possibleUpdates = { amount, description, type, currency, date };
+    const updates: any = {};
+    
+    for (const [key, value] of Object.entries(possibleUpdates)) {
+      if (value !== undefined && value !== null) {
+        if (key === 'amount') {
+          updates[key] = Math.abs(value); // Ensure amount is positive
+        } else if (key === 'date') {
+          updates[key] = moment(value).toDate(); // Convert to Date object
+        } else {
+          updates[key] = value;
+        }
+      }
+    }
+
+    // Handle account change if provided
+    let newAccount = currentAccount;
+    if (accountId && accountId !== currentAccount.ID.toString()) {
+      newAccount = await findAccountByReadableId(user, accountId);
+      if (!newAccount) {
+        return `Новый счет с ID ${accountId} не найден.`;
+      }
+      updates.account = newAccount._id;
+    }
+
+    // Check if there are any updates to apply
+    if (Object.keys(updates).length === 0) {
+      return "Не указаны параметры для обновления.";
+    }
+
+    // Calculate balance adjustments
+    const finalAmount = updates.amount !== undefined ? updates.amount : originalAmount;
+    const finalType = updates.type !== undefined ? updates.type : originalType;
+
+    // Revert original transaction impact on current account
+    if (originalType === 'expense') {
+      currentAccount.balance += originalAmount; // Add back the expense
+    } else if (originalType === 'income') {
+      currentAccount.balance -= originalAmount; // Remove the income
+    }
+
+    // Apply new transaction impact
+    if (newAccount._id.equals(currentAccount._id)) {
+      // Same account - apply new impact
+      if (finalType === 'expense') {
+        newAccount.balance -= finalAmount;
+      } else if (finalType === 'income') {
+        newAccount.balance += finalAmount;
+      }
+      await newAccount.save();
+    } else {
+      // Different account - save current account and update new account
+      await currentAccount.save();
+      
+      if (finalType === 'expense') {
+        newAccount.balance -= finalAmount;
+      } else if (finalType === 'income') {
+        newAccount.balance += finalAmount;
+      }
+      await newAccount.save();
+    }
+
+    // Apply the updates to the transaction
+    await Transaction.findByIdAndUpdate(transaction._id, updates);
+    
+    // Build success message with updated fields
+    const updatedFields = [];
+    if (updates.amount !== undefined) updatedFields.push(`сумма: ${updates.amount} ${updates.currency || transaction.currency}`);
+    if (updates.description) updatedFields.push(`описание: "${updates.description}"`);
+    if (updates.type) updatedFields.push(`тип: ${updates.type}`);
+    if (updates.currency) updatedFields.push(`валюта: ${updates.currency}`);
+    if (updates.account) updatedFields.push(`счет: ${newAccount.name}`);
+    if (updates.date) updatedFields.push(`дата: ${moment(updates.date).format('DD.MM.YYYY')}`);
+    
+    return `Транзакция "${transaction.description}" (ID: ${transaction.ID}) успешно обновлена. Изменения: ${updatedFields.join(', ')}.`;
+  } catch (error) {
+    console.error('Error editing transaction:', error);
+    return "Ошибка при редактировании транзакции. Попробуйте позже.";
+  }
+}
+
 // Helper function to find account by readable ID
 export async function findAccountByReadableId(user: IUser, readableId: string): Promise<IAccount | null> {
   try {

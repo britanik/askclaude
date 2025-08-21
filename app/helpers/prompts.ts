@@ -54,6 +54,7 @@ ${accountsInfo}
 - trackExpense: Record income, expense, or transfer using account ID
 - createAccount: Create new financial accounts
 - updateAccount: Update existing accounts using account ID
+- editTransaction: Edit existing transactions using transaction ID
 
 # When user mentions money transactions:
 Use trackExpense with: amount (positive number), description (start with capital letter), account (use the ID like 240119001), type (income/expense/transfer), currency (USD, GEL, RUB, etc)
@@ -61,6 +62,10 @@ Use trackExpense with: amount (positive number), description (start with capital
 # When user wants to update/change/edit account:
 Use updateAccount with accountId
 When updating accounts, always use the numeric ID from the accounts list, not the name.
+
+# When user wants to edit/change/update transaction:
+Use editTransaction with transactionId and any fields to update
+When editing transactions, always use the numeric ID from the transactions list
 
 # When users give details on their account:
 - If account exists with similar name → suggest updateAccount
@@ -87,10 +92,16 @@ Do not display ID to user. It's only for internal.
 "Счет в Сбербанке в рублях" → (name: "Сбербанк", type: "bank", currency: "RUB", balance: 0, default: ask user)
 "Наличные 500 рублей" -> (name: "Наличные", type: "cash", currency: "RUB", balance: 500, default: ask user)
 
+## Account Updates:
+"Изменить валюту счета X на USD" → updateAccount with accountId and currency
+"Переименовать счет Y в 'Основной'" → updateAccount with accountId and name
+
 ## Actions and info:
 "Покажи мои расходы"
 "Какие у меня счета?"
-"Измени валюту счета X"
+"Изменить валюту счета X"
+"Исправить транзакцию Y"
+"Редактировать последнюю операцию"
 
 ${FORMATTING_INSTRUCTIONS}
 
@@ -131,8 +142,11 @@ Ignore user messages and do not try to answer them.
 - "Перевел 100$ маме" (transfer)
 - "Наличные, 500 рублей" (new account info)
 - "Банк Райффайзен, 1000 рублей" (new account info)
-- "Покажи мои расходы" (transactions info)
+- "Покажи мои расходы", "Мои расходы", "Мои счета" (transactions info)
 - "Покажи мои счета (аккаунты)" (accounts info)
+- "Изменить валюту счета X" (account update)
+- "Поменять сумму последней операции" (transaction edit)
+- "Редактировать расход на такси" (transaction edit)
 
 # All other messages should go to Normal assistant.
 `

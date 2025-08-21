@@ -8,11 +8,11 @@ import { IUser } from "../interfaces/users"
 import { IMessage } from "../interfaces/messages"
 import { sendMessage } from "../templates/sendMessage"
 import { analyzeConversation, formatMessagesWithImages, IConversationAnalysisResult, saveImagePermanently } from "../services/ai"
-import { isTokenLimit, getTokenLimitMessage, logTokenUsage, logWebSearchUsage } from "./tokens"
+import { logTokenUsage, logWebSearchUsage } from "./tokens"
 import { saveAIResponse } from "../helpers/fileLogger"
 import { withChatAction } from "../helpers/chatAction"
 import { isAdmin } from "../helpers/helpers"
-import { createAccount, updateAccount, trackExpense, getUserAccountsString, getRecentTransactionsString } from "./expense"
+import { createAccount, updateAccount, trackExpense, getUserAccountsString, getRecentTransactionsString, editTransaction } from "./expense"
 import { financeTools, searchTool } from "../helpers/tools"
 import { promptsDict } from "../helpers/prompts"
 import axios from "axios"
@@ -461,6 +461,9 @@ async function executeFunction(functionName: string, input: any, user: IUser): P
       
     case 'trackExpense':
       return await trackExpense( user, input );
+      
+    case 'editTransaction':
+      return await editTransaction( user, input );
       
     default:
       throw new Error(`Unknown function: ${functionName}`);

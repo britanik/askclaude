@@ -103,5 +103,44 @@ export const financeTools = [
       },
       required: ["accountId"]
     }
+  },
+  {
+    name: "editTransaction",
+    description: "Edit an existing financial transaction",
+    input_schema: {
+      type: "object",
+      properties: {
+        transactionId: {
+          type: "string",
+          description: "Readable ID of the transaction to edit (e.g., 240119001)"
+        },
+        amount: {
+          type: "number",
+          description: "New amount for the transaction (always positive number)"
+        },
+        description: {
+          type: "string",
+          description: "New description for the transaction"
+        },
+        type: {
+          type: "string",
+          enum: ["expense", "income", "transfer"],
+          description: "New type of transaction"
+        },
+        currency: {
+          type: "string",
+          description: "New currency code (USD, EUR, GEL, etc.)"
+        },
+        accountId: {
+          type: "string",
+          description: "ID of the account to move this transaction to (e.g., 240119001)"
+        },
+        date: {
+          type: "string",
+          description: "New date for the transaction in YYYY-MM-DD format or other readable format"
+        }
+      },
+      required: ["transactionId"]
+    }
   }
 ];
