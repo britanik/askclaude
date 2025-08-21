@@ -297,7 +297,7 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
       let tools = [];
       let accountsInfo = '';
       let transactionsInfo = '';
-      const currentDate = moment().format('YY.MM.DD');
+      const currentDate = moment().format('DD.MM.YY');
       
       if (thread.webSearch) {
         tools = [...searchTool, ...tools]

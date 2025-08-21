@@ -148,11 +148,24 @@ export async function updateAccount(user: IUser, input): Promise<string> {
 
 export async function trackExpense(user: IUser, input): Promise<string> {
   try {    
-    const { amount, description, accountId, type, currency } = input;
+    const { amount, description, accountId, type, currency, date } = input;
 
     const account = await findAccountByReadableId(user, accountId);
     if (!account) {
       return "Account not found.";
+    }
+
+    // Parse date if provided, otherwise use current date
+    let transactionDate: Date;
+    if (date) {
+      const parsedDate = moment(date, 'DD.MM.YYYY', true);
+      if (parsedDate.isValid()) {
+        transactionDate = parsedDate.toDate();
+      } else {
+        return `Неверный формат даты: "${date}". Используйте формат: ДД.ММ.ГГГГ (например, 15.06.2024)`;
+      }
+    } else {
+      transactionDate = moment().toDate();
     }
 
     const transaction = new Transaction({
@@ -162,7 +175,8 @@ export async function trackExpense(user: IUser, input): Promise<string> {
       type,
       amount: Math.abs(amount),
       currency,
-      description
+      description,
+      date: transactionDate
     });
 
     await transaction.save();
@@ -170,7 +184,11 @@ export async function trackExpense(user: IUser, input): Promise<string> {
     account.balance -= Math.abs(amount);
     await account.save();
 
-    return `Expense of ${Math.abs(amount)} ${account.currency} tracked successfully with ID: ${transaction.ID}`;
+    // Format the date for the response
+    const formattedDate = moment(transactionDate).format('DD.MM.YYYY');
+    const dateText = date ? ` на ${formattedDate}` : '';
+
+    return `Expense of ${Math.abs(amount)} ${account.currency} tracked successfully${dateText} with ID: ${transaction.ID}`;
   } catch (error) {
     console.error('Error tracking expense:', error);
     return "Error tracking expense.";

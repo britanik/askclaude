@@ -33,9 +33,13 @@ export const financeTools = [
         currency: {
           type: "string",
           description: "Currency code (USD, EUR, GEL, etc.)"
+        },
+        date: {
+          type: "string",
+          description: "Transaction date in DD.MM.YYYY format (e.g., 15.06.2024). If not provided, uses current date."
         }
       },
-      required: ["amount", "description", "account", "type", "currency"]
+      required: ["amount", "description", "accountId", "type", "currency"]
     }
   },
   {
@@ -137,7 +141,7 @@ export const financeTools = [
         },
         date: {
           type: "string",
-          description: "New date for the transaction in YYYY-MM-DD format or other readable format"
+          description: "Date for the transaction strictly in DD.MM.YYYY format (e.g., 15.06.2024)"
         }
       },
       required: ["transactionId"]
