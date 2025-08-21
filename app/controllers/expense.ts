@@ -94,24 +94,55 @@ export async function createAccount(user: IUser, input): Promise<string> {
 
 export async function updateAccount(user: IUser, input): Promise<string> {
   try {
-    const { user, accountId, name, type, currency, isDefault } = input;
-    const updates = { name, type, currency, isDefault };
+    const { accountId, name, type, currency, balance, isDefault } = input;
     
-    // Try to find by readable ID first, then by ObjectId
+    // Validate that we have an account ID
+    if (!accountId) {
+      return "Не указан ID счета для обновления.";
+    }
+    
+    // Try to find by readable ID
     const account = await findAccountByReadableId(user, accountId);
     if (!account) {
-      return "Account not found.";
+      return `Счет с ID ${accountId} не найден.`;
     }
 
-    if (isDefault) {
+    // Build update object with only provided fields
+    const possibleUpdates = { name, type, currency, balance, isDefault };
+    const updates: any = {};
+    
+    for (const [key, value] of Object.entries(possibleUpdates)) {
+      if (value !== undefined && value !== null) {
+        updates[key] = value;
+      }
+    }
+
+    // Check if there are any updates to apply
+    if (Object.keys(updates).length === 0) {
+      return "Не указаны параметры для обновления.";
+    }
+
+    // If setting as default, unset other accounts first
+    if (isDefault === true) {
       await Account.updateMany({ user: user._id }, { isDefault: false });
     }
 
+    // Apply the updates
     await Account.findByIdAndUpdate(account._id, updates);
-    return `Account updated successfully.`;
+    
+    // Build success message with updated fields
+    const updatedFields = [];
+    if (updates.name) updatedFields.push(`название: "${updates.name}"`);
+    if (updates.type) updatedFields.push(`тип: ${updates.type}`);
+    if (updates.currency) updatedFields.push(`валюта: ${updates.currency}`);
+    if (updates.balance !== undefined) updatedFields.push(`баланс: ${updates.balance} ${account.currency}`);
+    if (updates.isDefault === true) updatedFields.push('установлен как основной');
+    if (updates.isDefault === false) updatedFields.push('снят статус основного');
+    
+    return `Счет "${account.name}" (ID: ${account.ID}) успешно обновлен. Изменения: ${updatedFields.join(', ')}.`;
   } catch (error) {
     console.error('Error updating account:', error);
-    return "Error updating account.";
+    return "Ошибка при обновлении счета. Попробуйте позже.";
   }
 }
 

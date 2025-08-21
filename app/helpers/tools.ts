@@ -81,20 +81,24 @@ export const financeTools = [
         },
         name: {
           type: "string",
-          description: "New name for the account (optional)"
+          description: "New name for the account"
         },
         type: {
           type: "string",
           enum: ["bank", "cash", "crypto"],
-          description: "New type for the account (optional)"
+          description: "New type for the account"
         },
         currency: {
           type: "string",
-          description: "New currency for the account (optional)"
+          description: "New currency for the account"
+        },
+        balance: {
+          type: "number",
+          description: "New balance for the account"
         },
         isDefault: {
           type: "boolean",
-          description: "Whether this account should be set as the default account (optional)"
+          description: "Whether this account should be set as the default account"
         }
       },
       required: ["accountId"]
