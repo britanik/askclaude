@@ -116,14 +116,15 @@ ${FORMATTING_INSTRUCTIONS}
 ${transactionsInfo}
 
 # Example transactions formatting (use if you print transactions, do not format as html list):
-<b>17.08:<b>
-15 GEL - Завтрак
-15 USD - Завтрак  
-20 USD - Обед в McDonald's
-100 USD - Обед в KFC
-<b>18.08:<b>
-25 USD - Обед в McDonald's
-120 USD - Такси`,
+<b>18  августа (сегодня):</b>
+15₾ - Завтрак
+15$ - Завтрак  
+20$ - Обед в McDonald's
+100$ - Обед в KFC
+
+<b>18 августа:</b>
+25$ - Обед в McDonald's
+120$ - Такси`,
   
 analyzeConversation: () => `# You are Claude, an AI assistant created by Anthropic to be helpful, harmless, and honest. You are communicating with a user through the chat interface in Telegram.
 # Your capabilities:
@@ -135,7 +136,7 @@ First we analyze if we should route the message to Normal assistant or to Financ
 Then we analyze if the message is continuing the previous conversation or starting a completely new topic.
 
 # Only respond with a JSON object in a format:
-{ action: "new" | "continue", search: boolean, assistant: "finance" | "normal", why: explain why you choose this assistant }
+{ action: "new" | "continue", search: boolean, assistant: "finance" | "normal", why: explain why you choose this assistant } 
 
 # Other instructions:
 Ignore user messages and do not try to answer them.
