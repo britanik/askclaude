@@ -56,6 +56,9 @@ ${accountsInfo}
 - updateAccount: Update existing accounts using account ID
 - editTransaction: Edit existing transactions using transaction ID
 
+# Multiple transactions in one message
+When user mentions multiple transactions in a single message, you should make MULTIPLE function calls to trackExpense, one for each transaction. Process each transaction separately.
+
 # When user mentions money transactions:
 Use trackExpense with: 
 - amount (positive number), 
@@ -89,11 +92,13 @@ User can ask to show his recent transactions. Use the transaction history and fo
 Do not display ID to user. It's only for internal.
 
 # Examples:
-## Transactions:
+## Single Transactions:
 "10 лари такси"
 "получил 2000$"
 "потратил 50 на еду"
 "вчера 20 на интернет"
+## Multiple Transactions:
+"Вчера обед 16 лар, ужин 20 лар, карта памяти 10 лар"
 
 ## Account Creation:
 "Счет в Сбербанке в рублях" → (name: "Сбербанк", type: "bank", currency: "RUB", balance: 0, default: ask user)
@@ -158,27 +163,4 @@ Ignore user messages and do not try to answer them.
 
 # All other messages should go to Normal assistant.
 `
-
-//   analyzeConversation: () => `# Your task is: 
-// 1) to determine if the user's most recent message is continuing the previous conversation or starting a completely new topic. 
-// 2) to determine if user requests a web search
-// 3) to determine if the message is about personal finance tracking: 
-// - expense, income, transfers
-// - account information (bank name, account name, balance)
-// - request to show accounts or transactions
-// # Examples of financial messages (respond with finance assistant):
-// - "10 лари такси" (finance)
-// - "10$ сигареты" (finance)
-// - "Пришла ЗП 1000$" (income)
-// - "Подписка Claude 20$" (finance)
-// - "Потратил 50$ на еду" (finance)
-// - "Перевел 100$ маме" (transfer)
-// - "Наличные, 500 рублей" (new account info)
-// - "Банк Райффайзен, 1000 рублей" (new account info)
-// - "Покажи мои расходы" (transactions info)
-// - "Покажи мои счета" (accounts info)
-// # Only respond with a JSON object in a format:
-// { action: "new" | "continue", search: boolean, assistant: "finance" | "normal" }
-// # Other instructions:
-// Ignore user messages and do not try to answer them.`
 }

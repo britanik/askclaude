@@ -290,6 +290,7 @@ export async function sendThreadToChatGPT(params) {
 
 async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
   const messages = [...initialMessages] // Copy initial messages
+  const executedFunctions = [] // Track all function calls for summary
   
   while (true) {
     try {
@@ -368,9 +369,9 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
       });
 
       // Check if Claude wants to use any tools
-      const toolUse = response.content.find(content => content.type === 'tool_use');
+      const toolUses = response.content.filter(content => content.type === 'tool_use');
       
-      if (!toolUse) {
+      if (toolUses.length === 0) {
         // No tool use, we're done - extract text response and search results
         let responseText = '';
         let searchResults = [];
@@ -404,44 +405,73 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
           });
           finalResponse += '\n';
         }
+        
+        // Add summary for multiple function executions (finance assistant)
+        if (executedFunctions.length > 1 && thread.assistantType === 'finance') {
+          const trackExpenseCalls = executedFunctions.filter(f => f.name === 'trackExpense');
+          if (trackExpenseCalls.length > 1) {
+            finalResponse += `<b>✅ Обработано ${trackExpenseCalls.length} транзакций:</b>\n`;
+            trackExpenseCalls.forEach((call, index) => {
+              const { amount, description, currency } = call.input;
+              finalResponse += `${index + 1}. ${amount} ${currency} - ${description}\n`;
+            });
+            finalResponse += '\n';
+          }
+        }
+        
         finalResponse += responseText;
         
         return finalResponse;
       }
 
-      // Execute the tool
-      try {
-        console.log(`Executing tool: ${toolUse.name}`, toolUse.input);
-        const toolResult = await executeFunction(toolUse.name, toolUse.input, user);
-        
-        // Send tool result back to Claude
-        messages.push({
-          role: "user",
-          content: [
-            {
-              type: "tool_result",
-              tool_use_id: toolUse.id,
-              content: toolResult
-            }
-          ]
-        });
-        
-      } catch (error) {
-        console.error(`Error executing tool ${toolUse.name}:`, error);
-        
-        // Send error back to Claude
-        messages.push({
-          role: "user",
-          content: [
-            {
-              type: "tool_result",
-              tool_use_id: toolUse.id,
-              content: `Error: ${error.message}`,
-              is_error: true
-            }
-          ]
-        });
+      // Execute all tools from this response
+      const toolResults = [];
+      
+      for (const toolUse of toolUses) {
+        try {
+          console.log(`Executing tool: ${toolUse.name}`, toolUse.input);
+          const toolResult = await executeFunction(toolUse.name, toolUse.input, user);
+          
+          // Track function execution for summary
+          executedFunctions.push({
+            name: toolUse.name,
+            input: toolUse.input,
+            result: toolResult
+          });
+          
+          // Add tool result to the batch
+          toolResults.push({
+            type: "tool_result",
+            tool_use_id: toolUse.id,
+            content: toolResult
+          });
+          
+        } catch (error) {
+          console.error(`Error executing tool ${toolUse.name}:`, error);
+          
+          // Track failed function execution
+          executedFunctions.push({
+            name: toolUse.name,
+            input: toolUse.input,
+            result: `Error: ${error.message}`,
+            failed: true
+          });
+          
+          // Add error to the batch
+          toolResults.push({
+            type: "tool_result",
+            tool_use_id: toolUse.id,
+            content: `Error: ${error.message}`,
+            is_error: true
+          });
+        }
       }
+      
+      // Send all tool results back to Claude in a single message
+      messages.push({
+        role: "user",
+        content: toolResults
+      });
 
       // Continue the loop to get Claude's response with the tool result
     } catch (error) {
