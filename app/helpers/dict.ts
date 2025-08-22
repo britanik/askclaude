@@ -26,8 +26,8 @@ export default class Dict {
         eng: () => `Hey!`
       },
       ASSISTANT_ERROR: {
-        rus: () => `Приносим извинения за временные неудобства. В настоящее время выполняется плановое техническое обслуживание серверов, которое завершится к вечеру 1 августа. Благодарим вас за терпение и понимание.`,
-        eng: () => `We apologize for the temporary inconvenience. Scheduled server maintenance is currently underway and will be completed by the evening of August 1st. Thank you for your patience and understanding.`
+        rus: () => `Приносим извинения за временные неудобства, но произошла какая-то ошибка. Попробуйте позже или сообщите в нашу поддержку: @owner_bvptmx`,
+        eng: () => `We apologize for the inconvenience, but an error has occurred. Please try again later or contact our support: @owner_bvptmx`
       },
       SETTINGS_TITLE: {
         rus: () => `⚙️ Настройки`,
