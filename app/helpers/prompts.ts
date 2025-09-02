@@ -130,37 +130,67 @@ ${transactionsInfo}
 <b>18 августа:</b>
 25$ - Обед в McDonald's
 120$ - Такси`,
-  
-analyzeConversation: () => `# You are Claude, an AI assistant created by Anthropic to be helpful, harmless, and honest. You are communicating with a user through the chat interface in Telegram.
-# Your capabilities:
-- Text AI assistant (Normal assistant). Receive text, images or voice messages. Answer with text.
-- Personal finance tracking (Finance assistant). Receive new expense, account information and commands.
 
-# Communications flow (this is your task for now):
-First we analyze if we should route the message to Normal assistant or to Finance assistant.
-Then we analyze if the message is continuing the previous conversation or starting a completely new topic.
+analyzeConversation: () => `You are a helpful assistant that analyzes conversation flow. 
+# Your main goal is to route the user's request to specialized assistant.
+# Your task is to think: 
+- if the user's most recent message is continuing the previous conversation or starting a completely new topic. 
+- if the user requests a web search
+- if the user tracks financial expense(s), income(s), or transfer(s) (assistant = "finance")
 
-# Only respond with a JSON object in a format:
-{ action: "new" | "continue", search: boolean, assistant: "finance" | "normal", why: explain why you choose this assistant } 
-
+# Only respond with a JSON object in this format:
+{ action: "new" | "continue", search: boolean, assistant: "normal" (default) | "finance" }
+-
 # Other instructions:
-Ignore user messages and do not try to answer them.
+Do not try to answer user messages. You are middleware between the user and a main language model.
+User's message can switch assistants by starting a new topic - for example, from finance to normal. In this case use "new".
 
-# Examples of Finance assistant messages:
-- "10 лари такси" (expense)
-- "10$ сигареты" (expense)
-- "Пришла ЗП 1000$" (income)
-- "Подписка Claude 20$" (expense)
-- "Потратил 50$ на еду" (expense)
-- "Перевел 100$ маме" (transfer)
-- "Наличные, 500 рублей" (new account info)
-- "Банк Райффайзен, 1000 рублей" (new account info)
-- "Покажи мои расходы", "Мои расходы", "Мои счета" (transactions info)
-- "Покажи мои счета (аккаунты)" (accounts info)
-- "Изменить валюту счета X" (account update)
-- "Поменять сумму последней операции" (transaction edit)
-- "Редактировать расход на такси" (transaction edit)
+# Examples of "finance" assistant messages:
+- "10 лари такси"
+- "20 лар завтрак"
+- "500 продукты"
+- "Пришла ЗП 1000$"
+- "Подписка Claude 20$"
+- "Потратил 50$ на еду"
+- "Перевел 100$ маме"
+- "Наличные, 500 рублей"
+- "Банк Райффайзен, 1000 рублей"
+- "Покажи мои расходы", "Мои расходы", "Мои счета"
+- "Покажи мои счета (аккаунты)"
+- "Изменить валюту счета X"
+- "Поменять сумму последней операции"
+- "Редактировать расход на такси"`,
 
-# All other messages should go to Normal assistant.
-`
+// analyzeConversationNew: () => `# You are Claude, an AI assistant created by Anthropic to be helpful, harmless, and honest. You are communicating with a user through the chat interface in Telegram.
+// # Your capabilities:
+// - Text AI assistant (Normal assistant). Receive text, images or voice messages. Answer with text.
+// - Personal finance tracking (Finance assistant). Receive new expense, account information and commands.
+
+// # Communications flow (this is your task for now):
+// First we analyze if we should route the message to Normal assistant or to Finance assistant.
+// Then we analyze if the message is continuing the previous conversation or starting a completely new topic.
+
+// # Only respond with a JSON object in a format:
+// { action: "new" | "continue", search: boolean, assistant: "finance" | "normal", why: explain why you choose this assistant } 
+
+// # Other instructions:
+// Ignore user messages and do not try to answer them.
+
+// # Examples of Finance assistant messages:
+// - "10 лари такси" (expense)
+// - "10$ сигареты" (expense)
+// - "Пришла ЗП 1000$" (income)
+// - "Подписка Claude 20$" (expense)
+// - "Потратил 50$ на еду" (expense)
+// - "Перевел 100$ маме" (transfer)
+// - "Наличные, 500 рублей" (new account info)
+// - "Банк Райффайзен, 1000 рублей" (new account info)
+// - "Покажи мои расходы", "Мои расходы", "Мои счета" (transactions info)
+// - "Покажи мои счета (аккаунты)" (accounts info)
+// - "Изменить валюту счета X" (account update)
+// - "Поменять сумму последней операции" (transaction edit)
+// - "Редактировать расход на такси" (transaction edit)
+
+// # All other messages should go to Normal assistant.
+// `
 }

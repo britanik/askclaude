@@ -220,7 +220,7 @@ export interface IConversationAnalysisResult {
   action: 'new' | 'continue',
   search: boolean,
   assistant: 'normal' | 'finance',
-  why: string
+  why?: string
 }
 
 export async function analyzeConversation( lastMessages: Array<{role: string, content: string}>, currentMessage: string  ): Promise<IConversationAnalysisResult> {
@@ -248,9 +248,9 @@ export async function analyzeConversation( lastMessages: Array<{role: string, co
     const chatParams = {
       model: process.env.OPENAI_MODEL_FAST || 'gpt-5-nano',
       messages: messages,
-      max_completion_tokens: 500,
+      max_completion_tokens: 1000,
       temperature: 1,
-      reasoning_effort: 'minimal', // New GPT-5 parameter for faster responses
+      reasoning_effort: 'medium', // New GPT-5 parameter for faster responses
       response_format: { type: 'json_object' }
     };
 
@@ -266,6 +266,8 @@ export async function analyzeConversation( lastMessages: Array<{role: string, co
       }
     );
 
+    // console.log(response.data,'response.data')
+    // console.log(response.data.choices,'response.data.choices')
     const result = JSON.parse(response.data.choices[0].message.content);
     
     // Validate the result

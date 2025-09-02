@@ -308,13 +308,13 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
         tools = [...financeTools, ...tools]
         accountsInfo = await getUserAccountsString(user)
         transactionsInfo = await getRecentTransactionsString(user)
-      }
 
-      console.log('----')
-      console.info(accountsInfo,'accountsInfo')
-      console.log('----')
-      console.info(transactionsInfo,'transactionsInfo')
-      console.log('----')
+        // console.log('---- accountsInfo -----')
+        // console.info(accountsInfo)
+        // console.log('---- transactionsInfo -----')
+        // console.info(transactionsInfo)
+        // console.log('----')  
+      }
 
       // Prepare API request
       const chatParams: any = {
@@ -335,7 +335,7 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
 
       // Send message to Claude
       const response = await makeClaudeAPICall(chatParams)
-      console.log(response.content,'response.content')
+      // console.log(response.content,'response.content')
       
       // Log token usage
       if (response.usage) {
