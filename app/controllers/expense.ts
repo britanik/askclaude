@@ -3,6 +3,7 @@ import { IUser } from "../interfaces/users";
 import { ITransaction } from "../interfaces/transactions";
 import Account from "../models/accounts";
 import Transaction from "../models/transactions";
+import { Budget } from '../models/budgets';
 import moment from "moment";
 import { getReadableId } from "../helpers/helpers";
 
@@ -302,7 +303,6 @@ export async function editTransaction(user: IUser, input): Promise<string> {
   }
 }
 
-// Helper function to find account by readable ID
 export async function findAccountByReadableId(user: IUser, readableId: string): Promise<IAccount | null> {
   try {
     // Check if the ID is numeric (readable ID)
@@ -317,7 +317,6 @@ export async function findAccountByReadableId(user: IUser, readableId: string): 
   }
 }
 
-// Helper function to find transaction by readable ID
 export async function findTransactionByReadableId(user: IUser, readableId: string): Promise<ITransaction | null> {
   try {
     // Check if the ID is numeric (readable ID)
@@ -329,5 +328,129 @@ export async function findTransactionByReadableId(user: IUser, readableId: strin
   } catch (error) {
     console.error('Error finding transaction by readable ID:', error);
     return null;
+  }
+}
+
+/* Budgets */
+export async function createBudget(user: IUser, input: any): Promise<string> {  
+  try {
+    const { totalAmount, currency, startDate, endDate } = input;
+    
+    // Validate required fields
+    if (!totalAmount || !currency || !startDate || !endDate) {
+      return "Total amount, currency, start date and end date are required.";
+    }
+    
+    // Parse dates (support both ISO and DD.MM.YYYY formats)
+    let parsedStartDate = moment.utc(startDate, 'YYYY-MM-DD', true);
+    if (!parsedStartDate.isValid()) {
+      parsedStartDate = moment.utc(startDate, 'DD.MM.YYYY', true);
+    }
+    
+    let parsedEndDate = moment.utc(endDate, 'YYYY-MM-DD', true);
+    if (!parsedEndDate.isValid()) {
+      parsedEndDate = moment.utc(endDate, 'DD.MM.YYYY', true);
+    }
+    
+    if (!parsedStartDate.isValid() || !parsedEndDate.isValid()) {
+      return "Invalid date format. Use YYYY-MM-DD or DD.MM.YYYY format.";
+    }
+    
+    if (parsedEndDate.isSameOrBefore(parsedStartDate)) {
+      return "End date must be after start date.";
+    }
+    
+    // Check for existing active budget
+    const existingBudget = await Budget.findOne({ 
+      user: user._id, 
+      currency: currency.toUpperCase(), 
+      isActive: true 
+    });
+    
+    if (existingBudget) {
+      return `You already have an active budget for ${currency.toUpperCase()}. Please delete it first.`;
+    }
+    
+    // Create and save budget
+    const budget = new Budget({
+      user: user._id,
+      totalAmount: Math.abs(totalAmount),
+      currency: currency.toUpperCase(),
+      startDate: parsedStartDate.utc().toDate(),
+      endDate: parsedEndDate.utc().toDate(),
+      isActive: true
+    });
+
+    await budget.save();
+    
+    // Format response
+    const formattedStartDate = parsedStartDate.format('DD.MM.YYYY');
+    const formattedEndDate = parsedEndDate.format('DD.MM.YYYY');
+    const durationDays = parsedEndDate.diff(parsedStartDate, 'days');
+    const dailyAllocation = Math.round(totalAmount / durationDays * 100) / 100;
+    
+    return `Budget created successfully: ${totalAmount} ${currency.toUpperCase()} from ${formattedStartDate} to ${formattedEndDate} (${durationDays} days, ${dailyAllocation}/day)`;
+  } catch (error) {
+    console.error('Error creating budget:', error);
+    return "Error creating budget.";
+  }
+}
+
+export async function deleteBudget(user: IUser, input: any): Promise<string> {
+  try {
+    const { currency } = input;
+    
+    if (!currency) {
+      return "Currency is required.";
+    }
+    
+    const budget = await Budget.findOneAndDelete({
+      user: user._id, 
+      currency: currency.toUpperCase(), 
+      isActive: true 
+    });
+    
+    if (!budget) {
+      return `No active budget found for ${currency.toUpperCase()}.`;
+    }
+    
+    const formattedStartDate = moment(budget.startDate).format('DD.MM.YYYY');
+    const formattedEndDate = moment(budget.endDate).format('DD.MM.YYYY');
+    
+    return `Budget for ${currency.toUpperCase()} (${budget.totalAmount} ${currency.toUpperCase()}, ${formattedStartDate} - ${formattedEndDate}) has been deleted successfully.`;
+  } catch (error) {
+    console.error('Error deleting budget:', error);
+    return "Error deleting budget.";
+  }
+}
+
+export async function getBudgetInfoString(user: IUser): Promise<string> {
+  try {
+    const budgets = await Budget.find({ user: user._id, isActive: true }).sort({ created: -1 });
+    
+    if (budgets.length === 0) {
+      return "No active budgets found.";
+    }
+    
+    // CSV header
+    let result = "ID|Currency|Total|Start Date|End Date|Days Remaining|Daily Allocation|Status\n";
+    
+    const now = new Date();
+    
+    // CSV data rows
+    result += budgets.map(budget => {
+      const startDate = moment(budget.startDate).format('MM/DD/YYYY');
+      const endDate = moment(budget.endDate).format('MM/DD/YYYY');
+      const daysRemaining = Math.max(0, Math.ceil((budget.endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+      const dailyAllocation = daysRemaining > 0 ? Math.round(budget.totalAmount / daysRemaining * 100) / 100 : 0;
+      const status = budget.endDate <= now ? 'Expired' : 'Active';
+      
+      return `${budget.ID}|${budget.currency}|${budget.totalAmount}|${startDate}|${endDate}|${daysRemaining}|${dailyAllocation}|${status}`;
+    }).join('\n');
+    
+    return result;
+  } catch (error) {
+    console.error('Error formatting budget info:', error);
+    return "Error retrieving budget information.";
   }
 }

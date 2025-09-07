@@ -50,16 +50,16 @@ export const financeTools = [
       properties: {
         name: {
           type: "string",
-          description: "Name of the account (e.g., 'Bank of Georgia', 'ByBit', 'Наличные')"
+          description: "Name of the account (e.g., 'Main Card', 'Cash Wallet')"
         },
         type: {
           type: "string",
           enum: ["bank", "cash", "crypto"],
-          description: "Type of account"
+          description: "Type of the account"
         },
         currency: {
           type: "string",
-          description: "Primary currency for this account (USD, EUR, GEL, etc.)"
+          description: "Currency code (USD, EUR, GEL, etc.)"
         },
         initial_balance: {
           type: "number",
@@ -146,5 +146,49 @@ export const financeTools = [
       },
       required: ["transactionId"]
     }
-  }
+  },
+  {
+    name: "createBudget",
+    description: "Create a new budget for the user with specified amount, currency and end date. Automatically deactivates previous budgets for the same currency.",
+    input_schema: {
+      type: "object",
+      properties: {
+        totalAmount: {
+          type: "number",
+          description: "Total budget amount"
+        },
+        currency: {
+          type: "string", 
+          description: "Currency code: USD, EUR, GEL, RUB, etc"
+        },
+        startDate: {
+          type: "string",
+          description: "Budget start date in ISO format (YYYY-MM-DD)"
+        },
+        endDate: {
+          type: "string",
+          description: "Budget end date in ISO format (YYYY-MM-DD)"
+        },
+        description: {
+          type: "string",
+          description: "Optional budget description"
+        }
+      },
+      required: ["totalAmount", "currency", "startDate", "endDate"]
+    }
+  },
+  {
+    name: "deleteBudget",
+    description: "Permanently delete an existing budget for the user",
+    input_schema: {
+      type: "object",
+      properties: {
+        ID: {
+          type: "string",
+          description: "ID of the budget to delete (e.g., 240119001)"
+        }
+      },
+      required: ["ID"]
+    }
+  },
 ];
