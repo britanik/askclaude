@@ -331,14 +331,14 @@ export async function logTokenUsage(user: IUser, thread: any, inputTokens: numbe
     }
 
     // Send notification to user via bot
-    if( isAdmin(user) ) {
-      const message = `Tokens used:\nInput: ${inputTokens}\nOutput: ${outputTokens}\nModel: ${model}`;
-      await sendMessage({
-        text: message,
-        user,
-        bot
-      })
-    }
+    // if( isAdmin(user) ) {
+    //   const message = `Tokens used:\nInput: ${inputTokens}\nOutput: ${outputTokens}\nModel: ${model}`;
+    //   await sendMessage({
+    //     text: message,
+    //     user,
+    //     bot
+    //   })
+    // }
   } catch (error) {
     console.error('Error logging token usage:', error);
   }
