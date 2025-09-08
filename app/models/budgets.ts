@@ -11,8 +11,8 @@ const BudgetSchema = new Schema<IBudget>({
   created: { type: Date, default: Date.now }
 });
 
-// Index for finding active budgets by user and currency
-BudgetSchema.index({ user: 1, currency: 1, isActive: 1 });
+// Index for finding budgets by user and currency
+BudgetSchema.index({ user: 1, currency: 1 });
 
 // Index for finding budgets by date range
 BudgetSchema.index({ startDate: 1, endDate: 1 });

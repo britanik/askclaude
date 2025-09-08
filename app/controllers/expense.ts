@@ -360,25 +360,24 @@ export async function createBudget(user: IUser, input: any): Promise<string> {
       return "End date must be after start date.";
     }
     
-    // Check for existing active budget
+    // Check for existing budget with same currency (since we don't use isActive anymore)
     const existingBudget = await Budget.findOne({ 
       user: user._id, 
-      currency: currency.toUpperCase(), 
-      isActive: true 
+      currency: currency.toUpperCase()
     });
     
     if (existingBudget) {
-      return `You already have an active budget for ${currency.toUpperCase()}. Please delete it first.`;
+      return `You already have a budget for ${currency.toUpperCase()}. Please delete it first.`;
     }
     
-    // Create and save budget
+    // Create and save budget with generated ID
     const budget = new Budget({
+      ID: getReadableId(),
       user: user._id,
       totalAmount: Math.abs(totalAmount),
       currency: currency.toUpperCase(),
       startDate: parsedStartDate.utc().toDate(),
-      endDate: parsedEndDate.utc().toDate(),
-      isActive: true
+      endDate: parsedEndDate.utc().toDate()
     });
 
     await budget.save();
@@ -398,26 +397,28 @@ export async function createBudget(user: IUser, input: any): Promise<string> {
 
 export async function deleteBudget(user: IUser, input: any): Promise<string> {
   try {
-    const { currency } = input;
+    const { ID } = input;
     
-    if (!currency) {
-      return "Currency is required.";
+    if (!ID) {
+      return "Budget ID is required.";
     }
+    
+    // Convert to number if it's a string
+    const budgetId = typeof ID === 'string' ? parseInt(ID) : ID;
     
     const budget = await Budget.findOneAndDelete({
       user: user._id, 
-      currency: currency.toUpperCase(), 
-      isActive: true 
+      ID: budgetId
     });
     
     if (!budget) {
-      return `No active budget found for ${currency.toUpperCase()}.`;
+      return `No budget found with ID ${ID}.`;
     }
     
     const formattedStartDate = moment(budget.startDate).format('DD.MM.YYYY');
     const formattedEndDate = moment(budget.endDate).format('DD.MM.YYYY');
     
-    return `Budget for ${currency.toUpperCase()} (${budget.totalAmount} ${currency.toUpperCase()}, ${formattedStartDate} - ${formattedEndDate}) has been deleted successfully.`;
+    return `Budget for ${budget.currency} (${budget.totalAmount} ${budget.currency}, ${formattedStartDate} - ${formattedEndDate}) has been deleted successfully.`;
   } catch (error) {
     console.error('Error deleting budget:', error);
     return "Error deleting budget.";
@@ -426,10 +427,10 @@ export async function deleteBudget(user: IUser, input: any): Promise<string> {
 
 export async function getBudgetInfoString(user: IUser): Promise<string> {
   try {
-    const budgets = await Budget.find({ user: user._id, isActive: true }).sort({ created: -1 });
+    const budgets = await Budget.find({ user: user._id }).sort({ created: -1 });
     
     if (budgets.length === 0) {
-      return "No active budgets found.";
+      return "No budgets found.";
     }
     
     // CSV header
