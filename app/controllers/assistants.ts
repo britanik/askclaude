@@ -328,7 +328,7 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
         temperature: 1,
       }
 
-      // console.warn(chatParams.system,'chatParams.system')
+      console.warn(chatParams.system,'chatParams.system')
       
       // Only add tools if available
       if (tools.length > 0) {

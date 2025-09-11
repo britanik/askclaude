@@ -18,7 +18,7 @@ const FORMATTING_INSTRUCTIONS = `# HTML fornatting
 - Telegram will return error if you use any other HTML tags (outside of <code> or <pre>) - so wrap them in <code></code> tag.
 - Do not wrap commands like /image, /start, /help, etc. in <code> tag.`
 
-const CURRENT_DATE = `# Current date (DD.MM.YYYY): ${ moment().format('dddd, DD.MM.YYYY') }, end of week: Sunday.
+const CURRENT_DATE = `${ moment().format('dddd, DD.MM.YYYY') }, end of week: Sunday.
 `
 
 export const promptsDict = {
@@ -48,7 +48,7 @@ export const promptsDict = {
 ${FORMATTING_INSTRUCTIONS}`,
   
   finance: (accountsInfo: string, transactionsInfo: string, budgetInfo: string) => `You are Claude, an AI assistant for tracking personal finances.
-# Current date (DD.MM.YY)
+# Current date (DD.MM.YYYY)
 ${CURRENT_DATE}
 
 # Available accounts:

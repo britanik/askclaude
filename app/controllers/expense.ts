@@ -50,11 +50,12 @@ export async function getRecentTransactionsString(user: IUser): Promise<string> 
     }
     
     // CSV header
-    let result = "ID|Date|Type|Amount|Currency|Account|Description\n";
+    let result = "ID|Date (DD.MM.YYYY)|Type|Amount|Currency|Account|Description\n";
     
     // CSV data rows
     result += transactions.map(transaction => {
-      const date = moment(transaction.date).format('MM/DD/YYYY');
+      // Format date properly using UTC to avoid timezone shifts
+      const date = moment.utc(transaction.date).format('DD.MM.YYYY');
       const accountName = (transaction.account as any)?.name || 'Unknown Account';
       
       return `${transaction.ID}|${date}|${transaction.type}|${transaction.amount}|${transaction.currency}|${accountName}|${transaction.description}`;
@@ -159,14 +160,16 @@ export async function trackExpense(user: IUser, input): Promise<string> {
     // Parse date if provided, otherwise use current date
     let transactionDate: Date;
     if (date) {
-      const parsedDate = moment(date, 'DD.MM.YYYY', true);
+      // Parse the date in UTC and set to start of day to avoid timezone issues
+      const parsedDate = moment.utc(date, 'DD.MM.YYYY', true);
       if (parsedDate.isValid()) {
-        transactionDate = parsedDate.toDate();
+        transactionDate = parsedDate.startOf('day').toDate();
       } else {
         return `Неверный формат даты: "${date}". Используйте формат: ДД.ММ.ГГГГ (например, 15.06.2024)`;
       }
     } else {
-      transactionDate = moment().toDate();
+      // For current date, use start of today in UTC
+      transactionDate = moment().utc().startOf('day').toDate();
     }
 
     const transaction = new Transaction({
@@ -185,8 +188,8 @@ export async function trackExpense(user: IUser, input): Promise<string> {
     account.balance -= Math.abs(amount);
     await account.save();
 
-    // Format the date for the response
-    const formattedDate = moment(transactionDate).format('DD.MM.YYYY');
+    // Format the date for the response using UTC
+    const formattedDate = moment.utc(transactionDate).format('DD.MM.YYYY');
     const dateText = date ? ` на ${formattedDate}` : '';
 
     return `Expense of ${Math.abs(amount)} ${account.currency} tracked successfully${dateText} with ID: ${transaction.ID}`;
@@ -230,7 +233,13 @@ export async function editTransaction(user: IUser, input): Promise<string> {
         if (key === 'amount') {
           updates[key] = Math.abs(value); // Ensure amount is positive
         } else if (key === 'date') {
-          updates[key] = moment(value).toDate(); // Convert to Date object
+          // Parse date properly with UTC and start of day
+          const parsedDate = moment.utc(value, 'DD.MM.YYYY', true);
+          if (parsedDate.isValid()) {
+            updates[key] = parsedDate.startOf('day').toDate();
+          } else {
+            return `Неверный формат даты: "${value}". Используйте формат: ДД.ММ.ГГГГ`;
+          }
         } else {
           updates[key] = value;
         }
@@ -294,7 +303,7 @@ export async function editTransaction(user: IUser, input): Promise<string> {
     if (updates.type) updatedFields.push(`тип: ${updates.type}`);
     if (updates.currency) updatedFields.push(`валюта: ${updates.currency}`);
     if (updates.account) updatedFields.push(`счет: ${newAccount.name}`);
-    if (updates.date) updatedFields.push(`дата: ${moment(updates.date).format('DD.MM.YYYY')}`);
+    if (updates.date) updatedFields.push(`дата: ${moment.utc(updates.date).format('DD.MM.YYYY')}`);
     
     return `Транзакция "${transaction.description}" (ID: ${transaction.ID}) успешно обновлена. Изменения: ${updatedFields.join(', ')}.`;
   } catch (error) {
