@@ -72,6 +72,17 @@ export const financeTools = [
     }
   },
   {
+    name: "deleteTransaction",
+    description: "Delete existing transaction by ID",
+    input_schema: {
+      type: "object",
+      properties: {
+        transactionId: { type: "string", description: "Transaction ID to delete" }
+      },
+      required: ["transactionId"]
+    }
+  },
+  {
     name: "createBudget",
     description: "Create budget with amount, currency, dates",
     input_schema: {

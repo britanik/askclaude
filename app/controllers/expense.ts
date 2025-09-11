@@ -321,6 +321,58 @@ export async function editTransaction(user: IUser, input): Promise<string> {
   }
 }
 
+// Add this function to /controllers/expense.ts
+
+export async function deleteTransaction(user: IUser, input): Promise<string> {
+  try {
+    const { transactionId } = input;
+    
+    // Validate that we have a transaction ID
+    if (!transactionId) {
+      return "Не указан ID транзакции для удаления.";
+    }
+    
+    // Find the transaction by simple numeric ID
+    const numericId = parseInt(transactionId);
+    if (isNaN(numericId)) {
+      return `Неверный ID транзакции: ${transactionId}. ID должен быть числом.`;
+    }
+    
+    const transaction = await Transaction.findOne({ ID: numericId, user: user._id }).populate('account');
+    if (!transaction) {
+      return `Транзакция с ID ${transactionId} не найдена.`;
+    }
+
+    // Get the associated account
+    const account = transaction.account as any;
+    if (!account) {
+      return "Связанный счет не найден.";
+    }
+
+    // Delete the transaction first
+    await Transaction.findByIdAndDelete(transaction._id);
+
+    // Only update account balance after successful deletion
+    if (transaction.type === 'expense') {
+      // Add back the expense amount
+      account.balance += transaction.amount;
+    } else if (transaction.type === 'income') {
+      // Subtract the income amount
+      account.balance -= transaction.amount;
+    }
+    // Note: for transfers, you might need more complex logic depending on your implementation
+
+    // Save the updated account balance
+    await account.save();
+    
+    return `Транзакция удалена: ${transaction.ID}`;
+    
+  } catch (error) {
+    console.error('Error deleting transaction:', error);
+    return "Ошибка при удалении транзакции. Попробуйте позже.";
+  }
+}
+
 export async function findAccountByReadableId(user: IUser, readableId: string): Promise<IAccount | null> {
   try {
     // Check if the ID is numeric (simple numeric ID)

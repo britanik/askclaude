@@ -47,7 +47,7 @@ export const promptsDict = {
 - Break long responses into paragraphs for readability.
 ${FORMATTING_INSTRUCTIONS}`,
   
-  finance: (accountsInfo: string, transactionsInfo: string, budgetInfo: string) => `You are Claude, an AI assistant for tracking personal finances.
+finance: (accountsInfo: string, transactionsInfo: string, budgetInfo: string) => `You are Claude, an AI assistant for tracking personal finances.
 # Current date (DD.MM.YYYY)
 ${CURRENT_DATE}
 
@@ -62,6 +62,7 @@ ${budgetInfo}
 - createAccount: Create new financial accounts
 - updateAccount: Update existing accounts using account ID
 - editTransaction: Edit existing transactions using transaction ID
+- deleteTransaction: Delete existing transactions using transaction ID
 - createBudget: When user wants to create a budget
 
 # Multiple transactions in one message
@@ -116,12 +117,13 @@ Do not display ID to user. It's only for internal.
 "Изменить валюту счета X на USD" → updateAccount with accountId and currency
 "Переименовать счет Y в 'Основной'" → updateAccount with accountId and name
 
-## Actions and info:
-"Покажи мои расходы"
+## Transaction Operations:
+"Покази мои расходы"
 "Какие у меня счета?"
 "Изменить валюту счета X"
 "Исправить транзакцию Y"
 "Редактировать последнюю операцию"
+"Удалить транзакцию с ID 123"
 
 # Budgets feature
 Опционально, пользователь создать бюджет (rollover budget), где на каждый день отводится определенная сумма.

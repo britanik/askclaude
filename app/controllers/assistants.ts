@@ -12,7 +12,7 @@ import { logTokenUsage, logWebSearchUsage } from "./tokens"
 import { saveAIResponse } from "../helpers/fileLogger"
 import { withChatAction } from "../helpers/chatAction"
 import { isAdmin } from "../helpers/helpers"
-import { createAccount, updateAccount, trackExpense, getUserAccountsString, getRecentTransactionsString, editTransaction, createBudget, getBudgetInfoString, deleteBudget } from "./expense"
+import { createAccount, updateAccount, trackExpense, getUserAccountsString, getRecentTransactionsString, editTransaction, createBudget, getBudgetInfoString, deleteBudget, deleteTransaction } from "./expense"
 import { financeTools, searchTool } from "../helpers/tools"
 import { promptsDict } from "../helpers/prompts"
 import axios from "axios"
@@ -497,12 +497,14 @@ async function executeFunction(functionName: string, input: any, user: IUser): P
     case 'editTransaction':
       return await editTransaction( user, input );
 
+    case 'deleteTransaction':
+      return await deleteTransaction( user, input );
+
     case 'createBudget':
       return await createBudget( user, input );
     
     case 'deleteBudget':
       return await deleteBudget( user, input );
-  
       
     default:
       throw new Error(`Unknown function: ${functionName}`);
