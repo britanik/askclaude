@@ -5,7 +5,6 @@ import Account from "../models/accounts";
 import Transaction from "../models/transactions";
 import { Budget } from '../models/budgets';
 import moment from "moment";
-import { getReadableId } from "../helpers/helpers";
 
 export async function getUserAccounts(user: IUser): Promise<IAccount[]> {
   try {
@@ -77,7 +76,7 @@ export async function createAccount(user: IUser, input): Promise<string> {
     }
 
     const account = new Account({
-      ID: getReadableId(),
+      // ID will be auto-assigned by the pre-save middleware
       user: user._id,
       name,
       type,
@@ -103,8 +102,13 @@ export async function updateAccount(user: IUser, input): Promise<string> {
       return "Не указан ID счета для обновления.";
     }
     
-    // Try to find by readable ID
-    const account = await findAccountByReadableId(user, accountId);
+    // Try to find by simple numeric ID
+    const numericId = parseInt(accountId);
+    if (isNaN(numericId)) {
+      return `Неверный ID счета: ${accountId}. ID должен быть числом.`;
+    }
+    
+    const account = await Account.findOne({ ID: numericId, user: user._id });
     if (!account) {
       return `Счет с ID ${accountId} не найден.`;
     }
@@ -173,7 +177,7 @@ export async function trackExpense(user: IUser, input): Promise<string> {
     }
 
     const transaction = new Transaction({
-      ID: getReadableId(),
+      // ID will be auto-assigned by the pre-save middleware
       user: user._id,
       account: account._id,
       type,
@@ -208,8 +212,13 @@ export async function editTransaction(user: IUser, input): Promise<string> {
       return "Не указан ID транзакции для редактирования.";
     }
     
-    // Find the transaction by readable ID
-    const transaction = await findTransactionByReadableId(user, transactionId);
+    // Find the transaction by simple numeric ID
+    const numericId = parseInt(transactionId);
+    if (isNaN(numericId)) {
+      return `Неверный ID транзакции: ${transactionId}. ID должен быть числом.`;
+    }
+    
+    const transaction = await Transaction.findOne({ ID: numericId, user: user._id });
     if (!transaction) {
       return `Транзакция с ID ${transactionId} не найдена.`;
     }
@@ -314,7 +323,7 @@ export async function editTransaction(user: IUser, input): Promise<string> {
 
 export async function findAccountByReadableId(user: IUser, readableId: string): Promise<IAccount | null> {
   try {
-    // Check if the ID is numeric (readable ID)
+    // Check if the ID is numeric (simple numeric ID)
     const numericId = parseInt(readableId);
     if (!isNaN(numericId)) {
       return await Account.findOne({ ID: numericId, user: user._id });
@@ -328,7 +337,7 @@ export async function findAccountByReadableId(user: IUser, readableId: string): 
 
 export async function findTransactionByReadableId(user: IUser, readableId: string): Promise<ITransaction | null> {
   try {
-    // Check if the ID is numeric (readable ID)
+    // Check if the ID is numeric (simple numeric ID)
     const numericId = parseInt(readableId);
     if (!isNaN(numericId)) {
       return await Transaction.findOne({ ID: numericId, user: user._id });
@@ -379,9 +388,9 @@ export async function createBudget(user: IUser, input: any): Promise<string> {
       return `You already have a budget for ${currency.toUpperCase()}. Please delete it first.`;
     }
     
-    // Create and save budget with generated ID
+    // Create and save budget with auto-generated ID
     const budget = new Budget({
-      ID: getReadableId(),
+      // ID will be auto-assigned by the pre-save middleware
       user: user._id,
       totalAmount: Math.abs(totalAmount),
       currency: currency.toUpperCase(),
@@ -414,6 +423,10 @@ export async function deleteBudget(user: IUser, input: any): Promise<string> {
     
     // Convert to number if it's a string
     const budgetId = typeof ID === 'string' ? parseInt(ID) : ID;
+    
+    if (isNaN(budgetId)) {
+      return `Invalid budget ID: ${ID}. ID must be a number.`;
+    }
     
     const budget = await Budget.findOneAndDelete({
       user: user._id, 

@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "tsc && node dist/index.js"
+    "start": "tsc && node dist/index.js",
+    "migrate": "tsc && node dist/migrate.js",
+    "migrate:rollback": "tsc && node dist/migrate.js rollback"
   },
   "author": "",
   "license": "ISC",
