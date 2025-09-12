@@ -88,6 +88,7 @@ export const financeTools = [
     input_schema: {
       type: "object",
       properties: {
+        days: { type: "number" },
         totalAmount: { type: "number" },
         dailyAmount: { type: "number" },
         currency: { type: "string" },
@@ -95,7 +96,7 @@ export const financeTools = [
         endDate: { type: "string", description: "YYYY-MM-DD format" },
         description: { type: "string" }
       },
-      required: ["totalAmount", "dailyAmount", "currency", "startDate", "endDate"]
+      required: ["days", "totalAmount", "dailyAmount", "currency", "startDate", "endDate"]
     }
   },
   {

@@ -5,6 +5,7 @@ import { createAutoIncrementMiddleware } from '../helpers/autoIncrement'
 const BudgetSchema = new Schema<IBudget>({
   ID: { type: Number, unique: true },
   user: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  days: { type: Number, required: true, min: 0 },
   totalAmount: { type: Number, required: true, min: 0 },
   dailyAmount: { type: Number, required: true, min: 0 },
   currency: { type: String, required: true, uppercase: true, trim: true },
