@@ -404,11 +404,11 @@ export async function findTransactionByReadableId(user: IUser, readableId: strin
 /* Budgets */
 export async function createBudget(user: IUser, input: any): Promise<string> {  
   try {
-    const { totalAmount, currency, startDate, endDate } = input;
+    const { days, totalAmount, dailyAmount, currency, startDate, endDate } = input;
     
     // Validate required fields
-    if (!totalAmount || !currency || !startDate || !endDate) {
-      return "Total amount, currency, start date and end date are required.";
+    if ( !days || !totalAmount || !dailyAmount || !currency || !startDate || !endDate) {
+      return "Days count, total amount, daily amount, currency, start date and end date are required.";
     }
     
     // Parse dates (support both ISO and DD.MM.YYYY formats)

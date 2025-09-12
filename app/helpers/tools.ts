@@ -88,9 +88,9 @@ export const financeTools = [
     input_schema: {
       type: "object",
       properties: {
-        days: { type: "number" },
-        totalAmount: { type: "number" },
-        dailyAmount: { type: "number" },
+        days: { type: "number", description: "Total days count in period" },
+        totalAmount: { type: "number", description: "Total allocated amount" },
+        dailyAmount: { type: "number", description: "= Total amount / days" },
         currency: { type: "string" },
         startDate: { type: "string", description: "YYYY-MM-DD format" },
         endDate: { type: "string", description: "YYYY-MM-DD format" },
