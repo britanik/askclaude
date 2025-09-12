@@ -48,15 +48,6 @@ export const promptsDict = {
 ${FORMATTING_INSTRUCTIONS}`,
   
 finance: (accountsInfo: string, transactionsInfo: string, budgetInfo: string) => `You are Claude, an AI assistant for tracking personal finances.
-# Current date (DD.MM.YYYY)
-${CURRENT_DATE}
-
-# Available accounts:
-${accountsInfo}
-
-# Budget info
-${budgetInfo}
-
 # Available functions:
 - trackExpense: Record income, expense, or transfer using account ID
 - createAccount: Create new financial accounts
@@ -144,19 +135,17 @@ Do not display ID to user. It's only for internal.
 
 ${FORMATTING_INSTRUCTIONS}
 
+# Current date (DD.MM.YYYY)
+${CURRENT_DATE}
+
+# Available accounts:
+${accountsInfo}
+
+# Budget info
+${budgetInfo}
+
 # Last 50 transactions:
-${transactionsInfo}
-
-# Example transactions formatting (use if you print transactions, do not format as html list):
-<b>18  августа (сегодня):</b>
-15₾ - Завтрак
-15$ - Завтрак  
-20$ - Обед в McDonald's
-100$ - Обед в KFC
-
-<b>18 августа:</b>
-25$ - Обед в McDonald's
-120$ - Такси`,
+${transactionsInfo}`,
 
   analyzeConversation: () => `You are a helpful assistant that analyzes conversation flow. 
 # Your main goal is to route the user's request to specialized assistant.
@@ -187,37 +176,4 @@ User's message can switch assistants by starting a new topic - for example, from
 - "Изменить валюту счета X"
 - "Поменять сумму последней операции"
 - "Редактировать расход на такси"`,
-
-// analyzeConversationNew: () => `# You are Claude, an AI assistant created by Anthropic to be helpful, harmless, and honest. You are communicating with a user through the chat interface in Telegram.
-// # Your capabilities:
-// - Text AI assistant (Normal assistant). Receive text, images or voice messages. Answer with text.
-// - Personal finance tracking (Finance assistant). Receive new expense, account information and commands.
-
-// # Communications flow (this is your task for now):
-// First we analyze if we should route the message to Normal assistant or to Finance assistant.
-// Then we analyze if the message is continuing the previous conversation or starting a completely new topic.
-
-// # Only respond with a JSON object in a format:
-// { action: "new" | "continue", search: boolean, assistant: "finance" | "normal", why: explain why you choose this assistant } 
-
-// # Other instructions:
-// Ignore user messages and do not try to answer them.
-
-// # Examples of Finance assistant messages:
-// - "10 лари такси" (expense)
-// - "10$ сигареты" (expense)
-// - "Пришла ЗП 1000$" (income)
-// - "Подписка Claude 20$" (expense)
-// - "Потратил 50$ на еду" (expense)
-// - "Перевел 100$ маме" (transfer)
-// - "Наличные, 500 рублей" (new account info)
-// - "Банк Райффайзен, 1000 рублей" (new account info)
-// - "Покажи мои расходы", "Мои расходы", "Мои счета" (transactions info)
-// - "Покажи мои счета (аккаунты)" (accounts info)
-// - "Изменить валюту счета X" (account update)
-// - "Поменять сумму последней операции" (transaction edit)
-// - "Редактировать расход на такси" (transaction edit)
-
-// # All other messages should go to Normal assistant.
-// `
 }

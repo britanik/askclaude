@@ -48,19 +48,93 @@ export async function getRecentTransactionsString(user: IUser): Promise<string> 
       return "No recent transactions found.";
     }
     
+    // Group transactions by date
+    const groupedByDate = new Map<string, ITransaction[]>();
+    
+    transactions.forEach(transaction => {
+      const dateKey = moment.utc(transaction.date).format('DD.MM.YYYY');
+      if (!groupedByDate.has(dateKey)) {
+        groupedByDate.set(dateKey, []);
+      }
+      groupedByDate.get(dateKey)!.push(transaction);
+    });
+    
+    // Sort dates in descending order (newest first)
+    const sortedDates = Array.from(groupedByDate.keys()).sort((a, b) => {
+      const dateA = moment.utc(a, 'DD.MM.YYYY');
+      const dateB = moment.utc(b, 'DD.MM.YYYY');
+      return dateB.diff(dateA);
+    });
+    
     // CSV header
     let result = "ID|Date (DD.MM.YYYY)|Type|Amount|Currency|Account|Description\n";
     
-    // CSV data rows
-    result += transactions.map(transaction => {
-      // Format date properly using UTC to avoid timezone shifts
-      const date = moment.utc(transaction.date).format('DD.MM.YYYY');
-      const accountName = (transaction.account as any)?.name || 'Unknown Account';
+    sortedDates.forEach(dateKey => {
+      const dayTransactions = groupedByDate.get(dateKey)!;
       
-      return `${transaction.ID}|${date}|${transaction.type}|${transaction.amount}|${transaction.currency}|${accountName}|${transaction.description}`;
-    }).join('\n');
+      // Calculate daily expense totals by currency
+      const dailyExpenseTotals = new Map<string, number>();
+      
+      dayTransactions.forEach(transaction => {
+        if (transaction.type === 'expense') {
+          const currency = transaction.currency;
+          if (!dailyExpenseTotals.has(currency)) {
+            dailyExpenseTotals.set(currency, 0);
+          }
+          dailyExpenseTotals.set(currency, dailyExpenseTotals.get(currency)! + transaction.amount);
+        }
+      });
+      
+      // Format date header with totals
+      const today = moment().utc().format('DD.MM.YYYY');
+      const yesterday = moment().utc().subtract(1, 'day').format('DD.MM.YYYY');
+      
+      let dateLabel = dateKey;
+      if (dateKey === today) {
+        dateLabel += ' (today';
+      } else if (dateKey === yesterday) {
+        dateLabel += ' (yesterday';
+      } else {
+        dateLabel += ' (';
+      }
+      
+      // Add expense totals to the date label
+      if (dailyExpenseTotals.size > 0) {
+        const totalLines: string[] = [];
+        dailyExpenseTotals.forEach((total, currency) => {
+          totalLines.push(`${total} ${currency}`);
+        });
+        if (dateKey === today || dateKey === yesterday) {
+          dateLabel += `, total spent: ${totalLines.join(', ')})`;
+        } else {
+          dateLabel += `total spent: ${totalLines.join(', ')})`;
+        }
+      } else {
+        dateLabel += ')';
+      }
+      
+      result += `--- ${dateLabel} ---\n`;
+      
+      // Get only expense transactions for display
+      const expenseTransactions = dayTransactions.filter(t => t.type === 'expense');
+      
+      if (expenseTransactions.length > 0) {
+        // Sort expense transactions within the day by time (newest first)
+        const sortedExpenseTransactions = expenseTransactions.sort((a, b) => 
+          moment.utc(b.date).diff(moment.utc(a.date))
+        );
+        
+        // Add individual expense transactions in CSV format
+        sortedExpenseTransactions.forEach(transaction => {
+          const accountName = (transaction.account as any)?.name || 'Unknown Account';
+          const date = moment.utc(transaction.date).format('DD.MM.YYYY');
+          
+          result += `${transaction.ID}|${date}|${transaction.type}|${transaction.amount}|${transaction.currency}|${accountName}|${transaction.description}\n`;
+        });
+      }
+    });
     
-    return result;
+    return result.trim();
   } catch (error) {
     console.error('Error formatting recent transactions:', error);
     return "Error retrieving transactions.";
