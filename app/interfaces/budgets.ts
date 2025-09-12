@@ -6,6 +6,7 @@ export interface IBudget extends Document {
   ID: number;
   user: IUser | Types.ObjectId;
   totalAmount: number;
+  dailyAmount: number;
   currency: string;
   startDate: Date;
   endDate: Date;

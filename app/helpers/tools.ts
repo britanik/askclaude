@@ -89,12 +89,13 @@ export const financeTools = [
       type: "object",
       properties: {
         totalAmount: { type: "number" },
+        dailyAmount: { type: "number" },
         currency: { type: "string" },
         startDate: { type: "string", description: "YYYY-MM-DD format" },
         endDate: { type: "string", description: "YYYY-MM-DD format" },
         description: { type: "string" }
       },
-      required: ["totalAmount", "currency", "startDate", "endDate"]
+      required: ["totalAmount", "dailyAmount", "currency", "startDate", "endDate"]
     }
   },
   {
