@@ -444,7 +444,9 @@ export async function createBudget(user: IUser, input: any): Promise<string> {
     const budget = new Budget({
       // ID will be auto-assigned by the pre-save middleware
       user: user._id,
-      totalAmount: Math.abs(totalAmount),
+      days: parseInt(days),
+      totalAmount: parseInt(totalAmount),
+      dailyAmount: parseInt(dailyAmount),
       currency: currency.toUpperCase(),
       startDate: parsedStartDate.utc().toDate(),
       endDate: parsedEndDate.utc().toDate()
