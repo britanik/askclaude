@@ -47,7 +47,15 @@ export async function getRecentTransactionsString(user: IUser): Promise<string> 
     if (transactions.length === 0) {
       return "No recent transactions found.";
     }
-    
+
+    // Get active budgets for the user
+    const now = new Date();
+    const budgets = await Budget.find({ 
+      user: user._id,
+      startDate: { $lte: now },
+      endDate: { $gte: now }
+    });
+
     // Group transactions by date
     const groupedByDate = new Map<string, ITransaction[]>();
     
@@ -71,6 +79,7 @@ export async function getRecentTransactionsString(user: IUser): Promise<string> 
     
     sortedDates.forEach(dateKey => {
       const dayTransactions = groupedByDate.get(dateKey)!;
+      const transactionDate = moment.utc(dateKey, 'DD.MM.YYYY');
       
       // Calculate daily expense totals by currency
       const dailyExpenseTotals = new Map<string, number>();
@@ -85,7 +94,10 @@ export async function getRecentTransactionsString(user: IUser): Promise<string> 
         }
       });
       
-      // Format date header with totals
+      // Calculate budget information for this date
+      const budgetInfo = calculateDayBudgetInfo(transactionDate, budgets, transactions);
+      
+      // Format date header with totals and budget info
       const today = moment().utc().format('DD.MM.YYYY');
       const yesterday = moment().utc().subtract(1, 'day').format('DD.MM.YYYY');
       
@@ -105,15 +117,41 @@ export async function getRecentTransactionsString(user: IUser): Promise<string> 
           totalLines.push(`${total} ${currency}`);
         });
         if (dateKey === today || dateKey === yesterday) {
-          dateLabel += `, total spent: ${totalLines.join(', ')})`;
+          dateLabel += `, spent: ${totalLines.join(', ')}`;
         } else {
-          dateLabel += `total spent: ${totalLines.join(', ')})`;
+          dateLabel += `spent: ${totalLines.join(', ')}`;
         }
-      } else {
-        dateLabel += ')';
+      }
+
+      // Add budget information if available
+      if (budgetInfo.length > 0) {
+        const budgetLines: string[] = [];
+        budgetInfo.forEach(info => {
+          const rolloverText = info.rollover !== 0 ? 
+            (info.rollover > 0 ? `+${info.rollover.toFixed(2)}` : `${info.rollover.toFixed(2)}`) : '';
+          const allocationText = `${info.dailyAllocation.toFixed(2)} ${info.currency}`;
+          
+          if (rolloverText) {
+            budgetLines.push(`budget: ${allocationText} (${rolloverText} rollover)`);
+          } else {
+            budgetLines.push(`budget: ${allocationText}`);
+          }
+        });
+        
+        if (dailyExpenseTotals.size > 0) {
+          dateLabel += `, ${budgetLines.join(', ')}`;
+        } else {
+          if (dateKey === today || dateKey === yesterday) {
+            dateLabel += `, ${budgetLines.join(', ')}`;
+          } else {
+            dateLabel += `${budgetLines.join(', ')}`;
+          }
+        }
       }
       
-      result += `--- ${dateLabel} ---\n`;
+      dateLabel += ')';
+      
+      result += `## ${dateLabel}\n`;
       
       // Get only expense transactions for display
       const expenseTransactions = dayTransactions.filter(t => t.type === 'expense');
@@ -125,11 +163,11 @@ export async function getRecentTransactionsString(user: IUser): Promise<string> 
         );
         
         // Add individual expense transactions in CSV format
-        sortedExpenseTransactions.forEach(transaction => {
-          const accountName = (transaction.account as any)?.name || 'Unknown Account';
-          const date = moment.utc(transaction.date).format('DD.MM.YYYY');
+        sortedExpenseTransactions.forEach(t => {
+          const accountName = (t.account as any)?.name || 'Unknown Account';
+          const date = moment.utc(t.date).format('DD.MM.YYYY');
           
-          result += `${transaction.ID}|${date}|${transaction.type}|${transaction.amount}|${transaction.currency}|${accountName}|${transaction.description}\n`;
+          result += `${t.ID}|${date}|${t.type}|${t.amount}|${t.currency}|${accountName}|${t.description}\n`;
         });
       }
     });
@@ -139,6 +177,76 @@ export async function getRecentTransactionsString(user: IUser): Promise<string> 
     console.error('Error formatting recent transactions:', error);
     return "Error retrieving transactions.";
   }
+}
+
+interface DayBudgetInfo {
+  currency: string;
+  dailyAllocation: number;
+  rollover: number;
+  totalSpent: number;
+}
+
+function calculateDayBudgetInfo( targetDate: moment.Moment, budgets: any[], allTransactions: ITransaction[] ): DayBudgetInfo[] {
+  const result: DayBudgetInfo[] = [];
+
+  budgets.forEach(budget => {
+    const budgetStart = moment.utc(budget.startDate);
+    const budgetEnd = moment.utc(budget.endDate);
+    
+    // Check if target date falls within budget period
+    if (!targetDate.isBetween(budgetStart, budgetEnd, 'day', '[]')) {
+      return; // Skip this budget
+    }
+
+    // Calculate base daily allocation
+    const totalBudgetDays = budgetEnd.diff(budgetStart, 'days') + 1;
+    const baseDailyAllocation = budget.totalAmount / totalBudgetDays;
+
+    // Calculate rollover from previous days
+    let rollover = 0;
+    
+    // Get all expense transactions for this budget's currency from budget start to target date
+    const budgetTransactions = allTransactions.filter(t => 
+      t.type === 'expense' &&
+      t.currency === budget.currency &&
+      moment.utc(t.date).isBetween(budgetStart, targetDate, 'day', '[)')
+    );
+
+    // Group transactions by date to calculate daily rollovers
+    const dailySpending = new Map<string, number>();
+    budgetTransactions.forEach(t => {
+      const dateKey = moment.utc(t.date).format('YYYY-MM-DD');
+      if (!dailySpending.has(dateKey)) {
+        dailySpending.set(dateKey, 0);
+      }
+      dailySpending.set(dateKey, dailySpending.get(dateKey)! + t.amount);
+    });
+
+    // Calculate cumulative rollover up to target date
+    const startDate = budgetStart.clone();
+    while (startDate.isBefore(targetDate, 'day')) {
+      const dateKey = startDate.format('YYYY-MM-DD');
+      const daySpending = dailySpending.get(dateKey) || 0;
+      rollover += baseDailyAllocation - daySpending;
+      startDate.add(1, 'day');
+    }
+
+    // Get total spent on target date
+    const targetDateKey = targetDate.format('YYYY-MM-DD');
+    const totalSpent = dailySpending.get(targetDateKey) || 0;
+
+    // Final daily allocation includes rollover
+    const dailyAllocation = baseDailyAllocation + rollover;
+
+    result.push({
+      currency: budget.currency,
+      dailyAllocation: Math.max(0, dailyAllocation), // Don't show negative allocations
+      rollover,
+      totalSpent
+    });
+  });
+
+  return result;
 }
 
 export async function createAccount(user: IUser, input): Promise<string> {
