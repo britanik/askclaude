@@ -240,7 +240,12 @@ export async function handleAssistantReply(
     }
 
   } catch (error) {
-    console.error('Error in handleAssistantReply:', error.response.data);
+    console.error('Error in handleAssistantReply:', error);
+    
+    // Enhanced error logging with thread and user context
+    const errorContext = `Assistant reply failed for user ${thread.owner.username || thread.owner.chatId}, thread ${thread._id}, assistant type: ${thread.assistantType}`;
+    await logApiError('anthropic', error, errorContext);
+    
     // Send error message to user
     await sendMessage({ 
       text: dict.getString('ASSISTANT_ERROR'), 
@@ -337,7 +342,6 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
 
       // Send message to Claude
       const response = await makeClaudeAPICall(chatParams)
-      // console.log(response.content,'response.content')
       
       // Log token usage
       if (response.usage) {
@@ -451,6 +455,9 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
         } catch (error) {
           console.error(`Error executing tool ${toolUse.name}:`, error);
           
+          // Log the finance function error to file with context
+          await logApiError('anthropic', error, `Finance function ${toolUse.name} failed with input: ${JSON.stringify(toolUse.input)}`);
+          
           // Track failed function execution
           executedFunctions.push({
             name: toolUse.name,
@@ -478,36 +485,48 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
       // Continue the loop to get Claude's response with the tool result
     } catch (error) {
       console.error('Claude API call failed:', error)
+      
+      // Log the main API call error
+      await logApiError('anthropic', error, 'Claude API call failed in finance assistant chat loop')
+      
       throw error
     }
   }
 }
 
 async function executeFunction(functionName: string, input: any, user: IUser): Promise<string> {
-  switch (functionName) {
-    case 'createAccount':
-      return await createAccount( user, input );
-      
-    case 'updateAccount':
-      return await updateAccount( user, input );
-      
-    case 'trackExpense':
-      return await trackExpense( user, input );
-      
-    case 'editTransaction':
-      return await editTransaction( user, input );
+  try {
+    switch (functionName) {
+      case 'createAccount':
+        return await createAccount(user, input);
+        
+      case 'updateAccount':
+        return await updateAccount(user, input);
+        
+      case 'trackExpense':
+        return await trackExpense(user, input);
+        
+      case 'editTransaction':
+        return await editTransaction(user, input);
 
-    case 'deleteTransaction':
-      return await deleteTransaction( user, input );
+      case 'deleteTransaction':
+        return await deleteTransaction(user, input);
 
-    case 'createBudget':
-      return await createBudget( user, input );
+      case 'createBudget':
+        return await createBudget(user, input);
+      
+      case 'deleteBudget':
+        return await deleteBudget(user, input);
+        
+      default:
+        throw new Error(`Unknown function: ${functionName}`);
+    }
+  } catch (error) {
+    // Log individual function errors with more context
+    await logApiError('anthropic', error, `Individual finance function ${functionName} failed for user ${user.username || user.chatId} with input: ${JSON.stringify(input)}`);
     
-    case 'deleteBudget':
-      return await deleteBudget( user, input );
-      
-    default:
-      throw new Error(`Unknown function: ${functionName}`);
+    // Re-throw the error so it gets handled by the calling code
+    throw error;
   }
 }
 
