@@ -40,7 +40,7 @@ export async function getUserAccountsString(user: IUser): Promise<string> {
 export async function getRecentTransactionsString(user: IUser): Promise<string> {
   try {
     const transactions = await Transaction.find({ user: user._id })
-      .populate('account', 'name')
+      .populate('account', 'ID') // Changed from 'name' to 'ID'
       .sort({ date: -1 })
       .limit(50);
     
@@ -74,8 +74,8 @@ export async function getRecentTransactionsString(user: IUser): Promise<string> 
       return dateB.diff(dateA);
     });
     
-    // CSV header
-    let result = "ID|Date (DD.MM.YYYY)|Type|Amount|Currency|Account|Description\n";
+    // CSV header - changed "Account" to "Account ID"
+    let result = "Transaction ID|Account ID|Amount|Currency|Description\n";
     
     sortedDates.forEach(dateKey => {
       const dayTransactions = groupedByDate.get(dateKey)!;
@@ -162,12 +162,12 @@ export async function getRecentTransactionsString(user: IUser): Promise<string> 
           moment.utc(b.date).diff(moment.utc(a.date))
         );
         
-        // Add individual expense transactions in CSV format
+        // Add individual expense transactions in CSV format - changed to use account ID
         sortedExpenseTransactions.forEach(t => {
-          const accountName = (t.account as any)?.name || 'Unknown Account';
+          const accountId = (t.account as any)?.ID || 'Unknown'; // Changed from name to ID
           const date = moment.utc(t.date).format('DD.MM.YYYY');
           
-          result += `${t.ID}|${date}|${t.type}|${t.amount}|${t.currency}|${accountName}|${t.description}\n`;
+          result += `${t.ID}|${accountId}|${t.amount}|${t.currency}|${t.description}\n`;
         });
       }
     });
@@ -502,8 +502,6 @@ export async function editTransaction(user: IUser, input): Promise<string> {
     return "Ошибка при редактировании транзакции. Попробуйте позже.";
   }
 }
-
-// Add this function to /controllers/expense.ts
 
 export async function deleteTransaction(user: IUser, input): Promise<string> {
   try {
