@@ -685,7 +685,11 @@ export async function getBudgetInfoString(user: IUser): Promise<string> {
       const startDate = moment(budget.startDate).format('MM/DD/YYYY');
       const endDate = moment(budget.endDate).format('MM/DD/YYYY');
       const daysRemaining = Math.max(0, Math.ceil((budget.endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
-      const dailyAllocation = daysRemaining > 0 ? Math.round(budget.totalAmount / daysRemaining * 100) / 100 : 0;
+      
+      // Calculate daily allocation based on total budget period
+      const totalDays = Math.ceil((budget.endDate.getTime() - budget.startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      const dailyAllocation = Math.round(budget.totalAmount / totalDays * 100) / 100;
+      
       const status = budget.endDate <= now ? 'Expired' : 'Active';
       
       return `${budget.ID}|${budget.currency}|${budget.totalAmount}|${startDate}|${endDate}|${daysRemaining}|${dailyAllocation}|${status}`;
