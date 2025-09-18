@@ -40,7 +40,7 @@ export async function getUserAccountsString(user: IUser): Promise<string> {
 export async function getRecentTransactionsString(user: IUser): Promise<string> {
   try {
     const transactions = await Transaction.find({ user: user._id })
-      .populate('account', 'ID') // Changed from 'name' to 'ID'
+      .populate('account', 'ID')
       .sort({ date: -1 })
       .limit(50);
     
@@ -74,7 +74,7 @@ export async function getRecentTransactionsString(user: IUser): Promise<string> 
       return dateB.diff(dateA);
     });
     
-    // CSV header - changed "Account" to "Account ID"
+    // CSV header
     let result = "Transaction ID|Account ID|Amount|Currency|Description\n";
     
     sortedDates.forEach(dateKey => {
@@ -94,10 +94,10 @@ export async function getRecentTransactionsString(user: IUser): Promise<string> 
         }
       });
       
-      // Calculate budget information for this date
-      const budgetInfo = calculateDayBudgetInfo(transactionDate, budgets, transactions);
+      // Calculate budget allocation totals by currency for this date
+      const dailyAllocationTotals = calculateDayAllocationTotals(transactionDate, budgets, transactions);
       
-      // Format date header with totals and budget info
+      // Format date header with totals and allocation info
       const today = moment().utc().format('DD.MM.YYYY');
       const yesterday = moment().utc().subtract(1, 'day').format('DD.MM.YYYY');
       
@@ -123,28 +123,20 @@ export async function getRecentTransactionsString(user: IUser): Promise<string> 
         }
       }
 
-      // Add budget information if available
-      if (budgetInfo.length > 0) {
-        const budgetLines: string[] = [];
-        budgetInfo.forEach(info => {
-          const rolloverText = info.rollover !== 0 ? 
-            (info.rollover > 0 ? `+${info.rollover.toFixed(2)}` : `${info.rollover.toFixed(2)}`) : '';
-          const allocationText = `${info.dailyAllocation.toFixed(2)} ${info.currency}`;
-          
-          if (rolloverText) {
-            budgetLines.push(`budget: ${allocationText} (${rolloverText} rollover)`);
-          } else {
-            budgetLines.push(`budget: ${allocationText}`);
-          }
+      // Add allocation totals to the date label
+      if (dailyAllocationTotals.size > 0) {
+        const allocationLines: string[] = [];
+        dailyAllocationTotals.forEach((total, currency) => {
+          allocationLines.push(`${total.toFixed(2)} ${currency}`);
         });
         
         if (dailyExpenseTotals.size > 0) {
-          dateLabel += `, ${budgetLines.join(', ')}`;
+          dateLabel += `, allocated: ${allocationLines.join(', ')}`;
         } else {
           if (dateKey === today || dateKey === yesterday) {
-            dateLabel += `, ${budgetLines.join(', ')}`;
+            dateLabel += `, allocated: ${allocationLines.join(', ')}`;
           } else {
-            dateLabel += `${budgetLines.join(', ')}`;
+            dateLabel += `allocated: ${allocationLines.join(', ')}`;
           }
         }
       }
@@ -162,9 +154,9 @@ export async function getRecentTransactionsString(user: IUser): Promise<string> 
           moment.utc(b.date).diff(moment.utc(a.date))
         );
         
-        // Add individual expense transactions in CSV format - changed to use account ID
+        // Add individual expense transactions in CSV format
         sortedExpenseTransactions.forEach(t => {
-          const accountId = (t.account as any)?.ID || 'Unknown'; // Changed from name to ID
+          const accountId = (t.account as any)?.ID || 'Unknown';
           const date = moment.utc(t.date).format('DD.MM.YYYY');
           
           result += `${t.ID}|${accountId}|${t.amount}|${t.currency}|${t.description}\n`;
@@ -179,15 +171,16 @@ export async function getRecentTransactionsString(user: IUser): Promise<string> 
   }
 }
 
-interface DayBudgetInfo {
-  currency: string;
-  dailyAllocation: number;
-  rollover: number;
-  totalSpent: number;
-}
-
-function calculateDayBudgetInfo( targetDate: moment.Moment, budgets: any[], allTransactions: ITransaction[] ): DayBudgetInfo[] {
-  const result: DayBudgetInfo[] = [];
+/**
+ * Calculate daily allocation totals by currency for a specific date
+ * This aggregates all budget allocations for the given date
+ */
+function calculateDayAllocationTotals(
+  targetDate: moment.Moment, 
+  budgets: any[], 
+  allTransactions: ITransaction[]
+): Map<string, number> {
+  const allocationTotals = new Map<string, number>();
 
   budgets.forEach(budget => {
     const budgetStart = moment.utc(budget.startDate);
@@ -231,22 +224,15 @@ function calculateDayBudgetInfo( targetDate: moment.Moment, budgets: any[], allT
       startDate.add(1, 'day');
     }
 
-    // Get total spent on target date
-    const targetDateKey = targetDate.format('YYYY-MM-DD');
-    const totalSpent = dailySpending.get(targetDateKey) || 0;
-
     // Final daily allocation includes rollover
-    const dailyAllocation = baseDailyAllocation + rollover;
+    const dailyAllocation = Math.max(0, baseDailyAllocation + rollover);
 
-    result.push({
-      currency: budget.currency,
-      dailyAllocation: Math.max(0, dailyAllocation), // Don't show negative allocations
-      rollover,
-      totalSpent
-    });
+    // Add to totals by currency
+    const existingTotal = allocationTotals.get(budget.currency) || 0;
+    allocationTotals.set(budget.currency, existingTotal + dailyAllocation);
   });
 
-  return result;
+  return allocationTotals;
 }
 
 export async function createAccount(user: IUser, input): Promise<string> {
