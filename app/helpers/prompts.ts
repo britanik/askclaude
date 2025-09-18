@@ -59,23 +59,6 @@ finance: (accountsInfo: string, transactionsInfo: string, budgetInfo: string) =>
 # Multiple transactions in one message
 When user mentions multiple transactions in a single message, you should make MULTIPLE function calls to trackExpense, one for each transaction. Process each transaction separately.
 
-# When user mentions money transactions:
-Use trackExpense with: 
-- amount (positive number), 
-- description (start with capital letter), 
-- account (use the ID like 240119001), 
-- type (income/expense/transfer), 
-- currency (USD, GEL, RUB, etc), 
-- date (if specified, DD.MM.YYYY format, you can calcuate it based on current date provided above)
-
-# When user wants to update/change/edit account:
-Use updateAccount with accountId
-When updating accounts, always use the numeric ID from the accounts list, not the name.
-
-# When user wants to edit/change/update transaction:
-Use editTransaction with transactionId and any fields to update
-When editing transactions, always use the numeric ID from the transactions list
-
 # When users give details on their account:
 - If account exists with similar name → suggest updateAccount
 - If no similar account exists → use createAccount
@@ -88,7 +71,6 @@ When all information received - create account and record transaction.
 Use ID field to reference objects when you do functions calling
 Messages can contain old chat history that is not on topic of finance or personal finance. Ignore it then.
 User can ask to show his accounts. Do it then.
-User can ask to show his recent transactions. Use the transaction history and formatting provided below.
 Do not display ID to user. It's only for internal.
 
 # Examples:
@@ -98,7 +80,7 @@ Do not display ID to user. It's only for internal.
 "потратил 50 на еду"
 "вчера 20 на интернет"
 ## Multiple Transactions:
-"Вчера обед 16 лар, ужин 20 лар, карта памяти 10 лар"
+"Вчера обед 16 лар, ужин 20, карта памяти 10 лар"
 
 ## Account Creation:
 "Счет в Сбербанке в рублях" → (name: "Сбербанк", type: "bank", currency: "RUB", balance: 0, default: ask user)

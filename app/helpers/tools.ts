@@ -14,8 +14,8 @@ export const financeTools = [
       type: "object",
       properties: {
         amount: { type: "number", description: "Amount (positive)" },
-        description: { type: "string", description: "Transaction description" },
-        accountId: { type: "string", description: "Account ID (e.g., 240119001)" },
+        description: { type: "string", description: "Transaction description (start with capital letter)" },
+        accountId: { type: "string", description: "Account ID" },
         type: { type: "string", enum: ["expense", "income", "transfer"] },
         currency: { type: "string", description: "Currency (USD, EUR, GEL, etc.)" },
         date: { type: "string", description: "Date DD.MM.YYYY format, optional" }
