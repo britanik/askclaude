@@ -15,43 +15,11 @@ export const financeTools = [
       properties: {
         amount: { type: "number", description: "Amount (positive)" },
         description: { type: "string", description: "Transaction description (start with capital letter)" },
-        accountId: { type: "string", description: "Account ID" },
         type: { type: "string", enum: ["expense", "income", "transfer"] },
         currency: { type: "string", description: "Currency (USD, EUR, GEL, etc.)" },
         date: { type: "string", description: "Date DD.MM.YYYY format, optional" }
       },
-      required: ["amount", "description", "accountId", "type", "currency"]
-    }
-  },
-  {
-    name: "createAccount",
-    description: "Create new financial account",
-    input_schema: {
-      type: "object",
-      properties: {
-        name: { type: "string", description: "Account name" },
-        type: { type: "string", enum: ["bank", "cash", "crypto"] },
-        currency: { type: "string", description: "Currency code" },
-        initial_balance: { type: "number", description: "Starting balance, default 0" },
-        isDefault: { type: "boolean", description: "Set as default account" }
-      },
-      required: ["name", "type", "currency"]
-    }
-  },
-  {
-    name: "updateAccount",
-    description: "Update existing account",
-    input_schema: {
-      type: "object",
-      properties: {
-        accountId: { type: "string", description: "Account ID to update" },
-        name: { type: "string" },
-        type: { type: "string", enum: ["bank", "cash", "crypto"] },
-        currency: { type: "string" },
-        balance: { type: "number" },
-        isDefault: { type: "boolean" }
-      },
-      required: ["accountId"]
+      required: ["amount", "description", "type", "currency"]
     }
   },
   {
@@ -65,7 +33,6 @@ export const financeTools = [
         description: { type: "string" },
         type: { type: "string", enum: ["expense", "income", "transfer"] },
         currency: { type: "string" },
-        accountId: { type: "string" },
         date: { type: "string", description: "DD.MM.YYYY format" }
       },
       required: ["transactionId"]

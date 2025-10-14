@@ -12,7 +12,7 @@ import { logTokenUsage, logWebSearchUsage } from "./tokens"
 import { saveAIResponse } from "../helpers/fileLogger"
 import { withChatAction } from "../helpers/chatAction"
 import { isAdmin } from "../helpers/helpers"
-import { createAccount, updateAccount, trackExpense, getUserAccountsString, getRecentTransactionsString, editTransaction, createBudget, getBudgetInfoString, deleteBudget, deleteTransaction } from "./expense"
+import { trackExpense, getRecentTransactionsString, editTransaction, createBudget, getBudgetInfoString, deleteBudget, deleteTransaction } from "./expense"
 import { financeTools, searchTool } from "../helpers/tools"
 import { promptsDict } from "../helpers/prompts"
 import axios from "axios"
@@ -294,14 +294,13 @@ export async function sendThreadToChatGPT(params) {
 }
 
 async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
-  const messages = [...initialMessages] // Copy initial messages
-  const executedFunctions = [] // Track all function calls for summary
+  const messages = [...initialMessages]
+  const executedFunctions = []
   
   while (true) {
     try {
       // Prepare tools array and context
       let tools = [];
-      let accountsInfo = '';
       let transactionsInfo = '';
       let budgetInfo = '';
       
@@ -311,22 +310,16 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
 
       if (thread.assistantType === 'finance') {
         tools = [...financeTools, ...tools]
-        accountsInfo = await getUserAccountsString(user)
         transactionsInfo = await getRecentTransactionsString(user)
         budgetInfo = await getBudgetInfoString(user)
-        // console.log(budgetInfo,'budgetInfo')
-
-        // console.log('---- accountsInfo -----')
-        // console.info(accountsInfo)
-        // console.log('---- transactionsInfo -----')
-        // console.info(transactionsInfo)
-        // console.log('----')  
       }
 
       // Prepare API request
       const chatParams: any = {
         model: process.env.CLAUDE_MODEL,
-        system: thread.assistantType === 'finance' ? promptsDict.finance(accountsInfo, transactionsInfo, budgetInfo) : promptsDict.system(),
+        system: thread.assistantType === 'finance' 
+          ? promptsDict.finance(transactionsInfo, budgetInfo) 
+          : promptsDict.system(),
         messages: messages,
         max_tokens: +(process.env.CLAUDE_MAX_OUTPUT || 1000),
         stream: false,
@@ -485,10 +478,7 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
       // Continue the loop to get Claude's response with the tool result
     } catch (error) {
       console.error('Claude API call failed:', error)
-      
-      // Log the main API call error
       await logApiError('anthropic', error, 'Claude API call failed in finance assistant chat loop')
-      
       throw error
     }
   }
@@ -497,12 +487,6 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
 async function executeFunction(functionName: string, input: any, user: IUser): Promise<string> {
   try {
     switch (functionName) {
-      case 'createAccount':
-        return await createAccount(user, input);
-        
-      case 'updateAccount':
-        return await updateAccount(user, input);
-        
       case 'trackExpense':
         return await trackExpense(user, input);
         
@@ -522,10 +506,7 @@ async function executeFunction(functionName: string, input: any, user: IUser): P
         throw new Error(`Unknown function: ${functionName}`);
     }
   } catch (error) {
-    // Log individual function errors with more context
     await logApiError('anthropic', error, `Individual finance function ${functionName} failed for user ${user.username || user.chatId} with input: ${JSON.stringify(input)}`);
-    
-    // Re-throw the error so it gets handled by the calling code
     throw error;
   }
 }
