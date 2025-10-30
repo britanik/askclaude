@@ -11,7 +11,7 @@ import { analyzeConversation, formatMessagesWithImages, IConversationAnalysisRes
 import { logTokenUsage, logWebSearchUsage } from "./tokens"
 import { saveAIResponse } from "../helpers/fileLogger"
 import { withChatAction } from "../helpers/chatAction"
-import { isAdmin } from "../helpers/helpers"
+import { getReplyFooter, isAdmin } from "../helpers/helpers"
 import { trackExpense, getRecentTransactionsString, editTransaction, createBudget, getBudgetInfoString, deleteBudget, deleteTransaction } from "./expense"
 import { financeTools, searchTool } from "../helpers/tools"
 import { promptsDict } from "../helpers/prompts"
@@ -233,14 +233,14 @@ export async function handleAssistantReply(
     if (assistantReply) {
       await sendThreadToUser({ 
         user: thread.owner, 
-        content: (isNewThread && isAdmin(thread.owner)) ? assistantReply + '\n\n🆕' : assistantReply,
+        content: (isAdmin) ? assistantReply + getReplyFooter(thread, isNewThread) : assistantReply,
         bot, 
         dict 
       });
     }
 
   } catch (error) {
-    console.error('Error in handleAssistantReply:', error);
+    console.error('Error in handleAssistantReply:', error);``
     
     // Enhanced error logging with thread and user context
     const errorContext = `Assistant reply failed for user ${thread.owner.username || thread.owner.chatId}, thread ${thread._id}, assistant type: ${thread.assistantType}`;

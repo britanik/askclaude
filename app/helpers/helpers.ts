@@ -1,6 +1,7 @@
 import moment from 'moment'
 import { EditMessageTextOptions, InlineKeyboardButton, KeyboardButton, SendMessageOptions } from 'node-telegram-bot-api'
 import { IUser } from '../interfaces/users'
+import { IThread } from '../interfaces/threads'
 
 export interface IGetOptionsParams {
   buttons?: InlineKeyboardButton[][],
@@ -68,4 +69,9 @@ export function isAdmin( user:IUser ){
 
 export function formatUsername(user: IUser) {
   return user.name
+}
+
+export function getReplyFooter(thread:IThread, isNewThread:boolean):string {
+  let icon = (isNewThread) ? "🆕" : "➡️";
+  return `\n\n${icon} ${thread.assistantType}`
 }
