@@ -233,7 +233,7 @@ export async function handleAssistantReply(
     if (assistantReply) {
       await sendThreadToUser({ 
         user: thread.owner, 
-        content: (isAdmin) ? assistantReply + getReplyFooter(thread, isNewThread) : assistantReply,
+        content: (isAdmin(thread.owner)) ? assistantReply + getReplyFooter(thread, isNewThread) : assistantReply,
         bot, 
         dict 
       });
