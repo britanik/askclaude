@@ -312,6 +312,9 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
         tools = [...financeTools, ...tools]
         transactionsInfo = await getRecentTransactionsString(user)
         budgetInfo = await getBudgetInfoString(user)
+
+        // console.log('Transactions info: ', transactionsInfo);
+        // console.log('Budget info: ', budgetInfo)
       }
 
       // Prepare API request
@@ -326,7 +329,7 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
         temperature: 1,
       }
 
-      console.warn(chatParams.system,'chatParams.system')
+      // console.warn(chatParams.system,'chatParams.system')
       
       // Only add tools if available
       if (tools.length > 0) {
@@ -369,6 +372,7 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
 
       // Check if Claude wants to use any tools
       const toolUses = response.content.filter(content => content.type === 'tool_use');
+      // console.log('Claude wants to execute toolUses:', toolUses)
       
       if (toolUses.length === 0) {
         // No tool use, we're done - extract text response and search results
@@ -420,7 +424,7 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
         
         finalResponse += responseText;
         
-        return finalResponse;
+        return finalResponse; // Exit while loop
       }
 
       // Execute all tools from this response
@@ -469,6 +473,8 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
         }
       }
       
+      console.log(toolResults, 'toolResults');
+
       // Send all tool results back to Claude in a single message
       messages.push({
         role: "user",
