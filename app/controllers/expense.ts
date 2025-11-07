@@ -146,7 +146,7 @@ export async function getRecentTransactionsString(user: IUser): Promise<string> 
   try {
     const transactions = await Transaction.find({ user: user._id })
       .sort({ date: -1 })
-      .limit(50);
+      .limit(10);
     
     if (transactions.length === 0) {
       return "No recent transactions found.";
