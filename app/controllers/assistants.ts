@@ -12,7 +12,7 @@ import { logTokenUsage, logWebSearchUsage } from "./tokens"
 import { saveAIResponse } from "../helpers/fileLogger"
 import { withChatAction } from "../helpers/chatAction"
 import { getReplyFooter, isAdmin } from "../helpers/helpers"
-import { trackExpense, getRecentTransactionsString, editTransaction, createBudget, getBudgetInfoString, deleteBudget, deleteTransaction } from "./expense"
+import { trackExpense, getRecentTransactionsString, editTransaction, createBudget, getBudgetInfoString, deleteBudget, deleteTransaction, loadMoreTransactions } from "./expense"
 import { financeTools, searchTool } from "../helpers/tools"
 import { promptsDict } from "../helpers/prompts"
 import axios from "axios"
@@ -501,6 +501,9 @@ async function executeFunction(functionName: string, input: any, user: IUser): P
 
       case 'deleteTransaction':
         return await deleteTransaction(user, input);
+
+      case 'loadMore':
+        return await loadMoreTransactions(user, input);
 
       case 'createBudget':
         return await createBudget(user, input);

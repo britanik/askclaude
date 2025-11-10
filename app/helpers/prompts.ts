@@ -52,6 +52,7 @@ ${FORMATTING_INSTRUCTIONS}`,
 - trackExpense: Record expense or income
 - editTransaction: Edit existing transactions using transaction ID
 - deleteTransaction: Delete existing transactions using transaction ID
+- loadMore: Load additional transactions beyond the default 10 shown
 - createBudget: When user wants to create a budget
 - deleteBudget: Delete budget by ID
 

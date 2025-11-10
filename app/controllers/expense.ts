@@ -272,10 +272,114 @@ export async function getRecentTransactionsString(user: IUser): Promise<string> 
   }
 }
 
-/**
- * Calculate daily allocation totals by currency for a specific date
- * This aggregates all budget allocations for the given date
- */
+export async function loadMoreTransactions(
+  user: IUser, 
+  params: {
+    count?: number;
+    start_date?: string;
+    end_date?: string;
+  }
+): Promise<string> {
+  try {
+    const { count, start_date, end_date } = params;
+    
+    // Build query
+    let query: any = { user: user._id };
+    
+    // Add date range filter if provided
+    if (start_date || end_date) {
+      query.date = {};
+      
+      if (start_date) {
+        // Convert DD.MM.YYYY to Date
+        const startMoment = moment.utc(start_date, 'DD.MM.YYYY').startOf('day');
+        query.date.$gte = startMoment.toDate();
+      }
+      
+      if (end_date) {
+        // Convert DD.MM.YYYY to Date
+        const endMoment = moment.utc(end_date, 'DD.MM.YYYY').endOf('day');
+        query.date.$lte = endMoment.toDate();
+      }
+    }
+    
+    // Get transactions
+    const limit = count || 50; // Default to 50 if count not provided
+    const transactions = await Transaction.find(query)
+      .sort({ date: -1 })
+      .limit(limit);
+    
+    if (transactions.length === 0) {
+      return "No transactions found for the specified criteria.";
+    }
+
+    // Group by date (same logic as getRecentTransactionsString)
+    const groupedByDate = new Map<string, ITransaction[]>();
+    
+    transactions.forEach(transaction => {
+      const dateKey = moment.utc(transaction.date).format('DD.MM.YYYY');
+      if (!groupedByDate.has(dateKey)) {
+        groupedByDate.set(dateKey, []);
+      }
+      groupedByDate.get(dateKey)!.push(transaction);
+    });
+    
+    // Sort dates descending
+    const sortedDates = Array.from(groupedByDate.keys()).sort((a, b) => {
+      const dateA = moment.utc(a, 'DD.MM.YYYY');
+      const dateB = moment.utc(b, 'DD.MM.YYYY');
+      return dateB.diff(dateA);
+    });
+    
+    // Format result
+    let result = "Transaction ID|Amount|Currency|Description\n";
+    
+    sortedDates.forEach(dateKey => {
+      const dayTransactions = groupedByDate.get(dateKey)!;
+      
+      // Calculate daily totals
+      const dailyTotals = new Map<string, number>();
+      dayTransactions.forEach(transaction => {
+        if (transaction.type === 'expense') {
+          const currency = transaction.currency;
+          if (!dailyTotals.has(currency)) {
+            dailyTotals.set(currency, 0);
+          }
+          dailyTotals.set(currency, dailyTotals.get(currency)! + transaction.amount);
+        }
+      });
+      
+      // Format date header
+      let dateLabel = `${dateKey} (`;
+      if (dailyTotals.size > 0) {
+        const totalLines: string[] = [];
+        dailyTotals.forEach((total, currency) => {
+          totalLines.push(`${total} ${currency}`);
+        });
+        dateLabel += `spent: ${totalLines.join(', ')}`;
+      }
+      dateLabel += ')';
+      
+      result += `## ${dateLabel}\n`;
+      
+      // Add transactions (only expenses)
+      const expenseTransactions = dayTransactions
+        .filter(t => t.type === 'expense')
+        .sort((a, b) => moment.utc(b.date).diff(moment.utc(a.date)));
+      
+      expenseTransactions.forEach(t => {
+        result += `${t.ID}|${t.amount}|${t.currency}|${t.description}\n`;
+      });
+    });
+    
+    return result.trim();
+    
+  } catch (error) {
+    console.error('Error loading more transactions:', error);
+    return "Error loading transactions.";
+  }
+}
+
 function calculateDayAllocationTotals(
   targetDate: moment.Moment, 
   budgets: any[], 

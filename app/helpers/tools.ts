@@ -76,5 +76,27 @@ export const financeTools = [
       },
       required: ["ID"]
     }
+  },
+  {
+    name: "loadMore",
+    description: "Load additional transactions beyond the default 10 shown. Use when user needs more transaction history or asks about specific time periods. Can filter by count, date range, or both.",
+    input_schema: {
+      type: "object",
+      properties: {
+        count: { 
+          type: "number", 
+          description: "Number of additional transactions to load" 
+        },
+        start_date: { 
+          type: "string", 
+          description: "Start date in DD.MM.YYYY format" 
+        },
+        end_date: { 
+          type: "string", 
+          description: "End date in DD.MM.YYYY format" 
+        }
+      },
+      required: []
+    }
   }
 ];
