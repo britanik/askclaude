@@ -313,7 +313,7 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
         transactionsInfo = await getTransactionsString(user)
         budgetInfo = await getBudgetInfoString(user)
 
-        console.log('Transactions info: ', transactionsInfo);
+        // console.log('Transactions info: ', transactionsInfo);
         // console.log('Budget info: ', budgetInfo)
       }
 
