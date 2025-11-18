@@ -12,7 +12,7 @@ import { logTokenUsage, logWebSearchUsage } from "./tokens"
 import { saveAIResponse } from "../helpers/fileLogger"
 import { withChatAction } from "../helpers/chatAction"
 import { getReplyFooter, isAdmin } from "../helpers/helpers"
-import { trackExpense, getRecentTransactionsString, editTransaction, createBudget, getBudgetInfoString, deleteBudget, deleteTransaction, loadMoreTransactions } from "./expense"
+import { trackExpense, editTransaction, createBudget, getBudgetInfoString, deleteBudget, deleteTransaction, getTransactionsString } from "./expense"
 import { financeTools, searchTool } from "../helpers/tools"
 import { promptsDict } from "../helpers/prompts"
 import axios from "axios"
@@ -310,10 +310,10 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
 
       if (thread.assistantType === 'finance') {
         tools = [...financeTools, ...tools]
-        transactionsInfo = await getRecentTransactionsString(user)
+        transactionsInfo = await getTransactionsString(user)
         budgetInfo = await getBudgetInfoString(user)
 
-        // console.log('Transactions info: ', transactionsInfo);
+        console.log('Transactions info: ', transactionsInfo);
         // console.log('Budget info: ', budgetInfo)
       }
 
@@ -503,7 +503,7 @@ async function executeFunction(functionName: string, input: any, user: IUser): P
         return await deleteTransaction(user, input);
 
       case 'loadMore':
-        return await loadMoreTransactions(user, input);
+        return await getTransactionsString(user, { ...input, includeBudgetInfo: true })
 
       case 'createBudget':
         return await createBudget(user, input);

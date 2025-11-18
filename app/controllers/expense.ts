@@ -142,147 +142,20 @@ export async function deleteTransaction(user: IUser, input): Promise<string> {
   }
 }
 
-export async function getRecentTransactionsString(user: IUser): Promise<string> {
-  try {
-    const transactions = await Transaction.find({ user: user._id })
-      .sort({ date: -1 })
-      .limit(10);
-    
-    if (transactions.length === 0) {
-      return "No recent transactions found.";
-    }
-
-    // Get active budgets for the user
-    const now = new Date();
-    const budgets = await Budget.find({ 
-      user: user._id,
-      startDate: { $lte: now },
-      endDate: { $gte: now }
-    });
-
-    // Group transactions by date
-    const groupedByDate = new Map<string, ITransaction[]>();
-    
-    transactions.forEach(transaction => {
-      const dateKey = moment.utc(transaction.date).format('DD.MM.YYYY');
-      if (!groupedByDate.has(dateKey)) {
-        groupedByDate.set(dateKey, []);
-      }
-      groupedByDate.get(dateKey)!.push(transaction);
-    });
-    
-    // Sort dates in descending order (newest first)
-    const sortedDates = Array.from(groupedByDate.keys()).sort((a, b) => {
-      const dateA = moment.utc(a, 'DD.MM.YYYY');
-      const dateB = moment.utc(b, 'DD.MM.YYYY');
-      return dateB.diff(dateA);
-    });
-    
-    // CSV header
-    let result = "Transaction ID|Amount|Currency|Description\n";
-    
-    sortedDates.forEach(dateKey => {
-      const dayTransactions = groupedByDate.get(dateKey)!;
-      const transactionDate = moment.utc(dateKey, 'DD.MM.YYYY');
-      
-      // Calculate daily expense totals by currency
-      const dailyExpenseTotals = new Map<string, number>();
-      
-      dayTransactions.forEach(transaction => {
-        if (transaction.type === 'expense') {
-          const currency = transaction.currency;
-          if (!dailyExpenseTotals.has(currency)) {
-            dailyExpenseTotals.set(currency, 0);
-          }
-          dailyExpenseTotals.set(currency, dailyExpenseTotals.get(currency)! + transaction.amount);
-        }
-      });
-      
-      // Calculate budget allocation totals by currency for this date
-      const dailyAllocationTotals = calculateDayAllocationTotals(transactionDate, budgets, transactions);
-      
-      // Format date header with totals and allocation info
-      const today = moment().utc().format('DD.MM.YYYY');
-      const yesterday = moment().utc().subtract(1, 'day').format('DD.MM.YYYY');
-      
-      let dateLabel = dateKey;
-      if (dateKey === today) {
-        dateLabel += ' (today';
-      } else if (dateKey === yesterday) {
-        dateLabel += ' (yesterday';
-      } else {
-        dateLabel += ' (';
-      }
-      
-      // Add expense totals to the date label
-      if (dailyExpenseTotals.size > 0) {
-        const totalLines: string[] = [];
-        dailyExpenseTotals.forEach((total, currency) => {
-          totalLines.push(`${total} ${currency}`);
-        });
-        if (dateKey === today || dateKey === yesterday) {
-          dateLabel += `, spent: ${totalLines.join(', ')}`;
-        } else {
-          dateLabel += `spent: ${totalLines.join(', ')}`;
-        }
-      }
-
-      // Add allocation totals to the date label
-      if (dailyAllocationTotals.size > 0) {
-        const allocationLines: string[] = [];
-        dailyAllocationTotals.forEach((total, currency) => {
-          allocationLines.push(`${total.toFixed(2)} ${currency}`);
-        });
-        
-        if (dailyExpenseTotals.size > 0) {
-          dateLabel += `, allocated: ${allocationLines.join(', ')}`;
-        } else {
-          if (dateKey === today || dateKey === yesterday) {
-            dateLabel += `, allocated: ${allocationLines.join(', ')}`;
-          } else {
-            dateLabel += `allocated: ${allocationLines.join(', ')}`;
-          }
-        }
-      }
-      
-      dateLabel += ')';
-      
-      result += `## ${dateLabel}\n`;
-      
-      // Get only expense transactions for display
-      const expenseTransactions = dayTransactions.filter(t => t.type === 'expense');
-      
-      if (expenseTransactions.length > 0) {
-        // Sort expense transactions within the day by time (newest first)
-        const sortedExpenseTransactions = expenseTransactions.sort((a, b) => 
-          moment.utc(b.date).diff(moment.utc(a.date))
-        );
-        
-        // Add individual expense transactions in CSV format
-        sortedExpenseTransactions.forEach(t => {
-          result += `${t.ID}|${t.amount}|${t.currency}|${t.description}\n`;
-        });
-      }
-    });
-    
-    return result.trim();
-  } catch (error) {
-    console.error('Error formatting recent transactions:', error);
-    return "Error retrieving transactions.";
-  }
-}
-
-export async function loadMoreTransactions(
+export async function getTransactionsString(
   user: IUser, 
   params: {
     count?: number;
     start_date?: string;
     end_date?: string;
-  }
+    includeBudgetInfo?: boolean;
+  } = {}
 ): Promise<string> {
   try {
-    const { count, start_date, end_date } = params;
+    const { count = +process.env.FINANCE_TRANSACTIONS_AMOUNT, start_date, end_date, includeBudgetInfo = true } = params;
     
+    console.log(count,'count')
+
     // Build query
     let query: any = { user: user._id };
     
@@ -304,16 +177,26 @@ export async function loadMoreTransactions(
     }
     
     // Get transactions
-    const limit = count || 50; // Default to 50 if count not provided
     const transactions = await Transaction.find(query)
       .sort({ date: -1 })
-      .limit(limit);
+      .limit(count);
     
     if (transactions.length === 0) {
-      return "No transactions found for the specified criteria.";
+      return "<transactions><message>No recent transactions found.</message></transactions>";
     }
 
-    // Group by date (same logic as getRecentTransactionsString)
+    // Get active budgets if budget info is requested
+    let budgets = [];
+    if (includeBudgetInfo) {
+      const now = new Date();
+      budgets = await Budget.find({ 
+        user: user._id,
+        startDate: { $lte: now },
+        endDate: { $gte: now }
+      });
+    }
+
+    // Group transactions by date
     const groupedByDate = new Map<string, ITransaction[]>();
     
     transactions.forEach(transaction => {
@@ -324,59 +207,102 @@ export async function loadMoreTransactions(
       groupedByDate.get(dateKey)!.push(transaction);
     });
     
-    // Sort dates descending
+    // Sort dates in descending order (newest first)
     const sortedDates = Array.from(groupedByDate.keys()).sort((a, b) => {
       const dateA = moment.utc(a, 'DD.MM.YYYY');
       const dateB = moment.utc(b, 'DD.MM.YYYY');
       return dateB.diff(dateA);
     });
     
-    // Format result
-    let result = "Transaction ID|Amount|Currency|Description\n";
+    // Start XML output
+    let result = "<transactions>\n";
     
     sortedDates.forEach(dateKey => {
       const dayTransactions = groupedByDate.get(dateKey)!;
+      const transactionDate = moment.utc(dateKey, 'DD.MM.YYYY');
       
-      // Calculate daily totals
-      const dailyTotals = new Map<string, number>();
+      // Calculate daily expense totals by currency
+      const dailyExpenseTotals = new Map<string, number>();
+      
       dayTransactions.forEach(transaction => {
         if (transaction.type === 'expense') {
           const currency = transaction.currency;
-          if (!dailyTotals.has(currency)) {
-            dailyTotals.set(currency, 0);
+          if (!dailyExpenseTotals.has(currency)) {
+            dailyExpenseTotals.set(currency, 0);
           }
-          dailyTotals.set(currency, dailyTotals.get(currency)! + transaction.amount);
+          dailyExpenseTotals.set(currency, dailyExpenseTotals.get(currency)! + transaction.amount);
         }
       });
       
-      // Format date header
-      let dateLabel = `${dateKey} (`;
-      if (dailyTotals.size > 0) {
-        const totalLines: string[] = [];
-        dailyTotals.forEach((total, currency) => {
-          totalLines.push(`${total} ${currency}`);
-        });
-        dateLabel += `spent: ${totalLines.join(', ')}`;
+      // Calculate budget allocation totals by currency for this date (if requested)
+      let dailyAllocationTotals = new Map<string, number>();
+      if (includeBudgetInfo) {
+        dailyAllocationTotals = calculateDayAllocationTotals(transactionDate, budgets, transactions);
       }
-      dateLabel += ')';
       
-      result += `## ${dateLabel}\n`;
+      // Determine date label
+      const today = moment().utc().format('DD.MM.YYYY');
+      const yesterday = moment().utc().subtract(1, 'day').format('DD.MM.YYYY');
       
-      // Add transactions (only expenses)
-      const expenseTransactions = dayTransactions
-        .filter(t => t.type === 'expense')
-        .sort((a, b) => moment.utc(b.date).diff(moment.utc(a.date)));
+      let dateLabel = '';
+      if (dateKey === today) {
+        dateLabel = 'today';
+      } else if (dateKey === yesterday) {
+        dateLabel = 'yesterday';
+      }
       
-      expenseTransactions.forEach(t => {
-        result += `${t.ID}|${t.amount}|${t.currency}|${t.description}\n`;
-      });
+      // Build spent attribute
+      let spentAttr = '';
+      if (dailyExpenseTotals.size > 0) {
+        const spentParts: string[] = [];
+        dailyExpenseTotals.forEach((total, currency) => {
+          spentParts.push(`${total} ${currency}`);
+        });
+        spentAttr = ` spent="${spentParts.join(', ')}"`;
+      }
+      
+      // Build allocated attribute
+      let allocatedAttr = '';
+      if (dailyAllocationTotals.size > 0) {
+        const allocatedParts: string[] = [];
+        dailyAllocationTotals.forEach((total, currency) => {
+          allocatedParts.push(`${total.toFixed(2)} ${currency}`);
+        });
+        allocatedAttr = ` alloc="${allocatedParts.join(', ')}"`;
+      }
+      
+      // Build label attribute
+      const labelAttr = dateLabel ? ` label="${dateLabel}"` : '';
+      
+      // Open day tag
+      result += `  <day date="${dateKey}"${labelAttr}${spentAttr}${allocatedAttr}>\n`;
+      
+      // Get only expense transactions for display
+      const expenseTransactions = dayTransactions.filter(t => t.type === 'expense');
+      
+      if (expenseTransactions.length > 0) {
+        // Sort expense transactions within the day by time (newest first)
+        const sortedExpenseTransactions = expenseTransactions.sort((a, b) => 
+          moment.utc(b.date).diff(moment.utc(a.date))
+        );
+        
+        // Add individual expense transactions in XML format
+        sortedExpenseTransactions.forEach(t => {
+          result += `    <tx id="${t.ID}" amt="${t.amount}" cur="${t.currency}" desc="${t.description}"/>\n`;
+        });
+      }
+      
+      // Close day tag
+      result += `  </day>\n`;
     });
     
-    return result.trim();
+    // Close transactions tag
+    result += "</transactions>";
     
+    return result;
   } catch (error) {
-    console.error('Error loading more transactions:', error);
-    return "Error loading transactions.";
+    console.error('Error formatting transactions:', error);
+    return "<transactions><error>Error retrieving transactions.</error></transactions>";
   }
 }
 

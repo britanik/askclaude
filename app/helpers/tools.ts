@@ -57,7 +57,7 @@ export const financeTools = [
       properties: {
         days: { type: "number", description: "Total days count in period" },
         totalAmount: { type: "number", description: "Total allocated amount" },
-        dailyAmount: { type: "number", description: "= Total amount / days" },
+        dailyAmount: { type: "number", description: "Total amount / days" },
         currency: { type: "string" },
         startDate: { type: "string", description: "YYYY-MM-DD format" },
         endDate: { type: "string", description: "YYYY-MM-DD format" },
