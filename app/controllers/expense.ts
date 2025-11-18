@@ -470,28 +470,30 @@ export async function getBudgetInfoString(user: IUser): Promise<string> {
     const budgets = await Budget.find({ user: user._id }).sort({ created: -1 });
     
     if (budgets.length === 0) {
-      return "No budgets found.";
+      return "<budgets>No budgets found</budgets>";
     }
     
-    // CSV header
-    let result = "ID|Currency|Total|Start Date|End Date|Days Remaining|Daily Allocation|Status\n";
+    // XML opening tag
+    let result = "<budgets>\n";
     
     const now = new Date();
     
-    // CSV data rows
+    // XML data rows
     result += budgets.map(budget => {
-      const startDate = moment(budget.startDate).format('MM/DD/YYYY');
-      const endDate = moment(budget.endDate).format('MM/DD/YYYY');
+      const startDate = moment(budget.startDate).format('DD.MM.YYYY');
+      const endDate = moment(budget.endDate).format('DD.MM.YYYY');
       const daysRemaining = Math.max(0, Math.ceil((budget.endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
       
       // Calculate daily allocation based on total budget period
       const totalDays = Math.ceil((budget.endDate.getTime() - budget.startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
       const dailyAllocation = Math.round(budget.totalAmount / totalDays * 100) / 100;
       
-      const status = budget.endDate <= now ? 'Expired' : 'Active';
+      const status = budget.endDate <= now ? 'expired' : 'active';
       
-      return `${budget.ID}|${budget.currency}|${budget.totalAmount}|${startDate}|${endDate}|${daysRemaining}|${dailyAllocation}|${status}`;
+      return `  <budget id="${budget.ID}" cur="${budget.currency}" total="${budget.totalAmount}" start="${startDate}" end="${endDate}" days_rem="${daysRemaining}" daily="${dailyAllocation}" status="${status}"/>`;
     }).join('\n');
+    
+    result += "\n</budgets>";
     
     return result;
   } catch (error) {
