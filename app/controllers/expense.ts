@@ -152,9 +152,8 @@ export async function getTransactionsString(
   } = {}
 ): Promise<string> {
   try {
-    const { count = +process.env.FINANCE_TRANSACTIONS_AMOUNT, start_date, end_date, includeBudgetInfo = true } = params;
-    
-    console.log(count,'count')
+    const { count = +process.env.FINANCE_TRANSACTIONS_AMOUNT, start_date, end_date, includeBudgetInfo = true } = params;    
+    // console.log(count,'count')
 
     // Build query
     let query: any = { user: user._id };
