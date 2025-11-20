@@ -111,7 +111,7 @@ ${CURRENT_DATE}
 # Budget info
 ${budgetInfo}
 
-# Last 50 transactions:
+# Last ${process.env.FINANCE_TRANSACTIONS_AMOUNT} transactions:
 ${transactionsInfo}`,
 
   analyzeConversation: () => `You are a helpful assistant that analyzes conversation flow. 
