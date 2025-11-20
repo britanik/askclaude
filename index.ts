@@ -108,4 +108,10 @@ bot.on('callback_query', async (callbackQuery) => {
 
 const endCycle = () => {
   console.log('--- END CYCLE ---')
+  console.log("\n");
+  console.log("\n");
+  console.log("\n");
+  console.log("\n");
+  console.log("\n");
+  console.log("\n");
 }
