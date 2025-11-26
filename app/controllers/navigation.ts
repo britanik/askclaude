@@ -262,7 +262,7 @@ export default class Navigation {
 
         // if it's /search command
         if (this.msg && this.msg.text && this.msg.text.startsWith('/search')) {
-          startAssistantParams.webSearch = true;
+          startAssistantParams.assistantType = 'websearch';
         }
 
         // Create a new thread with the welcome message
@@ -338,21 +338,19 @@ export default class Navigation {
             }
           }
           
-          // Now process the message normally
+          // PROCESS MESSAGE
+          
           // Analyze, save new Message, start new thread or return existing one
-          let threadWithUserMessage: { 
-            thread: IThread, 
-            isNew: boolean 
-          } = await handleUserReply(this.user, text, this.bot, images, mediaGroupId);
+          let userReply: { thread: IThread, isNew: boolean } = await handleUserReply(this.user, text, this.bot, images, mediaGroupId);
           
           // Only send to Claude if this isn't a media group or it's the first message after waiting
           if (!mediaGroupId || this.mediaGroups.includes(mediaGroupId)) {
             
-            const searchLimitReached = await isWebSearchLimit(this.user) || false;
-            if( !searchLimitReached ){
-              // Continue 
-              // Send thread to Claude and it's reply to user
-              await handleAssistantReply(threadWithUserMessage.thread, threadWithUserMessage.isNew, this.bot, this.dict);
+            const searchLimitReached:boolean = await isWebSearchLimit(this.user) || false;
+            if (!searchLimitReached) {
+              // CONTINUE HERE
+              // Send thread to LLM and then it's reply to user
+              await handleAssistantReply(userReply.thread, userReply.isNew, this.bot, this.dict);
             } else {
               // Exit
               await sendMessage({

@@ -1,5 +1,4 @@
 import TelegramBot from "node-telegram-bot-api"
-import moment from "moment"
 import Dict from "../helpers/dict"
 import Thread from '../models/threads'
 import Message from '../models/messages'
@@ -21,17 +20,15 @@ import { logApiError } from "../helpers/errorLogger"
 export interface IAssistantParams {
   user: IUser
   firstMessage?: string
-  webSearch?: boolean
-  assistantType?: 'normal' | 'finance'
+  assistantType?: 'normal' | 'finance' | 'websearch'
 }
 
 export async function startAssistant(params:IAssistantParams): Promise<IThread> {
-  const { user, firstMessage, webSearch = false, assistantType = 'normal' } = params
+  const { user, firstMessage, assistantType = 'normal' } = params
   try {
     // Create a new thread
     const thread: IThread = await new Thread({ 
       owner: user, 
-      webSearch, 
       assistantType
     }).save()
     
@@ -70,13 +67,7 @@ export async function createNewThread(params): Promise<IThread> {
   }
 }
 
-export async function handleUserReply( 
-  user: IUser, 
-  userReply: string, 
-  bot: TelegramBot, 
-  images: string[] = [], 
-  mediaGroupId?: string 
-): Promise<{ thread: IThread, isNew: boolean }> {
+export async function handleUserReply( user: IUser, userReply: string, bot: TelegramBot, images: string[] = [], mediaGroupId?: string ): Promise<{ thread: IThread, isNew: boolean }> {
   // Get the most recent thread
   let thread: IThread = await getRecentThread(user);
   const savedImagePaths = [];
@@ -128,89 +119,68 @@ export async function handleUserReply(
       
       return { thread, isNew: false };
     }
-  } else {
-    // This is a regular message (not part of a media group)
-    
-    // Check if conversation analysis is enabled in .env (default to disabled if not set)
-    const isAnalysisEnabled = parseInt(process.env.ENABLE_CONVERSATION_ANALYSIS || '0') === 1;
-    
-    // Skip all analysis logic if the feature is disabled
-    let shouldCreateNewThread = false;
-    let assistantType: 'normal' | 'finance' = 'normal';
-
-    // Web search disabled by default
-    let webSearch = false;
-    
-    // Only query for messages and perform analysis if the feature is enabled
-    if (isAnalysisEnabled && images.length === 0) {
-      // Get the last few messages from the thread for analysis
-      const lastMessages = await Message.find({ thread: thread._id })
-        .sort({ created: -1 })
-        .limit(5);
-      
-      // Only analyze if there's at least one previous message
-      if (lastMessages.length > 0) {
-        // Format messages for the analysis
-        const formattedMessages = lastMessages
-          .reverse()
-          .map(msg => ({
-            role: msg.role,
-            content: msg.content || ""
-          }));
-          
-        // Analyze the conversation
-        const analysis:IConversationAnalysisResult = await analyzeConversation(formattedMessages, userReply);
-        console.log(`[CONVERSATION ANALYSIS]`, analysis);
-        
-        webSearch = analysis.search || false;
-        assistantType = analysis.assistant === 'finance' ? 'finance' : 'normal';
-        
-        // If analysis says it's a new topic, create a new thread
-        if (analysis.action === 'new') {
-          shouldCreateNewThread = true;
-        }
-      }
-    }
-    
-    // Create a new thread if analysis determined it's a new topic
-    let startAssistantParams:IAssistantParams = {
-      user,
-      firstMessage: userReply,
-      webSearch,
-      assistantType,
-    }
-
-    if (shouldCreateNewThread) {
-      thread = await startAssistant(startAssistantParams);
-      console.log(`[NEW THREAD CREATED] For ${user.username || user.chatId} based on topic change analysis - Type: ${thread.assistantType}`);
-      return { thread, isNew: true };
-    }
-
-    // If continuing with existing thread but assistant type changed to finance, update it
-    if (assistantType === 'finance' && thread.assistantType !== 'finance') {
-      thread.assistantType = 'finance';
-      await thread.save();
-      console.log(`[THREAD UPDATED] Changed to finance type`);
-    }
-    
-    // Otherwise continue with the existing thread
-    await new Message({
-      thread: thread._id,
-      role: 'user',
-      content: userReply || " ",
-      images: images.length > 0 ? images : undefined
-    }).save();
-    
-    return { thread, isNew: false };
   }
+
+  // REGULAR MESSAGE
+  
+  // Check if conversation analysis is enabled in .env (default to disabled if not set)
+  const isAnalysisEnabled = parseInt(process.env.ENABLE_CONVERSATION_ANALYSIS || '0') === 1;
+  
+  // Analysis defaults
+  let assistantType: 'normal' | 'finance' | 'websearch' = 'normal';
+  let shouldCreateNewThread = false;
+  
+  // Only query for messages and perform analysis if the feature is enabled
+  if (isAnalysisEnabled) {
+    // Get the last few messages from the thread for analysis
+    const lastMessages = await Message.find({ thread: thread._id }).sort({ created: -1 }).limit(5);
+    
+    // Only analyze if there's at least one previous message
+    if (lastMessages.length > 0) {
+      // Format messages for the analysis
+      const formattedMessages = lastMessages.reverse().map(msg => ({ role: msg.role, content: msg.content || "" }));
+        
+      // Analyze the conversation
+      const analysis:IConversationAnalysisResult = await analyzeConversation(formattedMessages, userReply);
+      console.log(`[CONVERSATION ANALYSIS]`, analysis);
+      
+      // Analysis results
+      if (analysis.search) {
+        assistantType = 'websearch';
+      } else if (analysis.assistant === 'finance') {
+        assistantType = 'finance';
+      } else {
+        assistantType = 'normal';
+      }
+      shouldCreateNewThread = (analysis.action === 'new') ? true : false;
+    }
+  }
+  
+  // Exit with new thread if analysis say so
+  if (shouldCreateNewThread) {
+    thread = await startAssistant({ user, firstMessage: userReply, assistantType });
+    return { thread, isNew: true };
+  }
+
+  // If assistant changed for existing thread
+  if (assistantType === 'finance' && thread.assistantType !== 'finance') {
+    thread.assistantType = 'finance';
+    await thread.save();
+  }
+  
+  // Save message to the thread
+  await new Message({
+    thread: thread._id,
+    role: 'user',
+    content: userReply || " ",
+    images: images.length > 0 ? images : undefined
+  }).save();
+
+  // Return thread
+  return { thread, isNew: false };
 }
 
-export async function handleAssistantReply(
-  thread: IThread, 
-  isNewThread: boolean, 
-  bot: TelegramBot, 
-  dict: Dict
-): Promise<void> {
+export async function handleAssistantReply( thread: IThread, isNewThread: boolean, bot: TelegramBot, dict: Dict ): Promise<void> {
   try {
     // Use the chat action helper for typing action while processing
     const assistantReply = await withChatAction(
@@ -304,7 +274,7 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
       let transactionsInfo = '';
       let budgetInfo = '';
       
-      if (thread.webSearch) {
+      if (thread.assistantType === 'websearch') {
         tools = [...searchTool, ...tools]
       }
 
