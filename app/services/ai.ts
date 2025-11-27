@@ -263,7 +263,6 @@ export async function analyzeConversation( lastMessages: Array<{role: string, co
     }
 
     const result = JSON.parse(textContent.text);
-    console.log('result: ', result)
     
     // Validate the result
     return { 
