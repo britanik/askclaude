@@ -15,6 +15,7 @@ const FORMATTING_INSTRUCTIONS = `# HTML fornatting
   - <blockquote>Block quotation started\nBlock quotation continued</blockquote>
   - <blockquote expandable>Expandable block quotation started\nExpandable block quotation continued</blockquote>
 - Important - for code blocks use <pre></pre>. Do not use <pre> for anything but code blocks.
+- Do not use <ul> tag.
 - Telegram will return error if you use any other HTML tags (outside of <code> or <pre>) - so wrap them in <code></code> tag.
 - Do not wrap commands like /image, /start, /help, etc. in <code> tag.`
 

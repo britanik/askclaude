@@ -16,7 +16,8 @@ export class OpenAIProvider implements LLMProvider {
 
   async call(request: LLMRequest): Promise<LLMResponse> {
     console.log('OpenAI call (responses API)');
-    console.log('request.model: ', request.model);
+    console.log('request.model: ', request.system);
+    // console.log('request.system: ', request.model.slice(0, 20) + '...');
 
     // Convert messages to OpenAI input format
     const input = this.convertMessages(request);
