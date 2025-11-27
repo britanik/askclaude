@@ -4,7 +4,7 @@ import moment from 'moment'
 
 interface ErrorLog {
   timestamp: string
-  service: 'anthropic' | 'openai'
+  service: 'anthropic' | 'openai' | 'llm'
   status?: number
   statusText?: string
   data?: any
@@ -14,7 +14,7 @@ interface ErrorLog {
 }
 
 export async function logApiError(
-  service: 'anthropic' | 'openai',
+  service: 'anthropic' | 'openai' | 'llm',
   error: any,
   context?: string
 ): Promise<void> {

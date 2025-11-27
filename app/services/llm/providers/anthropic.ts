@@ -2,7 +2,7 @@ import axios from 'axios';
 import { LLMProvider, LLMRequest, LLMResponse } from '../types';
 import { logApiError } from '../../../helpers/errorLogger';
 
-export class ClaudeProvider implements LLMProvider {
+export class AnthropicProvider implements LLMProvider {
   name = 'claude';
   
   private apiKey: string;
@@ -16,6 +16,9 @@ export class ClaudeProvider implements LLMProvider {
   }
 
   async call(request: LLMRequest): Promise<LLMResponse> {
+    console.log('Anthropic call')
+    console.log('request.model: ', request.model)
+
     // Build Claude-specific request
     const claudeRequest: any = {
       model: request.model,

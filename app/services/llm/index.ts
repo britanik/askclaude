@@ -1,26 +1,24 @@
 import { LLMProvider, LLMRequest, LLMResponse } from './types';
-import { ClaudeProvider } from './providers/claude';
+import { AnthropicProvider } from './providers/anthropic';
 import { OpenAIProvider } from './providers/openai';
 import { logApiError } from '../../helpers/errorLogger';
 
 // Provider instances (lazy loaded)
-let claudeProvider: ClaudeProvider | null = null;
+let anthropicProvider: AnthropicProvider | null = null;
 let openaiProvider: OpenAIProvider | null = null;
 
 /**
  * Get provider instance by name
  */
 function getProvider(name: string): LLMProvider {
-  switch (name.toLowerCase()) {
-    case 'claude':
+  switch (name) {
     case 'anthropic':
-      if (!claudeProvider) {
-        claudeProvider = new ClaudeProvider();
+      if (!anthropicProvider) {
+        anthropicProvider = new AnthropicProvider();
       }
-      return claudeProvider;
+      return anthropicProvider;
 
     case 'openai':
-    case 'gpt':
       if (!openaiProvider) {
         openaiProvider = new OpenAIProvider();
       }
@@ -49,11 +47,11 @@ function isServerError(error: any): boolean {
 export async function callLLM(request: LLMRequest): Promise<LLMResponse> {
   // Get primary config from env
   const primaryModel = request.model || process.env.MODEL_NORMAL || process.env.CLAUDE_MODEL;
-  const primaryProviderName = process.env.MODEL_NORMAL_PROVIDER || 'claude';
+  const primaryProviderName = (process.env.MODEL_NORMAL_PROVIDER || 'anthropic') as 'anthropic' | 'openai';
 
   // Get backup config from env
   const backupModel = process.env.MODEL_NORMAL_BACKUP;
-  const backupProviderName = process.env.MODEL_NORMAL_BACKUP_PROVIDER;
+  const backupProviderName = process.env.MODEL_NORMAL_BACKUP_PROVIDER as 'anthropic' | 'openai' | undefined;
 
   // Try primary provider
   const primaryProvider = getProvider(primaryProviderName);
@@ -96,3 +94,4 @@ export async function callLLM(request: LLMRequest): Promise<LLMResponse> {
 
 // Re-export types for convenience
 export * from './types';
+export { isToolUse } from './types';

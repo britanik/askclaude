@@ -102,3 +102,8 @@ export interface LLMProvider {
   name: string;
   call(request: LLMRequest): Promise<LLMResponse>;
 }
+
+// Type guard for tool_use content
+export function isToolUse(content: LLMContentPart): content is LLMToolUseContent {
+  return content.type === 'tool_use';
+}

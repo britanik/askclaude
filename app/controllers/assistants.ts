@@ -15,7 +15,7 @@ import { trackExpense, editTransaction, createBudget, getBudgetInfoString, delet
 import { financeTools, searchTool } from "../helpers/tools"
 import { promptsDict } from "../helpers/prompts"
 import { logApiError } from "../helpers/errorLogger"
-import { callLLM, LLMRequest } from "../services/llm"
+import { callLLM, LLMRequest, isToolUse } from "../services/llm"
 
 export interface IAssistantParams {
   user: IUser
@@ -335,7 +335,7 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
       });
 
       // Check if LLM wants to use any tools
-      const toolUses = response.content.filter(content => content.type === 'tool_use');
+      const toolUses = response.content.filter(isToolUse);
       
       if (toolUses.length === 0) {
         // No tool use, we're done - extract text response and search results
@@ -480,69 +480,6 @@ async function executeFunction(functionName: string, input: any, user: IUser): P
   } catch (error) {
     await logApiError('anthropic', error, `Individual finance function ${functionName} failed for user ${user.username || user.chatId} with input: ${JSON.stringify(input)}`);
     throw error;
-  }
-}
-
-async function makeClaudeAPICall(chatParams: any) {
-  try {
-    // Make API request with primary model
-    const request = await axios.post(
-      'https://api.anthropic.com/v1/messages', 
-      chatParams, 
-      { 
-        headers: {
-          'x-api-key': process.env.CLAUDE_TOKEN, 
-          'anthropic-version': '2023-06-01',
-          'Content-Type': 'application/json'
-        },
-        timeout: +process.env.CLAUDE_TIMEOUT
-      }
-    )
-
-    return request.data
-    
-  } catch (primaryError) {
-    // Log the primary error
-    await logApiError('anthropic', primaryError, 'Primary model call failed')
-    
-    // Check if it's a 529 error or any server error (5xx)
-    if (primaryError.response && (primaryError.response.status === 529 || 
-        (primaryError.response.status >= 500 && primaryError.response.status < 600))) {
-      
-      console.log(`Primary model ${process.env.CLAUDE_MODEL} failed with status ${primaryError.response.status}, trying backup model...`)
-      
-      // Use backup model if primary fails
-      const backupModel = process.env.CLAUDE_MODEL_BACKUP
-              
-      // Update model in request
-      chatParams.model = backupModel
-      
-      try {
-        // Try with backup model
-        const backupRequest = await axios.post(
-          'https://api.anthropic.com/v1/messages', 
-          chatParams, 
-          { 
-            headers: {
-              'x-api-key': process.env.CLAUDE_TOKEN, 
-              'anthropic-version': '2023-06-01',
-              'Content-Type': 'application/json'
-            },
-            timeout: +process.env.CLAUDE_TIMEOUT
-          }
-        )
-        
-        console.log(`Received response from backup model ${backupModel}`)
-        return backupRequest.data
-      } catch (backupError) {
-        // Log backup error as well
-        logApiError('anthropic', backupError, 'Backup model call failed').catch(() => {})
-        throw backupError
-      }
-    } else {
-      // For other types of errors, rethrow
-      throw primaryError
-    }
   }
 }
 
