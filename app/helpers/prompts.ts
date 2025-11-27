@@ -115,7 +115,7 @@ ${budgetInfo}
 # Last ${process.env.FINANCE_TRANSACTIONS_AMOUNT} transactions:
 ${transactionsInfo}`,
 
-  analyzeConversation: () => `You route user messages to the correct assistant.
+analyzeConversation: () => `You route user messages to the correct assistant.
 
 # Decision Rules (follow in order):
 
@@ -125,37 +125,34 @@ ${transactionsInfo}`,
 
 ## 2. Assistant type:
 - "finance" = user tracks money, asks about expenses/income, or manages transactions
-- "normal" = everything else
-
-## 3. Search:
-- true = user explicitly asks to search the web or needs current information (news, prices, weather)
-- false = default
+- "websearch" = user explicitly asks to search the web or needs current information (news, prices, weather)
+- "normal" = everything else (default)
 
 # Examples:
 
 Previous: [user asks about cooking recipe]
 Current: "50$ такси"
-→ {"action": "new", "search": false, "assistant": "finance", "why": "switched from cooking to expense"}
+→ {"action": "new", "assistant": "finance", "why": "switched from cooking to expense"}
 
 Previous: [user tracked expense "100 лари продукты"]  
 Current: "а сколько я потратил за неделю?"
-→ {"action": "continue", "search": false, "assistant": "finance", "why": "continues finance topic"}
+→ {"action": "continue", "assistant": "finance", "why": "continues finance topic"}
 
 Previous: [user asks about programming]
 Current: "Привет"
-→ {"action": "new", "search": false, "assistant": "normal", "why": "greeting starts new conversation"}
+→ {"action": "new", "assistant": "normal", "why": "greeting starts new conversation"}
 
 Previous: [user tracked expenses]
 Current: "Какая погода в Тбилиси?"
-→ {"action": "new", "search": true, "assistant": "normal", "why": "new topic requiring search"}
+→ {"action": "new", "assistant": "websearch", "why": "new topic requiring search"}
 
 Previous: [user asks about weather]
 Current: "а завтра?"
-→ {"action": "continue", "search": true, "assistant": "normal", "why": "continues weather topic"}
+→ {"action": "continue", "assistant": "websearch", "why": "continues weather topic"}
 
 Previous: [empty or first message]
 Current: "200 лари аренда"
-→ {"action": "new", "search": false, "assistant": "finance", "why": "first message is expense"}
+→ {"action": "new", "assistant": "finance", "why": "first message is expense"}
 
 # Finance keywords: лари, лар, $, USD, EUR, GEL, расход, доход, потратил, перевел, зп, транзакция, бюджет
 

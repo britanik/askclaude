@@ -219,8 +219,7 @@ export async function saveImagePermanently(url, imageId) {
 
 export interface IConversationAnalysisResult {
   action: 'new' | 'continue',
-  search: boolean,
-  assistant: 'normal' | 'finance',
+  assistant: 'normal' | 'finance' | 'websearch',
   why?: string
 }
 
@@ -267,7 +266,6 @@ export async function analyzeConversation( lastMessages: Array<{role: string, co
     // Validate the result
     return { 
       action: result.action || 'continue', 
-      search: result.search || false, 
       assistant: result.assistant || 'normal',
       why: result.why || 'default'
     };
@@ -281,7 +279,7 @@ export async function analyzeConversation( lastMessages: Array<{role: string, co
     }
     
     // Always return 'continue' on any error to prevent crashes
-    return { action: 'continue', search: false, assistant: 'normal', why: 'default' };
+    return { action: 'continue', assistant: 'normal', why: 'default' };
   }
 }
 

@@ -120,11 +120,10 @@ export const RESPONSE_FORMAT_ANALYZE = {
       type: 'object',
       properties: {
         action: { type: 'string', enum: ['new', 'continue'] },
-        search: { type: 'boolean' },
-        assistant: { type: 'string', enum: ['normal', 'finance'] },
+        assistant: { type: 'string', enum: ['normal', 'finance', 'websearch'] },
         why: { type: 'string' }
       },
-      required: ['action', 'search', 'assistant', 'why'],
+      required: ['action', 'assistant', 'why'],
       additionalProperties: false
     }
   }

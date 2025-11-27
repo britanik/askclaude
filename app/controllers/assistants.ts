@@ -145,13 +145,7 @@ export async function handleUserReply( user: IUser, userReply: string, bot: Tele
       console.log(`[CONVERSATION ANALYSIS]`, analysis);
       
       // Analysis results
-      if (analysis.search) {
-        assistantType = 'websearch';
-      } else if (analysis.assistant === 'finance') {
-        assistantType = 'finance';
-      } else {
-        assistantType = 'normal';
-      }
+      assistantType = analysis.assistant;
       shouldCreateNewThread = (analysis.action === 'new') ? true : false;
     }
   }
