@@ -166,8 +166,11 @@ export class OpenAIProvider implements LLMProvider {
     const result: any[] = [];
 
     for (const tool of tools) {
-      // Skip web search tool (OpenAI doesn't support it the same way)
+      // Convert Anthropic web search tool to OpenAI format
       if (tool.type === 'web_search_20250305') {
+        result.push({
+          type: 'web_search'
+        });
         continue;
       }
 
@@ -185,6 +188,8 @@ export class OpenAIProvider implements LLMProvider {
 
   private convertResponse(data: any): LLMResponse {
     const content: LLMContentPart[] = [];
+    const webSearchResults: Array<{ type: 'web_search_result'; title: string; url: string }> = [];
+    let webSearchRequestCount = 0;
 
     // Parse output array
     if (data.output && Array.isArray(data.output)) {
@@ -207,15 +212,40 @@ export class OpenAIProvider implements LLMProvider {
             name: outputItem.name,
             input: JSON.parse(outputItem.arguments || '{}')
           });
+        } else if (outputItem.type === 'web_search_call') {
+          // Handle web search call - count for usage tracking
+          webSearchRequestCount++;
+          
+          // Extract search results if available
+          if (outputItem.results && Array.isArray(outputItem.results)) {
+            for (const result of outputItem.results) {
+              webSearchResults.push({
+                type: 'web_search_result',
+                title: result.title || '',
+                url: result.url || ''
+              });
+            }
+          }
         }
       }
+    }
+
+    // Add web search results to content if any were found
+    if (webSearchResults.length > 0) {
+      content.push({
+        type: 'web_search_tool_result',
+        content: webSearchResults
+      } as any);
     }
 
     return {
       content,
       usage: {
         input_tokens: data.usage?.input_tokens || 0,
-        output_tokens: data.usage?.output_tokens || 0
+        output_tokens: data.usage?.output_tokens || 0,
+        server_tool_use: webSearchRequestCount > 0 ? {
+          web_search_requests: webSearchRequestCount
+        } : undefined
       },
       model: data.model,
       stop_reason: data.status
