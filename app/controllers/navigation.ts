@@ -350,7 +350,7 @@ export default class Navigation {
             if (!searchLimitReached) {
               // CONTINUE HERE
               // Send thread to LLM and then it's reply to user
-              await handleAssistantReply(userReply.thread, userReply.isNew, this.bot, this.dict);
+              await handleAssistantReply(userReply.thread, this.bot, this.dict);
             } else {
               // Exit
               await sendMessage({

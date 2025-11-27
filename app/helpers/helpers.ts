@@ -71,7 +71,7 @@ export function formatUsername(user: IUser) {
   return user.name
 }
 
-export function getReplyFooter(thread:IThread, isNewThread:boolean):string {
+export function getReplyFooter(assistantType: string, isNewThread: boolean, model: string): string {
   let icon = (isNewThread) ? "🆕" : "➡️";
-  return `\n\n${icon} ${thread.assistantType}`
+  return `\n\n${icon} ${assistantType} | ${model}`
 }

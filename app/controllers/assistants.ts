@@ -180,7 +180,7 @@ export async function handleUserReply( user: IUser, userReply: string, bot: Tele
   return { thread, isNew: false };
 }
 
-export async function handleAssistantReply( thread: IThread, isNewThread: boolean, bot: TelegramBot, dict: Dict ): Promise<void> {
+export async function handleAssistantReply( thread: IThread, bot: TelegramBot, dict: Dict ): Promise<void> {
   try {
     // Use the chat action helper for typing action while processing
     const assistantReply = await withChatAction(
@@ -203,14 +203,14 @@ export async function handleAssistantReply( thread: IThread, isNewThread: boolea
     if (assistantReply) {
       await sendThreadToUser({ 
         user: thread.owner, 
-        content: (isAdmin(thread.owner)) ? assistantReply + getReplyFooter(thread, isNewThread) : assistantReply,
+        content: assistantReply,
         bot, 
         dict 
       });
     }
 
   } catch (error) {
-    console.error('Error in handleAssistantReply:', error);``
+    console.error('Error in handleAssistantReply:', error);
     
     // Enhanced error logging with thread and user context
     const errorContext = `Assistant reply failed for user ${thread.owner.username || thread.owner.chatId}, thread ${thread._id}, assistant type: ${thread.assistantType}`;
@@ -249,11 +249,17 @@ async function chatWithFunctionCalling(params: { thread: IThread, bot: TelegramB
     // Get all messages for this thread
     const threadMessages = await Message.find({ thread: thread._id }).sort({ created: 1 })
     
+    // Determine if this is a new thread (only 1 user message)
+    const isNewThread = threadMessages.length === 1
+    
     // Format messages for Claude API with image support
     const formattedMessages = await formatMessagesWithImages(threadMessages, user, bot)
     
     const messages = [...formattedMessages]
     const executedFunctions = []
+    
+    // Track the model used (will be updated from response)
+    let usedModel = ''
     
     while (true) {
       try {
@@ -290,6 +296,9 @@ async function chatWithFunctionCalling(params: { thread: IThread, bot: TelegramB
 
         // Call LLM (with automatic fallback)
         const response = await callLLM(request)
+        
+        // Track the model used
+        usedModel = response.model || request.model
         
         // Log token usage
         if (response.usage) {
@@ -374,6 +383,11 @@ async function chatWithFunctionCalling(params: { thread: IThread, bot: TelegramB
           }
           
           finalResponse += responseText;
+          
+          // Add admin footer
+          if (isAdmin(user)) {
+            finalResponse += getReplyFooter(freshThread.assistantType, isNewThread, usedModel);
+          }
           
           return finalResponse; // Exit while loop
         }
