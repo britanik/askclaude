@@ -14,8 +14,8 @@ import { getReplyFooter, isAdmin } from "../helpers/helpers"
 import { trackExpense, editTransaction, createBudget, getBudgetInfoString, deleteBudget, deleteTransaction, getTransactionsString } from "./expense"
 import { financeTools, searchTool } from "../helpers/tools"
 import { promptsDict } from "../helpers/prompts"
-import axios from "axios"
 import { logApiError } from "../helpers/errorLogger"
+import { callLLM, LLMRequest } from "../services/llm"
 
 export interface IAssistantParams {
   user: IUser
@@ -282,32 +282,26 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
         tools = [...financeTools, ...tools]
         transactionsInfo = await getTransactionsString(user)
         budgetInfo = await getBudgetInfoString(user)
-
-        // console.log('Transactions info: ', transactionsInfo);
-        // console.log('Budget info: ', budgetInfo)
       }
 
-      // Prepare API request
-      const chatParams: any = {
-        model: process.env.CLAUDE_MODEL,
+      // Prepare LLM request
+      const request: LLMRequest = {
+        model: process.env.MODEL_NORMAL || process.env.CLAUDE_MODEL,
         system: thread.assistantType === 'finance' 
           ? promptsDict.finance(transactionsInfo, budgetInfo) 
           : promptsDict.system(),
         messages: messages,
-        max_tokens: +(process.env.CLAUDE_MAX_OUTPUT || 1000),
-        stream: false,
+        max_tokens: +(process.env.CLAUDE_MAX_OUTPUT || 4096),
         temperature: 1,
       }
-
-      // console.warn(chatParams.system,'chatParams.system')
       
       // Only add tools if available
       if (tools.length > 0) {
-        chatParams.tools = tools;
+        request.tools = tools;
       }
 
-      // Send message to Claude
-      const response = await makeClaudeAPICall(chatParams)
+      // Call LLM (with automatic fallback)
+      const response = await callLLM(request)
       
       // Log token usage
       if (response.usage) {
@@ -318,7 +312,7 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
           thread, 
           inputTokens, 
           outputTokens,
-          response.model || process.env.CLAUDE_MODEL,
+          response.model || process.env.MODEL_NORMAL || process.env.CLAUDE_MODEL,
           bot
         )
         
@@ -328,21 +322,20 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
             user,
             thread,
             response.usage.server_tool_use.web_search_requests,
-            response.model || process.env.CLAUDE_MODEL,
+            response.model || process.env.MODEL_NORMAL || process.env.CLAUDE_MODEL,
             bot
           );
         }
       }
 
-      // Add Claude's response to conversation
+      // Add assistant's response to conversation
       messages.push({
         role: "assistant",
         content: response.content
       });
 
-      // Check if Claude wants to use any tools
+      // Check if LLM wants to use any tools
       const toolUses = response.content.filter(content => content.type === 'tool_use');
-      // console.log('Claude wants to execute toolUses:', toolUses)
       
       if (toolUses.length === 0) {
         // No tool use, we're done - extract text response and search results
@@ -422,8 +415,8 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
         } catch (error) {
           console.error(`Error executing tool ${toolUse.name}:`, error);
           
-          // Log the finance function error to file with context
-          await logApiError('anthropic', error, `Finance function ${toolUse.name} failed with input: ${JSON.stringify(toolUse.input)}`);
+          // Log the function error to file with context
+          await logApiError('llm', error, `Function ${toolUse.name} failed with input: ${JSON.stringify(toolUse.input)}`);
           
           // Track failed function execution
           executedFunctions.push({
@@ -445,16 +438,16 @@ async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
       
       console.log(toolResults, 'toolResults');
 
-      // Send all tool results back to Claude in a single message
+      // Send all tool results back to LLM in a single message
       messages.push({
         role: "user",
         content: toolResults
       });
 
-      // Continue the loop to get Claude's response with the tool result
+      // Continue the loop to get LLM's response with the tool result
     } catch (error) {
-      console.error('Claude API call failed:', error)
-      await logApiError('anthropic', error, 'Claude API call failed in finance assistant chat loop')
+      console.error('LLM API call failed:', error)
+      await logApiError('llm', error, 'LLM API call failed in assistant chat loop')
       throw error
     }
   }
