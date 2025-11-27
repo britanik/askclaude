@@ -187,7 +187,7 @@ export async function handleAssistantReply( thread: IThread, isNewThread: boolea
       bot,
       thread.owner.chatId,
       'typing',
-      () => sendThreadToChatGPT({ thread, bot })
+      () => chatWithFunctionCalling({ thread, bot })
     );
 
     // Save the response to file
@@ -238,218 +238,210 @@ export async function getRecentThread(user: IUser): Promise<IThread> {
   }
 }
 
-export async function sendThreadToChatGPT(params) {
+async function chatWithFunctionCalling(params: { thread: IThread, bot: TelegramBot }) {
   const { thread, bot } = params
-
+  
   try {
     // Get fresh thread and owner to ensure we have the latest
     const freshThread = await Thread.findById(thread._id).populate('owner')
     const user = freshThread.owner
     
     // Get all messages for this thread
-    const messages = await Message.find({ thread: thread._id }).sort({ created: 1 })
+    const threadMessages = await Message.find({ thread: thread._id }).sort({ created: 1 })
     
     // Format messages for Claude API with image support
-    const formattedMessages = await formatMessagesWithImages(messages, user, bot)
+    const formattedMessages = await formatMessagesWithImages(threadMessages, user, bot)
     
-    // Start the conversation loop
-    const finalResponse = await chatWithFunctionCalling(formattedMessages, user, thread, bot)
+    const messages = [...formattedMessages]
+    const executedFunctions = []
     
-    return finalResponse
-
-  } catch(e) {
-    console.log('Failed to send message to Anthropic API or other error:', e)
-    throw e
-  }
-}
-
-async function chatWithFunctionCalling(initialMessages, user, thread, bot) {
-  const messages = [...initialMessages]
-  const executedFunctions = []
-  
-  while (true) {
-    try {
-      // Prepare tools array and context
-      let tools = [];
-      let transactionsInfo = '';
-      let budgetInfo = '';
-      
-      if (thread.assistantType === 'websearch') {
-        tools = [...searchTool, ...tools]
-      }
-
-      if (thread.assistantType === 'finance') {
-        tools = [...financeTools, ...tools]
-        transactionsInfo = await getTransactionsString(user)
-        budgetInfo = await getBudgetInfoString(user)
-      }
-
-      // Prepare LLM request
-      const request: LLMRequest = {
-        model: process.env.MODEL_NORMAL || process.env.CLAUDE_MODEL,
-        system: thread.assistantType === 'finance' 
-          ? promptsDict.finance(transactionsInfo, budgetInfo) 
-          : promptsDict.system(),
-        messages: messages,
-        max_tokens: +(process.env.CLAUDE_MAX_OUTPUT || 4096),
-        temperature: 1,
-      }
-      
-      // Only add tools if available
-      if (tools.length > 0) {
-        request.tools = tools;
-      }
-
-      // Call LLM (with automatic fallback)
-      const response = await callLLM(request)
-      
-      // Log token usage
-      if (response.usage) {
-        const inputTokens = response.usage.input_tokens || 0
-        const outputTokens = response.usage.output_tokens || 0
-        await logTokenUsage(
-          user, 
-          thread, 
-          inputTokens, 
-          outputTokens,
-          response.model || process.env.MODEL_NORMAL || process.env.CLAUDE_MODEL,
-          bot
-        )
+    while (true) {
+      try {
+        // Prepare tools array and context
+        let tools = [];
+        let transactionsInfo = '';
+        let budgetInfo = '';
         
-        // Log web search usage if any
-        if (response.usage.server_tool_use?.web_search_requests) {
-          await logWebSearchUsage(
-            user,
-            thread,
-            response.usage.server_tool_use.web_search_requests,
+        if (freshThread.assistantType === 'websearch') {
+          tools = [...searchTool, ...tools]
+        }
+
+        if (freshThread.assistantType === 'finance') {
+          tools = [...financeTools, ...tools]
+          transactionsInfo = await getTransactionsString(user)
+          budgetInfo = await getBudgetInfoString(user)
+        }
+
+        // Prepare LLM request
+        const request: LLMRequest = {
+          model: process.env.MODEL_NORMAL || process.env.CLAUDE_MODEL,
+          system: freshThread.assistantType === 'finance' 
+            ? promptsDict.finance(transactionsInfo, budgetInfo) 
+            : promptsDict.system(),
+          messages: messages,
+          max_tokens: +(process.env.CLAUDE_MAX_OUTPUT || 4096),
+          temperature: 1,
+        }
+        
+        // Only add tools if available
+        if (tools.length > 0) {
+          request.tools = tools;
+        }
+
+        // Call LLM (with automatic fallback)
+        const response = await callLLM(request)
+        
+        // Log token usage
+        if (response.usage) {
+          const inputTokens = response.usage.input_tokens || 0
+          const outputTokens = response.usage.output_tokens || 0
+          await logTokenUsage(
+            user, 
+            freshThread, 
+            inputTokens, 
+            outputTokens,
             response.model || process.env.MODEL_NORMAL || process.env.CLAUDE_MODEL,
             bot
-          );
+          )
+          
+          // Log web search usage if any
+          if (response.usage.server_tool_use?.web_search_requests) {
+            await logWebSearchUsage(
+              user,
+              freshThread,
+              response.usage.server_tool_use.web_search_requests,
+              response.model || process.env.MODEL_NORMAL || process.env.CLAUDE_MODEL,
+              bot
+            );
+          }
         }
-      }
 
-      // Add assistant's response to conversation
-      messages.push({
-        role: "assistant",
-        content: response.content
-      });
+        // Add assistant's response to conversation
+        messages.push({
+          role: "assistant",
+          content: response.content
+        });
 
-      // Check if LLM wants to use any tools
-      const toolUses = response.content.filter(isToolUse);
-      
-      if (toolUses.length === 0) {
-        // No tool use, we're done - extract text response and search results
-        let responseText = '';
-        let searchResults = [];
+        // Check if LLM wants to use any tools
+        const toolUses = response.content.filter(isToolUse);
         
-        if (response.content && Array.isArray(response.content)) {
-          for (const contentItem of response.content) {
-            if (contentItem.type === 'text') {
-              responseText += contentItem.text;
-            } else if (contentItem.type === 'web_search_tool_result') {
-              // Handle web search results
-              if (contentItem.content) {
-                for (const result of contentItem.content) {
-                  if (result.type === 'web_search_result') {
-                    searchResults.push({
-                      title: result.title,
-                      url: result.url
-                    });
+        if (toolUses.length === 0) {
+          // No tool use, we're done - extract text response and search results
+          let responseText = '';
+          let searchResults = [];
+          
+          if (response.content && Array.isArray(response.content)) {
+            for (const contentItem of response.content) {
+              if (contentItem.type === 'text') {
+                responseText += contentItem.text;
+              } else if (contentItem.type === 'web_search_tool_result') {
+                // Handle web search results
+                if (contentItem.content) {
+                  for (const result of contentItem.content) {
+                    if (result.type === 'web_search_result') {
+                      searchResults.push({
+                        title: result.title,
+                        url: result.url
+                      });
+                    }
                   }
                 }
               }
             }
           }
-        }
-        
-        // Format final response with search results at the top
-        let finalResponse = '';
-        if (searchResults.length > 0) {
-          finalResponse += '<b>🔍 Источники:</b>\n';
-          searchResults.slice(0, 3).forEach((result, index) => {
-            finalResponse += `${index + 1}. <a href="${result.url}">${result.title}</a>\n`;
-          });
-          finalResponse += '\n';
-        }
-        
-        // Add summary for multiple function executions (finance assistant)
-        if (executedFunctions.length > 1 && thread.assistantType === 'finance') {
-          const trackExpenseCalls = executedFunctions.filter(f => f.name === 'trackExpense');
-          if (trackExpenseCalls.length > 1) {
-            finalResponse += `<b>✅ Обработано ${trackExpenseCalls.length} транзакций:</b>\n`;
-            trackExpenseCalls.forEach((call, index) => {
-              const { amount, description, currency } = call.input;
-              finalResponse += `${index + 1}. ${amount} ${currency} - ${description}\n`;
+          
+          // Format final response with search results at the top
+          let finalResponse = '';
+          if (searchResults.length > 0) {
+            finalResponse += '<b>🔍 Источники:</b>\n';
+            searchResults.slice(0, 3).forEach((result, index) => {
+              finalResponse += `${index + 1}. <a href="${result.url}">${result.title}</a>\n`;
             });
             finalResponse += '\n';
           }
+          
+          // Add summary for multiple function executions (finance assistant)
+          if (executedFunctions.length > 1 && freshThread.assistantType === 'finance') {
+            const trackExpenseCalls = executedFunctions.filter(f => f.name === 'trackExpense');
+            if (trackExpenseCalls.length > 1) {
+              finalResponse += `<b>✅ Обработано ${trackExpenseCalls.length} транзакций:</b>\n`;
+              trackExpenseCalls.forEach((call, index) => {
+                const { amount, description, currency } = call.input;
+                finalResponse += `${index + 1}. ${amount} ${currency} - ${description}\n`;
+              });
+              finalResponse += '\n';
+            }
+          }
+          
+          finalResponse += responseText;
+          
+          return finalResponse; // Exit while loop
+        }
+
+        // Execute all tools from this response
+        const toolResults = [];
+        
+        for (const toolUse of toolUses) {
+          try {
+            console.log(`Executing tool: ${toolUse.name}`, toolUse.input);
+            const toolResult = await executeFunction(toolUse.name, toolUse.input, user);
+            
+            // Track function execution for summary
+            executedFunctions.push({
+              name: toolUse.name,
+              input: toolUse.input,
+              result: toolResult
+            });
+            
+            // Add tool result to the batch
+            toolResults.push({
+              type: "tool_result",
+              tool_use_id: toolUse.id,
+              content: toolResult
+            });
+            
+          } catch (error) {
+            console.error(`Error executing tool ${toolUse.name}:`, error);
+            
+            // Log the function error to file with context
+            await logApiError('llm', error, `Function ${toolUse.name} failed with input: ${JSON.stringify(toolUse.input)}`);
+            
+            // Track failed function execution
+            executedFunctions.push({
+              name: toolUse.name,
+              input: toolUse.input,
+              result: `Error: ${error.message}`,
+              failed: true
+            });
+            
+            // Add error to the batch
+            toolResults.push({
+              type: "tool_result",
+              tool_use_id: toolUse.id,
+              content: `Error: ${error.message}`,
+              is_error: true
+            });
+          }
         }
         
-        finalResponse += responseText;
-        
-        return finalResponse; // Exit while loop
+        console.log(toolResults, 'toolResults');
+
+        // Send all tool results back to LLM in a single message
+        messages.push({
+          role: "user",
+          content: toolResults
+        });
+
+        // Continue the loop to get LLM's response with the tool result
+      } catch (error) {
+        console.error('LLM API call failed:', error)
+        await logApiError('llm', error, 'LLM API call failed in assistant chat loop')
+        throw error
       }
-
-      // Execute all tools from this response
-      const toolResults = [];
-      
-      for (const toolUse of toolUses) {
-        try {
-          console.log(`Executing tool: ${toolUse.name}`, toolUse.input);
-          const toolResult = await executeFunction(toolUse.name, toolUse.input, user);
-          
-          // Track function execution for summary
-          executedFunctions.push({
-            name: toolUse.name,
-            input: toolUse.input,
-            result: toolResult
-          });
-          
-          // Add tool result to the batch
-          toolResults.push({
-            type: "tool_result",
-            tool_use_id: toolUse.id,
-            content: toolResult
-          });
-          
-        } catch (error) {
-          console.error(`Error executing tool ${toolUse.name}:`, error);
-          
-          // Log the function error to file with context
-          await logApiError('llm', error, `Function ${toolUse.name} failed with input: ${JSON.stringify(toolUse.input)}`);
-          
-          // Track failed function execution
-          executedFunctions.push({
-            name: toolUse.name,
-            input: toolUse.input,
-            result: `Error: ${error.message}`,
-            failed: true
-          });
-          
-          // Add error to the batch
-          toolResults.push({
-            type: "tool_result",
-            tool_use_id: toolUse.id,
-            content: `Error: ${error.message}`,
-            is_error: true
-          });
-        }
-      }
-      
-      console.log(toolResults, 'toolResults');
-
-      // Send all tool results back to LLM in a single message
-      messages.push({
-        role: "user",
-        content: toolResults
-      });
-
-      // Continue the loop to get LLM's response with the tool result
-    } catch (error) {
-      console.error('LLM API call failed:', error)
-      await logApiError('llm', error, 'LLM API call failed in assistant chat loop')
-      throw error
     }
+  } catch(e) {
+    console.log('Failed to process thread:', e)
+    throw e
   }
 }
 
