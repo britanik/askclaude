@@ -47,7 +47,7 @@ function isServerError(error: any): boolean {
 export async function callLLM(request: LLMRequest): Promise<LLMResponse> {
   // Get primary config from env
   const primaryModel = request.model || process.env.MODEL_NORMAL || process.env.CLAUDE_MODEL;
-  const primaryProviderName = (process.env.MODEL_NORMAL_PROVIDER || 'anthropic') as 'anthropic' | 'openai';
+  const primaryProviderName = (request.provider || process.env.MODEL_NORMAL_PROVIDER || 'anthropic') as 'anthropic' | 'openai';
 
   // Get backup config from env
   const backupModel = process.env.MODEL_NORMAL_BACKUP;

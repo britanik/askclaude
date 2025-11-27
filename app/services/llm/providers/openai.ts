@@ -16,8 +16,8 @@ export class OpenAIProvider implements LLMProvider {
 
   async call(request: LLMRequest): Promise<LLMResponse> {
     console.log('OpenAI call (responses API)');
-    console.log('request.model: ', request.system);
-    // console.log('request.system: ', request.model.slice(0, 20) + '...');
+    console.log('request.model: ', request.model);
+    console.log('request.system: ', request.system.slice(0, 50) + '...');
 
     // Convert messages to OpenAI input format
     const input = this.convertMessages(request);
@@ -29,6 +29,24 @@ export class OpenAIProvider implements LLMProvider {
       max_output_tokens: request.max_tokens || 4096,
       temperature: request.temperature ?? 1,
     };
+
+    // Add reasoning effort if provided (for reasoning models)
+    if (request.reasoning_effort) {
+      openaiRequest.reasoning = {
+        effort: request.reasoning_effort
+      };
+    }
+
+    // Add response format if provided (for JSON responses)
+    if (request.response_format) {
+      openaiRequest.text = {
+        format: {
+          type: 'json_schema',
+          name: request.response_format.json_schema.name,
+          schema: request.response_format.json_schema.schema
+        }
+      };
+    }
 
     // Add system prompt as instructions
     if (request.system) {

@@ -78,6 +78,15 @@ export interface LLMRequest {
   tools?: (LLMTool | LLMWebSearchTool)[];
   max_tokens?: number;
   temperature?: number;
+  provider?: 'anthropic' | 'openai';
+  reasoning_effort?: 'low' | 'medium' | 'high';
+  response_format?: {
+    type: 'json_schema';
+    json_schema: {
+      name: string;
+      schema: Record<string, any>;
+    };
+  };
 }
 
 // Usage stats
@@ -102,6 +111,24 @@ export interface LLMProvider {
   name: string;
   call(request: LLMRequest): Promise<LLMResponse>;
 }
+
+export const RESPONSE_FORMAT_ANALYZE = {
+  type: 'json_schema' as const,
+  json_schema: {
+    name: 'conversation_analysis',
+    schema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['new', 'continue'] },
+        search: { type: 'boolean' },
+        assistant: { type: 'string', enum: ['normal', 'finance'] },
+        why: { type: 'string' }
+      },
+      required: ['action', 'search', 'assistant', 'why'],
+      additionalProperties: false
+    }
+  }
+};
 
 // Type guard for tool_use content
 export function isToolUse(content: LLMContentPart): content is LLMToolUseContent {

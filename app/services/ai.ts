@@ -10,6 +10,7 @@ import { logApiError } from "../helpers/errorLogger"
 import { sendMessage } from "../templates/sendMessage"
 import { handleImageGeneration } from "../controllers/images"
 import { IUser } from "../interfaces/users"
+import { callLLM, RESPONSE_FORMAT_ANALYZE } from "./llm"
 
 export interface IChatCallParams {
   messages: Array<{
@@ -237,45 +238,39 @@ export async function analyzeConversation( lastMessages: Array<{role: string, co
       return { role: msg.role, content: msg.content || '' };
     });
 
-    // Build messages array for OpenAI format (system message first, then conversation)
+    // Build messages array (conversation + current message)
     const messages = [
-      { role: 'system', content: promptsDict.analyzeConversation() },
-      ...formattedMessages,
-      { role: 'user', content: currentMessage }
+      ...formattedMessages.map(msg => ({ role: msg.role as 'user' | 'assistant', content: msg.content })),
+      { role: 'user' as const, content: currentMessage }
     ];
 
-    // API request to OpenAI GPT-5 nano
-    const chatParams = {
-      model: process.env.OPENAI_MODEL_FAST || 'gpt-5-nano',
+    // Call LLM with analyze model/provider
+    const response = await callLLM({
+      model: process.env.MODEL_ANALYZE || 'gpt-5-mini',
+      provider: (process.env.MODEL_ANALYZE_PROVIDER || 'openai') as 'anthropic' | 'openai',
+      system: promptsDict.analyzeConversation(),
       messages: messages,
-      max_completion_tokens: 1000,
+      max_tokens: 1000,
       temperature: 1,
-      reasoning_effort: 'medium', // New GPT-5 parameter for faster responses
-      response_format: { type: 'json_object' }
-    };
+      reasoning_effort: 'medium',
+      response_format: RESPONSE_FORMAT_ANALYZE
+    });
 
-    const response = await axios.post(
-      'https://api.openai.com/v1/chat/completions',
-      chatParams,
-      {
-        headers: {
-          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 10000 // 10-second timeout for quick response
-      }
-    );
+    // Extract text from response
+    const textContent = response.content.find(c => c.type === 'text');
+    if (!textContent || textContent.type !== 'text') {
+      throw new Error('No text content in response');
+    }
 
-    // console.log(response.data,'response.data')
-    // console.log(response.data.choices,'response.data.choices')
-    const result = JSON.parse(response.data.choices[0].message.content);
+    const result = JSON.parse(textContent.text);
+    console.log('result: ', result)
     
     // Validate the result
     return { 
       action: result.action || 'continue', 
       search: result.search || false, 
-      assistant: result.assistant || 'normal' ,
-      why: result.why || "default"
+      assistant: result.assistant || 'normal',
+      why: result.why || 'default'
     };
 
   } catch (error) {
@@ -283,11 +278,11 @@ export async function analyzeConversation( lastMessages: Array<{role: string, co
     
     // Log analysis error only if it's not a simple timeout or network issue
     if (error.response?.status) {
-      logApiError('openai', error, 'Conversation analysis with GPT-5 nano failed').catch(() => {});
+      logApiError('llm', error, 'Conversation analysis failed').catch(() => {});
     }
     
     // Always return 'continue' on any error to prevent crashes
-    return { action: 'continue', search: false, assistant: 'normal', "why": "default" };
+    return { action: 'continue', search: false, assistant: 'normal', why: 'default' };
   }
 }
 
