@@ -7,7 +7,7 @@ export class OpenAIProvider implements LLMProvider {
   
   private apiKey: string;
   private timeout: number;
-  private baseUrl = 'https://api.openai.com/v1/chat/completions';
+  private baseUrl = 'https://api.openai.com/v1/responses';
 
   constructor() {
     this.apiKey = process.env.OPENAI_API_KEY || '';
@@ -15,19 +15,24 @@ export class OpenAIProvider implements LLMProvider {
   }
 
   async call(request: LLMRequest): Promise<LLMResponse> {
-    console.log('Openai call')
-    console.log('request.model: ', request.model)
+    console.log('OpenAI call (responses API)');
+    console.log('request.model: ', request.model);
 
-    // Convert messages to OpenAI format
-    const openaiMessages = this.convertMessages(request);
+    // Convert messages to OpenAI input format
+    const input = this.convertMessages(request);
     
-    // Build OpenAI request
+    // Build OpenAI request for /responses API
     const openaiRequest: any = {
       model: request.model,
-      messages: openaiMessages,
-      max_tokens: request.max_tokens || 4096,
+      input: input,
+      max_output_tokens: request.max_tokens || 4096,
       temperature: request.temperature ?? 1,
     };
+
+    // Add system prompt as instructions
+    if (request.system) {
+      openaiRequest.instructions = request.system;
+    }
 
     // Add tools if provided (convert to OpenAI format)
     if (request.tools && request.tools.length > 0) {
@@ -60,32 +65,24 @@ export class OpenAIProvider implements LLMProvider {
   }
 
   private convertMessages(request: LLMRequest): any[] {
-    const messages: any[] = [];
+    const input: any[] = [];
 
-    // Add system message if provided
-    if (request.system) {
-      messages.push({
-        role: 'system',
-        content: request.system
-      });
-    }
-
-    // Convert each message
+    // Convert each message to input format
     for (const msg of request.messages) {
       if (typeof msg.content === 'string') {
         // Simple text message
-        messages.push({
+        input.push({
           role: msg.role,
           content: msg.content
         });
       } else {
         // Complex content (images, tool results, etc.)
         const converted = this.convertContentParts(msg.content, msg.role);
-        messages.push(...converted);
+        input.push(...converted);
       }
     }
 
-    return messages;
+    return input;
   }
 
   private convertContentParts(parts: LLMContentPart[], role: string): any[] {
@@ -98,63 +95,68 @@ export class OpenAIProvider implements LLMProvider {
       switch (part.type) {
         case 'text':
           contentParts.push({
-            type: 'text',
+            type: 'input_text',
             text: part.text
           });
           break;
 
         case 'image':
           contentParts.push({
-            type: 'image_url',
-            image_url: {
-              url: `data:${part.source.media_type};base64,${part.source.data}`
-            }
+            type: 'input_image',
+            image_url: `data:${part.source.media_type};base64,${part.source.data}`
           });
           break;
 
         case 'tool_use':
+          // Tool use from assistant - will be handled in tool calling update
           toolCalls.push({
+            type: 'function_call',
             id: part.id,
-            type: 'function',
-            function: {
-              name: part.name,
-              arguments: JSON.stringify(part.input)
-            }
+            name: part.name,
+            arguments: JSON.stringify(part.input)
           });
           break;
 
         case 'tool_result':
+          // Tool result from user
           toolResults.push({
-            role: 'tool',
-            tool_call_id: part.tool_use_id,
-            content: part.content
+            type: 'function_call_output',
+            call_id: part.tool_use_id,
+            output: part.content
           });
           break;
 
         case 'web_search_tool_result':
-          // Web search not supported in OpenAI - skip or convert to text
+          // Web search not supported in OpenAI - skip
           break;
       }
     }
 
     // Build message(s) based on content type
-    if (contentParts.length > 0 || toolCalls.length > 0) {
-      const msg: any = { role };
-      
-      if (contentParts.length > 0) {
-        msg.content = contentParts.length === 1 && contentParts[0].type === 'text' 
-          ? contentParts[0].text 
-          : contentParts;
-      }
-      
-      if (toolCalls.length > 0) {
-        msg.tool_calls = toolCalls;
-      }
-      
-      result.push(msg);
+    if (contentParts.length > 0) {
+      result.push({
+        role,
+        content: contentParts
+      });
     }
 
-    // Add tool results as separate messages
+    // Add tool calls as part of assistant message
+    if (toolCalls.length > 0 && role === 'assistant') {
+      // If we already have content, merge tool calls
+      if (result.length > 0) {
+        result[result.length - 1].content = [
+          ...result[result.length - 1].content,
+          ...toolCalls
+        ];
+      } else {
+        result.push({
+          role: 'assistant',
+          content: toolCalls
+        });
+      }
+    }
+
+    // Add tool results as separate items in input
     result.push(...toolResults);
 
     return result;
@@ -164,7 +166,7 @@ export class OpenAIProvider implements LLMProvider {
     const result: any[] = [];
 
     for (const tool of tools) {
-      // Skip web search tool (OpenAI doesn't support it natively)
+      // Skip web search tool (OpenAI doesn't support it the same way)
       if (tool.type === 'web_search_20250305') {
         continue;
       }
@@ -172,11 +174,9 @@ export class OpenAIProvider implements LLMProvider {
       // Convert function tool
       result.push({
         type: 'function',
-        function: {
-          name: tool.name,
-          description: tool.description,
-          parameters: tool.input_schema
-        }
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.input_schema
       });
     }
 
@@ -184,38 +184,41 @@ export class OpenAIProvider implements LLMProvider {
   }
 
   private convertResponse(data: any): LLMResponse {
-    const choice = data.choices?.[0];
-    const message = choice?.message;
     const content: LLMContentPart[] = [];
 
-    // Convert text content
-    if (message?.content) {
-      content.push({
-        type: 'text',
-        text: message.content
-      });
-    }
-
-    // Convert tool calls
-    if (message?.tool_calls) {
-      for (const toolCall of message.tool_calls) {
-        content.push({
-          type: 'tool_use',
-          id: toolCall.id,
-          name: toolCall.function.name,
-          input: JSON.parse(toolCall.function.arguments || '{}')
-        });
+    // Parse output array
+    if (data.output && Array.isArray(data.output)) {
+      for (const outputItem of data.output) {
+        if (outputItem.type === 'message' && outputItem.content) {
+          // Handle message output
+          for (const contentItem of outputItem.content) {
+            if (contentItem.type === 'output_text') {
+              content.push({
+                type: 'text',
+                text: contentItem.text
+              });
+            }
+          }
+        } else if (outputItem.type === 'function_call') {
+          // Handle function call output
+          content.push({
+            type: 'tool_use',
+            id: outputItem.id || outputItem.call_id,
+            name: outputItem.name,
+            input: JSON.parse(outputItem.arguments || '{}')
+          });
+        }
       }
     }
 
     return {
       content,
       usage: {
-        input_tokens: data.usage?.prompt_tokens || 0,
-        output_tokens: data.usage?.completion_tokens || 0
+        input_tokens: data.usage?.input_tokens || 0,
+        output_tokens: data.usage?.output_tokens || 0
       },
       model: data.model,
-      stop_reason: choice?.finish_reason
+      stop_reason: data.status
     };
   }
 }
