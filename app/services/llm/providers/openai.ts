@@ -127,17 +127,17 @@ export class OpenAIProvider implements LLMProvider {
           break;
 
         case 'tool_use':
-          // Tool use from assistant - will be handled in tool calling update
+          // Tool use from assistant - add as separate top-level item
           toolCalls.push({
             type: 'function_call',
-            id: part.id,
+            call_id: part.id,
             name: part.name,
             arguments: JSON.stringify(part.input)
           });
           break;
 
         case 'tool_result':
-          // Tool result from user
+          // Tool result from user - add as separate top-level item
           toolResults.push({
             type: 'function_call_output',
             call_id: part.tool_use_id,
@@ -151,7 +151,7 @@ export class OpenAIProvider implements LLMProvider {
       }
     }
 
-    // Build message(s) based on content type
+    // Build message with text/image content (if any)
     if (contentParts.length > 0) {
       result.push({
         role,
@@ -159,24 +159,16 @@ export class OpenAIProvider implements LLMProvider {
       });
     }
 
-    // Add tool calls as part of assistant message
-    if (toolCalls.length > 0 && role === 'assistant') {
-      // If we already have content, merge tool calls
-      if (result.length > 0) {
-        result[result.length - 1].content = [
-          ...result[result.length - 1].content,
-          ...toolCalls
-        ];
-      } else {
-        result.push({
-          role: 'assistant',
-          content: toolCalls
-        });
-      }
+    // Add tool calls as SEPARATE top-level items (not nested in content)
+    // This is the key fix - function_call items must be at the top level of input array
+    if (toolCalls.length > 0) {
+      result.push(...toolCalls);
     }
 
-    // Add tool results as separate items in input
-    result.push(...toolResults);
+    // Add tool results as separate top-level items
+    if (toolResults.length > 0) {
+      result.push(...toolResults);
+    }
 
     return result;
   }
