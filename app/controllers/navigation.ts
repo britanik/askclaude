@@ -268,14 +268,13 @@ export default class Navigation {
         // Create a new thread with the welcome message
         let thread: IThread = await startAssistant(startAssistantParams);
         
-        // Send the welcome message to user and get telegram message ID
+        // Send welcome message and save with telegram ID
         const sendResult = await sendMessage({ 
           text: firstMessage, 
           user: this.user, 
           bot: this.bot 
         });
         
-        // Add the welcome message to thread WITH telegram message ID
         await new Message({
           thread: thread._id,
           role: 'assistant',
@@ -337,7 +336,7 @@ export default class Navigation {
               // For subsequent messages in the same media group, just add the image and return
               // without sending to Claude yet - this is handled by the first message
               console.log(`Additional message in media group ${mediaGroupId}`);
-              await handleUserReply(this.user, text, this.bot, images, mediaGroupId, replyToMessageId);
+              await handleUserReply(this.user, text, this.bot, images, mediaGroupId, replyToMessageId, this.msg.message_id);
               return; // Important: don't process this as a full message
             }
           }
@@ -345,14 +344,21 @@ export default class Navigation {
           // PROCESS MESSAGE
           
           // Analyze, save new Message, start new thread or return existing one
-          let userReply: { thread: IThread, isNew: boolean } = await handleUserReply(
-            this.user, 
-            text, 
-            this.bot, 
-            images, 
-            mediaGroupId,
-            replyToMessageId   // which message user replied to (for branching)
+          let userReply = await handleUserReply(
+            this.user, text, this.bot, images, mediaGroupId,
+            replyToMessageId,
+            this.msg.message_id
           );
+          
+          // If user replied to an old message we don't have tracked - just notify and stop
+          if (userReply.oldMessageNotFound) {
+            await sendMessage({
+              text: '💬 Это сообщение было отправлено до включения функции ответов на старые сообщения.',
+              user: this.user,
+              bot: this.bot
+            });
+            return;
+          }
           
           // Only send to Claude if this isn't a media group or it's the first message after waiting
           if (!mediaGroupId || this.mediaGroups.includes(mediaGroupId)) {

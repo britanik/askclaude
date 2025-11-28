@@ -96,8 +96,9 @@ export async function handleUserReply(
   bot: TelegramBot, 
   images: string[] = [], 
   mediaGroupId?: string,
-  replyToTelegramMessageId?: number
-): Promise<{ thread: IThread, isNew: boolean }> {
+  replyToTelegramMessageId?: number,
+  userTelegramMessageId?: number
+): Promise<{ thread: IThread, isNew: boolean, oldMessageNotFound?: boolean }> {
   let thread: IThread = await getRecentThread(user);
   
   // Process images if any
@@ -133,7 +134,8 @@ export async function handleUserReply(
       role: 'user',
       content: userReply || " ",
       images: images.length > 0 ? images : undefined,
-      mediaGroupId
+      mediaGroupId,
+      telegramMessageId: userTelegramMessageId
     }).save();
     return { thread, isNew: false };
   }
@@ -142,6 +144,12 @@ export async function handleUserReply(
   if (replyToTelegramMessageId) {
     // Find the message user replied to
     const repliedMessage = await Message.findOne({ telegramMessageId: replyToTelegramMessageId })
+    
+    if (!repliedMessage) {
+      // Message not found - it's from before we started tracking
+      console.log(`[REPLY] Message ${replyToTelegramMessageId} not found in DB`)
+      return { thread: null, isNew: false, oldMessageNotFound: true }
+    }
     
     if (repliedMessage) {
       // Verify it belongs to this user's thread
@@ -176,7 +184,8 @@ export async function handleUserReply(
             thread: thread._id,
             role: 'user',
             content: userReply || " ",
-            images: images.length > 0 ? images : undefined
+            images: images.length > 0 ? images : undefined,
+            telegramMessageId: userTelegramMessageId
           }).save()
           
           return { thread, isNew: true }
@@ -215,7 +224,8 @@ export async function handleUserReply(
     thread: thread._id,
     role: 'user',
     content: userReply || " ",
-    images: images.length > 0 ? images : undefined
+    images: images.length > 0 ? images : undefined,
+    telegramMessageId: userTelegramMessageId
   }).save();
 
   return { thread, isNew: false };
