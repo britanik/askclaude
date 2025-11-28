@@ -67,102 +67,150 @@ export async function createNewThread(params): Promise<IThread> {
   }
 }
 
-export async function handleUserReply( user: IUser, userReply: string, bot: TelegramBot, images: string[] = [], mediaGroupId?: string ): Promise<{ thread: IThread, isNew: boolean }> {
-  // Get the most recent thread
+/**
+ * Get all messages for a thread, including parent thread messages if it's a branch.
+ * For branched threads: parent messages (up to branch point) + own messages
+ */
+export async function getThreadMessages(thread: IThread): Promise<IMessage[]> {
+  const fullThread = await Thread.findById(thread._id)
+  
+  // Simple case: no parent, just get own messages
+  if (!fullThread.parent?.thread) {
+    return Message.find({ thread: thread._id }).sort({ created: 1 })
+  }
+  
+  // Branched thread: get parent messages up to branch point, then own messages
+  const parentMessages = await Message.find({ 
+    thread: fullThread.parent.thread,
+    _id: { $lte: fullThread.parent.point }  // Messages up to and including branch point
+  }).sort({ created: 1 })
+  
+  const ownMessages = await Message.find({ thread: thread._id }).sort({ created: 1 })
+  
+  return [...parentMessages, ...ownMessages]
+}
+
+export async function handleUserReply( 
+  user: IUser, 
+  userReply: string, 
+  bot: TelegramBot, 
+  images: string[] = [], 
+  mediaGroupId?: string,
+  replyToTelegramMessageId?: number
+): Promise<{ thread: IThread, isNew: boolean }> {
   let thread: IThread = await getRecentThread(user);
-  const savedImagePaths = [];
   
   // Process images if any
   if (images.length > 0) {
     for (const imageId of images) {
       try {
         const fileLink = await bot.getFileLink(imageId);
-        const savedPath = await saveImagePermanently(fileLink, imageId);
-        savedImagePaths.push({
-          telegramId: imageId,
-          localPath: savedPath
-        });
-        console.log(`[PHOTO DETAILS] File ID: ${imageId}, Saved to: ${savedPath}`);
+        await saveImagePermanently(fileLink, imageId);
       } catch (error) {
         console.error(`Error saving image ${imageId}:`, error);
       }
     }
   }
 
-  // If this is part of a media group
+  // Handle media group
   if (mediaGroupId) {
-    // Handle media group messages as before
     const lastMediaMessage = await Message.findOne({ 
       thread: thread._id, 
-      mediaGroupId: mediaGroupId,
+      mediaGroupId,
       role: 'user'
     }).sort({ created: -1 });
     
     if (lastMediaMessage) {
       lastMediaMessage.images = lastMediaMessage.images || [];
       lastMediaMessage.images.push(...images);
-      
-      if (userReply && userReply.trim() !== " " && userReply.trim() !== "") {
-        lastMediaMessage.content = userReply;
-      }
-      
+      if (userReply?.trim()) lastMediaMessage.content = userReply;
       await lastMediaMessage.save();
       return { thread, isNew: false };
-    } else {
-      await new Message({
-        thread: thread._id,
-        role: 'user',
-        content: userReply || " ",
-        images: images.length > 0 ? images : undefined,
-        mediaGroupId
-      }).save();
+    }
+    
+    await new Message({
+      thread: thread._id,
+      role: 'user',
+      content: userReply || " ",
+      images: images.length > 0 ? images : undefined,
+      mediaGroupId
+    }).save();
+    return { thread, isNew: false };
+  }
+
+  // ===== HANDLE REPLY TO OLD MESSAGE =====
+  if (replyToTelegramMessageId) {
+    // Find the message user replied to
+    const repliedMessage = await Message.findOne({ telegramMessageId: replyToTelegramMessageId })
+    
+    if (repliedMessage) {
+      // Verify it belongs to this user's thread
+      const repliedThread = await Thread.findOne({ 
+        _id: repliedMessage.thread, 
+        owner: user._id 
+      }).populate('owner')
       
-      return { thread, isNew: false };
+      if (repliedThread) {
+        // Check if it's the last message (continue) or older (branch)
+        const lastMessage = await Message.findOne({ thread: repliedThread._id }).sort({ created: -1 })
+        const isLastMessage = lastMessage?._id.equals(repliedMessage._id)
+        
+        if (isLastMessage) {
+          // Continue existing thread
+          thread = repliedThread
+        } else {
+          // Create branch thread
+          thread = await new Thread({
+            owner: user,
+            assistantType: repliedThread.assistantType,
+            parent: {
+              thread: repliedThread._id,
+              point: repliedMessage._id
+            }
+          }).save()
+          
+          console.log(`[BRANCH] Created ${thread._id} from ${repliedThread._id}`)
+          
+          // Save user message and return
+          await new Message({
+            thread: thread._id,
+            role: 'user',
+            content: userReply || " ",
+            images: images.length > 0 ? images : undefined
+          }).save()
+          
+          return { thread, isNew: true }
+        }
+      }
     }
   }
 
-  // REGULAR MESSAGE
-  
-  // Check if conversation analysis is enabled in .env (default to disabled if not set)
+  // ===== CONVERSATION ANALYSIS (if enabled) =====
   const isAnalysisEnabled = parseInt(process.env.ENABLE_CONVERSATION_ANALYSIS || '0') === 1;
-  
-  // Analysis defaults
   let assistantType: 'normal' | 'finance' | 'websearch' = 'normal';
   let shouldCreateNewThread = false;
   
-  // Only query for messages and perform analysis if the feature is enabled
   if (isAnalysisEnabled) {
-    // Get the last few messages from the thread for analysis
     const lastMessages = await Message.find({ thread: thread._id }).sort({ created: -1 }).limit(5);
-    
-    // Only analyze if there's at least one previous message
     if (lastMessages.length > 0) {
-      // Format messages for the analysis
       const formattedMessages = lastMessages.reverse().map(msg => ({ role: msg.role, content: msg.content || "" }));
-        
-      // Analyze the conversation
-      const analysis:IConversationAnalysisResult = await analyzeConversation(formattedMessages, userReply);
-      console.log(`[CONVERSATION ANALYSIS]`, analysis);
-      
-      // Analysis results
+      const analysis: IConversationAnalysisResult = await analyzeConversation(formattedMessages, userReply);
       assistantType = analysis.assistant;
-      shouldCreateNewThread = (analysis.action === 'new') ? true : false;
+      shouldCreateNewThread = analysis.action === 'new';
     }
   }
   
-  // Exit with new thread if analysis say so
   if (shouldCreateNewThread) {
     thread = await startAssistant({ user, firstMessage: userReply, assistantType });
     return { thread, isNew: true };
   }
 
-  // If assistant changed for existing thread
   if (assistantType === 'finance' && thread.assistantType !== 'finance') {
     thread.assistantType = 'finance';
     await thread.save();
   }
   
-  // Save message to the thread
+  // Save user message
   await new Message({
     thread: thread._id,
     role: 'user',
@@ -170,13 +218,11 @@ export async function handleUserReply( user: IUser, userReply: string, bot: Tele
     images: images.length > 0 ? images : undefined
   }).save();
 
-  // Return thread
   return { thread, isNew: false };
 }
 
-export async function handleAssistantReply( thread: IThread, bot: TelegramBot, dict: Dict ): Promise<void> {
+export async function handleAssistantReply(thread: IThread, bot: TelegramBot, dict: Dict): Promise<void> {
   try {
-    // Use the chat action helper for typing action while processing
     const assistantReply = await withChatAction(
       bot,
       thread.owner.chatId,
@@ -184,38 +230,27 @@ export async function handleAssistantReply( thread: IThread, bot: TelegramBot, d
       () => chatWithFunctionCalling({ thread, bot })
     );
 
-    // Save the response to file
     await saveAIResponse(assistantReply, 'response');
 
-    // Add the assistant's message to thread
+    // Send to user and get telegram message ID
+    let telegramMessageId: number | undefined;
+    if (assistantReply) {
+      const result = await sendMessage({ text: assistantReply, user: thread.owner, bot });
+      telegramMessageId = result?.telegramMessageId;
+    }
+
+    // Save assistant message with telegram ID
     await new Message({
       thread: thread._id,
       role: 'assistant',
-      content: assistantReply
+      content: assistantReply,
+      telegramMessageId
     }).save();
-
-    if (assistantReply) {
-      await sendThreadToUser({ 
-        user: thread.owner, 
-        content: assistantReply,
-        bot, 
-        dict 
-      });
-    }
 
   } catch (error) {
     console.error('Error in handleAssistantReply:', error);
-    
-    // Enhanced error logging with thread and user context
-    const errorContext = `Assistant reply failed for user ${thread.owner.username || thread.owner.chatId}, thread ${thread._id}, assistant type: ${thread.assistantType}`;
-    await logApiError('anthropic', error, errorContext);
-    
-    // Send error message to user
-    await sendMessage({ 
-      text: dict.getString('ASSISTANT_ERROR'), 
-      user: thread.owner, 
-      bot 
-    });
+    await logApiError('anthropic', error, `Assistant reply failed for thread ${thread._id}`);
+    await sendMessage({ text: dict.getString('ASSISTANT_ERROR'), user: thread.owner, bot });
   }
 }
 
@@ -223,7 +258,6 @@ export async function getRecentThread(user: IUser): Promise<IThread> {
   try {
     let recentThread = await Thread.findOne({ owner: user }).sort({ created: -1 }).populate('owner')
     if (!recentThread) {
-      // If no thread is found, create a new one
       recentThread = await createNewThread({ user, messages: [] })
     }
     return recentThread
@@ -236,28 +270,22 @@ async function chatWithFunctionCalling(params: { thread: IThread, bot: TelegramB
   const { thread, bot } = params
   
   try {
-    // Get fresh thread and owner to ensure we have the latest
     const freshThread = await Thread.findById(thread._id).populate('owner')
     const user = freshThread.owner
     
-    // Get all messages for this thread
-    const threadMessages = await Message.find({ thread: thread._id }).sort({ created: 1 })
+    // Get all messages (handles branched threads automatically)
+    const threadMessages = await getThreadMessages(freshThread)
     
-    // Determine if this is a new thread (only 1 user message)
-    const isNewThread = threadMessages.length === 1
+    const ownMessages = await Message.find({ thread: thread._id })
+    const isNewThread = ownMessages.length === 1
     
-    // Format messages for Claude API with image support
     const formattedMessages = await formatMessagesWithImages(threadMessages, user, bot)
-    
     const messages = [...formattedMessages]
     const executedFunctions = []
-    
-    // Track the model used (will be updated from response)
     let usedModel = ''
     
     while (true) {
       try {
-        // Prepare tools array and context
         let tools = [];
         let transactionsInfo = '';
         let budgetInfo = '';
@@ -272,7 +300,6 @@ async function chatWithFunctionCalling(params: { thread: IThread, bot: TelegramB
           budgetInfo = await getBudgetInfoString(user)
         }
 
-        // Prepare LLM request
         const request: LLMRequest = {
           model: process.env.MODEL_NORMAL || process.env.CLAUDE_MODEL,
           system: freshThread.assistantType === 'finance' 
@@ -283,94 +310,61 @@ async function chatWithFunctionCalling(params: { thread: IThread, bot: TelegramB
           temperature: 1,
         }
         
-        // Only add tools if available
         if (tools.length > 0) {
           request.tools = tools;
         }
 
-        // Call LLM (with automatic fallback)
         const response = await callLLM(request)
-        
-        // Track the model used
         usedModel = response.model || request.model
         
-        // Log token usage
         if (response.usage) {
-          const inputTokens = response.usage.input_tokens || 0
-          const outputTokens = response.usage.output_tokens || 0
           await logTokenUsage(
-            user, 
-            freshThread, 
-            inputTokens, 
-            outputTokens,
-            response.model || process.env.MODEL_NORMAL || process.env.CLAUDE_MODEL,
-            bot
+            user, freshThread, 
+            response.usage.input_tokens || 0,
+            response.usage.output_tokens || 0,
+            usedModel, bot
           )
           
-          // Log web search usage if any
           if (response.usage.server_tool_use?.web_search_requests) {
-            await logWebSearchUsage(
-              user,
-              freshThread,
-              response.usage.server_tool_use.web_search_requests,
-              response.model || process.env.MODEL_NORMAL || process.env.CLAUDE_MODEL,
-              bot
-            );
+            await logWebSearchUsage(user, freshThread, response.usage.server_tool_use.web_search_requests, usedModel, bot);
           }
         }
 
-        // Add assistant's response to conversation
-        messages.push({
-          role: "assistant",
-          content: response.content
-        });
+        messages.push({ role: "assistant", content: response.content });
 
-        // Check if LLM wants to use any tools
         const toolUses = response.content.filter(isToolUse);
         
         if (toolUses.length === 0) {
-          // No tool use, we're done - extract text response and search results
           let responseText = '';
           let searchResults = [];
           
-          if (response.content && Array.isArray(response.content)) {
-            for (const contentItem of response.content) {
-              if (contentItem.type === 'text') {
-                responseText += contentItem.text;
-              } else if (contentItem.type === 'web_search_tool_result') {
-                // Handle web search results
-                if (contentItem.content) {
-                  for (const result of contentItem.content) {
-                    if (result.type === 'web_search_result') {
-                      searchResults.push({
-                        title: result.title,
-                        url: result.url
-                      });
-                    }
-                  }
+          for (const item of response.content || []) {
+            if (item.type === 'text') {
+              responseText += item.text;
+            } else if (item.type === 'web_search_tool_result' && item.content) {
+              for (const result of item.content) {
+                if (result.type === 'web_search_result') {
+                  searchResults.push({ title: result.title, url: result.url });
                 }
               }
             }
           }
           
-          // Format final response with search results at the top
           let finalResponse = '';
           if (searchResults.length > 0) {
             finalResponse += '<b>🔍 Источники:</b>\n';
-            searchResults.slice(0, 3).forEach((result, index) => {
-              finalResponse += `${index + 1}. <a href="${result.url}">${result.title}</a>\n`;
+            searchResults.slice(0, 3).forEach((r, i) => {
+              finalResponse += `${i + 1}. <a href="${r.url}">${r.title}</a>\n`;
             });
             finalResponse += '\n';
           }
           
-          // Add summary for multiple function executions (finance assistant)
           if (executedFunctions.length > 1 && freshThread.assistantType === 'finance') {
-            const trackExpenseCalls = executedFunctions.filter(f => f.name === 'trackExpense');
-            if (trackExpenseCalls.length > 1) {
-              finalResponse += `<b>✅ Обработано ${trackExpenseCalls.length} транзакций:</b>\n`;
-              trackExpenseCalls.forEach((call, index) => {
-                const { amount, description, currency } = call.input;
-                finalResponse += `${index + 1}. ${amount} ${currency} - ${description}\n`;
+            const trackCalls = executedFunctions.filter(f => f.name === 'trackExpense');
+            if (trackCalls.length > 1) {
+              finalResponse += `<b>✅ Обработано ${trackCalls.length} транзакций:</b>\n`;
+              trackCalls.forEach((c, i) => {
+                finalResponse += `${i + 1}. ${c.input.amount} ${c.input.currency} - ${c.input.description}\n`;
               });
               finalResponse += '\n';
             }
@@ -378,72 +372,29 @@ async function chatWithFunctionCalling(params: { thread: IThread, bot: TelegramB
           
           finalResponse += responseText;
           
-          // Add admin footer
           if (isAdmin(user)) {
             finalResponse += getReplyFooter(freshThread.assistantType, isNewThread, usedModel);
           }
           
-          return finalResponse; // Exit while loop
+          return finalResponse;
         }
 
-        // Execute all tools from this response
         const toolResults = [];
-        
         for (const toolUse of toolUses) {
           try {
-            console.log(`Executing tool: ${toolUse.name}`, toolUse.input);
             const toolResult = await executeFunction(toolUse.name, toolUse.input, user);
-            
-            // Track function execution for summary
-            executedFunctions.push({
-              name: toolUse.name,
-              input: toolUse.input,
-              result: toolResult
-            });
-            
-            // Add tool result to the batch
-            toolResults.push({
-              type: "tool_result",
-              tool_use_id: toolUse.id,
-              content: toolResult
-            });
-            
+            executedFunctions.push({ name: toolUse.name, input: toolUse.input, result: toolResult });
+            toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: toolResult });
           } catch (error) {
-            console.error(`Error executing tool ${toolUse.name}:`, error);
-            
-            // Log the function error to file with context
-            await logApiError('llm', error, `Function ${toolUse.name} failed with input: ${JSON.stringify(toolUse.input)}`);
-            
-            // Track failed function execution
-            executedFunctions.push({
-              name: toolUse.name,
-              input: toolUse.input,
-              result: `Error: ${error.message}`,
-              failed: true
-            });
-            
-            // Add error to the batch
-            toolResults.push({
-              type: "tool_result",
-              tool_use_id: toolUse.id,
-              content: `Error: ${error.message}`,
-              is_error: true
-            });
+            await logApiError('llm', error, `Function ${toolUse.name} failed`);
+            executedFunctions.push({ name: toolUse.name, input: toolUse.input, result: `Error: ${error.message}`, failed: true });
+            toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: `Error: ${error.message}`, is_error: true });
           }
         }
-        
-        console.log(toolResults, 'toolResults');
 
-        // Send all tool results back to LLM in a single message
-        messages.push({
-          role: "user",
-          content: toolResults
-        });
-
-        // Continue the loop to get LLM's response with the tool result
+        messages.push({ role: "user", content: toolResults });
       } catch (error) {
-        console.error('LLM API call failed:', error)
-        await logApiError('llm', error, 'LLM API call failed in assistant chat loop')
+        await logApiError('llm', error, 'LLM API call failed')
         throw error
       }
     }
@@ -454,44 +405,22 @@ async function chatWithFunctionCalling(params: { thread: IThread, bot: TelegramB
 }
 
 async function executeFunction(functionName: string, input: any, user: IUser): Promise<string> {
-  try {
-    switch (functionName) {
-      case 'trackExpense':
-        return await trackExpense(user, input);
-        
-      case 'editTransaction':
-        return await editTransaction(user, input);
-
-      case 'deleteTransaction':
-        return await deleteTransaction(user, input);
-
-      case 'loadMore':
-        return await getTransactionsString(user, { ...input, includeBudgetInfo: true })
-
-      case 'createBudget':
-        return await createBudget(user, input);
-      
-      case 'deleteBudget':
-        return await deleteBudget(user, input);
-        
-      default:
-        throw new Error(`Unknown function: ${functionName}`);
-    }
-  } catch (error) {
-    await logApiError('anthropic', error, `Individual finance function ${functionName} failed for user ${user.username || user.chatId} with input: ${JSON.stringify(input)}`);
-    throw error;
+  switch (functionName) {
+    case 'trackExpense': return trackExpense(user, input);
+    case 'editTransaction': return editTransaction(user, input);
+    case 'deleteTransaction': return deleteTransaction(user, input);
+    case 'loadMore': return getTransactionsString(user, { ...input, includeBudgetInfo: true });
+    case 'createBudget': return createBudget(user, input);
+    case 'deleteBudget': return deleteBudget(user, input);
+    default: throw new Error(`Unknown function: ${functionName}`);
   }
 }
 
 export async function sendThreadToUser(params: { user: IUser, content?: string, bot: TelegramBot, dict: Dict }) {
-  const { user, content, bot, dict } = params
+  const { user, content, bot } = params
   try {
-    await sendMessage({ text: content, user, bot })
+    return await sendMessage({ text: content, user, bot })
   } catch(e) {
     console.log('Failed to sendThreadToUser', e)
   }
-}
-
-export async function getThreadMessages(threadId: string): Promise<IMessage[]> {
-  return await Message.find({ thread: threadId }).sort({ created: 1 })
 }

@@ -20,7 +20,11 @@ export interface ISendMessageParams {
   timer?: number
 }
 
-export async function sendMessage(params: ISendMessageParams) {
+export interface ISendMessageResult {
+  telegramMessageId?: number
+}
+
+export async function sendMessage(params: ISendMessageParams): Promise<ISendMessageResult | undefined> {
   let { user, chatId, bot, text = 'Test message', deletable, buttons, keyboard, gallery, placeholder, timer } = params;
   try {
     let sent: TelegramBot.Message;
@@ -55,6 +59,7 @@ export async function sendMessage(params: ISendMessageParams) {
         }
 
         await bot.editMessageText(text, editOptions);
+        return { telegramMessageId: messageId };
       } else {
         if (gallery && gallery.length > 0) {
           // Send gallery in front if it exists
@@ -109,6 +114,9 @@ export async function sendMessage(params: ISendMessageParams) {
       }, timer);
     }
 
+    // Return the telegram message ID for tracking replies
+    return sent ? { telegramMessageId: sent.message_id } : undefined;
+
   } catch (error) {
     // Error handling
     if (error.response && error.response.body && error.response.body.error_code === 403) {
@@ -121,6 +129,8 @@ export async function sendMessage(params: ISendMessageParams) {
       // that falls out of the range of 2xx
       console.error('Error Telegram sending:', error.response.body);
     }
+    
+    return undefined;
   }
 }
 
@@ -187,7 +197,7 @@ export async function sendPhoto( options: ISendPhotoParams ){
   } catch( e ){
     // catch
     if( e.response.body.error_code && e.response.body.error_code === 403 ){
-      user = await userController.blocked(this.user)
+      user = await userController.blocked(user)
       console.log(e.response.body.error_code, 'Send text error')
     }
 

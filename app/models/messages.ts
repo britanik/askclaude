@@ -12,11 +12,13 @@ const MessageSchema = new Schema<IMessage>({
   created: { type: Date, default: () => moment().utc() },
   name: { type: String, default: undefined },
   images: { type: [String], default: undefined },
-  mediaGroupId: { type: String, default: undefined }
+  mediaGroupId: { type: String, default: undefined },
+  telegramMessageId: { type: Number, default: undefined }
 })
 
 // Add indexes for faster queries
 MessageSchema.index({ thread: 1, created: 1 })
 MessageSchema.index({ role: 1 })
+MessageSchema.index({ telegramMessageId: 1 })  // For finding messages by Telegram message ID
 
 export default mongoose.model<IMessage>('Message', MessageSchema)

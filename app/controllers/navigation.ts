@@ -268,19 +268,20 @@ export default class Navigation {
         // Create a new thread with the welcome message
         let thread: IThread = await startAssistant(startAssistantParams);
         
-        // Add the welcome message directly to the thread (no API call)
-        await new Message({
-          thread: thread._id,
-          role: 'assistant',
-          content: firstMessage
-        }).save();
-  
-        // Send the welcome message to user
-        await sendMessage({ 
+        // Send the welcome message to user and get telegram message ID
+        const sendResult = await sendMessage({ 
           text: firstMessage, 
           user: this.user, 
           bot: this.bot 
         });
+        
+        // Add the welcome message to thread WITH telegram message ID
+        await new Message({
+          thread: thread._id,
+          role: 'assistant',
+          content: firstMessage,
+          telegramMessageId: sendResult?.telegramMessageId
+        }).save();
       },
       callback: async () => {
         // Check token limit (both hourly and daily)
@@ -294,6 +295,9 @@ export default class Navigation {
           let text: string = '';
           let images: string[] = [];
           let mediaGroupId = this.msg.media_group_id || null;
+          
+          // For thread branching: detect if user replied to an old message
+          const replyToMessageId = this.msg.reply_to_message?.message_id;
           
           // Handle voice messages
           if (this.msg.voice) {
@@ -333,7 +337,7 @@ export default class Navigation {
               // For subsequent messages in the same media group, just add the image and return
               // without sending to Claude yet - this is handled by the first message
               console.log(`Additional message in media group ${mediaGroupId}`);
-              await handleUserReply(this.user, text, this.bot, images, mediaGroupId);
+              await handleUserReply(this.user, text, this.bot, images, mediaGroupId, replyToMessageId);
               return; // Important: don't process this as a full message
             }
           }
@@ -341,7 +345,14 @@ export default class Navigation {
           // PROCESS MESSAGE
           
           // Analyze, save new Message, start new thread or return existing one
-          let userReply: { thread: IThread, isNew: boolean } = await handleUserReply(this.user, text, this.bot, images, mediaGroupId);
+          let userReply: { thread: IThread, isNew: boolean } = await handleUserReply(
+            this.user, 
+            text, 
+            this.bot, 
+            images, 
+            mediaGroupId,
+            replyToMessageId   // which message user replied to (for branching)
+          );
           
           // Only send to Claude if this isn't a media group or it's the first message after waiting
           if (!mediaGroupId || this.mediaGroups.includes(mediaGroupId)) {

@@ -10,4 +10,5 @@ export interface IMessage extends Document {
   name?: string
   images?: string[]
   mediaGroupId?: string
+  telegramMessageId?: number  // Telegram message_id for reply tracking
 }
