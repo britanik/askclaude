@@ -85,22 +85,21 @@ export class OpenAIProvider implements LLMProvider {
 
   private convertMessages(request: LLMRequest): any[] {
     const input: any[] = [];
-
-    // Convert each message to input format
+  
     for (const msg of request.messages) {
       if (typeof msg.content === 'string') {
-        // Simple text message
-        input.push({
-          role: msg.role,
-          content: msg.content
-        });
+        input.push({ role: msg.role, content: msg.content });
       } else {
-        // Complex content (images, tool results, etc.)
+        // Debug: log the content type and value before attempting iteration
+        logApiError('openai', new Error('Debug: content type check'), 
+          `msg.content type: ${typeof msg.content}, isArray: ${Array.isArray(msg.content)}, value: ${JSON.stringify(msg.content)?.slice(0, 200)}`
+        ).catch(() => {});
+        
         const converted = this.convertContentParts(msg.content, msg.role);
         input.push(...converted);
       }
     }
-
+  
     return input;
   }
 
