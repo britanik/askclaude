@@ -1,5 +1,7 @@
 // Unified LLM Provider Types
 
+import { ModelConfig } from './config';
+
 // Content types for messages
 export interface LLMTextContent {
   type: 'text';
@@ -78,7 +80,6 @@ export interface LLMRequest {
   tools?: (LLMTool | LLMWebSearchTool)[];
   max_tokens?: number;
   temperature?: number;
-  provider?: 'anthropic' | 'openai';
   reasoning_effort?: 'low' | 'medium' | 'high';
   response_format?: {
     type: 'json_schema';
@@ -87,6 +88,8 @@ export interface LLMRequest {
       schema: Record<string, any>;
     };
   };
+  // Internal: passed by callLLM to providers
+  _modelConfig?: ModelConfig;
 }
 
 // Usage stats
@@ -121,7 +124,6 @@ export const RESPONSE_FORMAT_ANALYZE = {
       properties: {
         action: { type: 'string', enum: ['new', 'continue'] },
         assistant: { type: 'string', enum: ['normal', 'finance', 'websearch'] },
-        why: { type: 'string' }
       },
       required: ['action', 'assistant', 'why'],
       additionalProperties: false

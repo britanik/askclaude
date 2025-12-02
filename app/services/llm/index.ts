@@ -2,6 +2,7 @@ import { LLMProvider, LLMRequest, LLMResponse } from './types';
 import { AnthropicProvider } from './providers/anthropic';
 import { OpenAIProvider } from './providers/openai';
 import { logApiError } from '../../helpers/errorLogger';
+import { getModelConfig, ModelConfig } from './config';
 
 // Provider instances (lazy loaded)
 let anthropicProvider: AnthropicProvider | null = null;
@@ -40,49 +41,62 @@ function isServerError(error: any): boolean {
 /**
  * Main function to call LLM with automatic fallback
  * 
- * Uses env variables:
- * - MODEL_NORMAL / MODEL_NORMAL_PROVIDER (primary)
- * - MODEL_NORMAL_BACKUP / MODEL_NORMAL_BACKUP_PROVIDER (fallback)
+ * Uses env variables for model names only:
+ * - MODEL_NORMAL (primary)
+ * - MODEL_NORMAL_BACKUP (fallback)
+ * 
+ * Provider and API type are determined from config.ts
  */
 export async function callLLM(request: LLMRequest): Promise<LLMResponse> {
-  // Get primary config from env
+  // Get primary model name
   const primaryModel = request.model || process.env.MODEL_NORMAL || process.env.CLAUDE_MODEL;
-  const primaryProviderName = (request.provider || process.env.MODEL_NORMAL_PROVIDER || 'anthropic') as 'anthropic' | 'openai';
-
-  // Get backup config from env
+  
+  // Get config for primary model
+  const primaryConfig = getModelConfig(primaryModel);
+  
+  // Get backup model name from env
   const backupModel = process.env.MODEL_NORMAL_BACKUP;
-  const backupProviderName = process.env.MODEL_NORMAL_BACKUP_PROVIDER as 'anthropic' | 'openai' | undefined;
 
   // Try primary provider
-  const primaryProvider = getProvider(primaryProviderName);
+  const primaryProvider = getProvider(primaryConfig.provider);
   
   try {
     const response = await primaryProvider.call({
       ...request,
-      model: primaryModel
+      model: primaryModel,
+      // Pass config to provider for API type selection
+      _modelConfig: primaryConfig,
+      // Apply default reasoning from config if not specified in request
+      reasoning_effort: request.reasoning_effort || primaryConfig.reasoning
     });
     return response;
 
   } catch (primaryError) {
     // Log primary error
-    await logApiError(primaryProviderName, primaryError, `Primary model ${primaryModel} failed`);
+    await logApiError(primaryConfig.provider, primaryError, `Primary model ${primaryModel} failed`);
 
     // Check if we should try backup
-    if (isServerError(primaryError) && backupModel && backupProviderName) {
+    if (isServerError(primaryError) && backupModel) {
       console.log(`Primary model ${primaryModel} failed with server error, trying backup ${backupModel}...`);
 
       try {
-        const backupProvider = getProvider(backupProviderName);
+        // Get config for backup model
+        const backupConfig = getModelConfig(backupModel);
+        const backupProvider = getProvider(backupConfig.provider);
+        
         const response = await backupProvider.call({
           ...request,
-          model: backupModel
+          model: backupModel,
+          _modelConfig: backupConfig,
+          reasoning_effort: request.reasoning_effort || backupConfig.reasoning
         });
         
         console.log(`Received response from backup model ${backupModel}`);
         return response;
 
       } catch (backupError) {
-        await logApiError(backupProviderName, backupError, `Backup model ${backupModel} also failed`);
+        const backupConfig = getModelConfig(backupModel);
+        await logApiError(backupConfig.provider, backupError, `Backup model ${backupModel} also failed`);
         throw backupError;
       }
     }

@@ -248,14 +248,14 @@ export async function analyzeConversation( lastMessages: Array<{role: string, co
     // Call LLM with analyze model/provider
     const response = await callLLM({
       model: process.env.MODEL_ANALYZE || 'gpt-5-mini',
-      provider: (process.env.MODEL_ANALYZE_PROVIDER || 'openai') as 'anthropic' | 'openai',
       system: promptsDict.analyzeConversation(),
       messages: messages,
-      max_tokens: 1000,
+      max_tokens: 3000,
       temperature: 1,
-      reasoning_effort: 'medium',
       response_format: RESPONSE_FORMAT_ANALYZE
     });
+
+    console.log('response:', response);
 
     // Extract text from response
     const textContent = response.content.find(c => c.type === 'text');
