@@ -224,6 +224,8 @@ export interface IConversationAnalysisResult {
 }
 
 export async function analyzeConversation( lastMessages: Array<{role: string, content: string}>, currentMessage: string  ): Promise<IConversationAnalysisResult> {
+  const startTime = Date.now();
+  
   try {
     // Prepare context for the model
     // Truncate assistant messages to 200 characters to save on tokens
@@ -263,6 +265,18 @@ export async function analyzeConversation( lastMessages: Array<{role: string, co
 
     const result = JSON.parse(textContent.text);
     
+    // Log performance metrics
+    const duration = Date.now() - startTime;
+    const durationSec = (duration / 1000).toFixed(2);
+    const model = process.env.MODEL_ANALYZE || 'gpt-5-mini';
+    const provider = process.env.MODEL_ANALYZE_PROVIDER || 'openai';
+    
+    logApiError(
+      'llm',
+      new Error(`[PERF] Conversation analysis: ${durationSec}s | Model: ${model} (${provider}) | Messages: ${messages.length} | Action: ${result.action} | Assistant: ${result.assistant}`),
+      'Performance metric'
+    ).catch(() => {});
+    
     // Validate the result
     return { 
       action: result.action || 'continue', 
@@ -271,11 +285,13 @@ export async function analyzeConversation( lastMessages: Array<{role: string, co
     };
 
   } catch (error) {
+    const duration = Date.now() - startTime;
+    const durationSec = (duration / 1000).toFixed(2);
     console.error('Error in analyzeConversation:', error.message);
     
     // Log analysis error only if it's not a simple timeout or network issue
     if (error.response?.status) {
-      logApiError('llm', error, 'Conversation analysis failed').catch(() => {});
+      logApiError('llm', error, `Conversation analysis failed after ${durationSec}s`).catch(() => {});
     }
     
     // Always return 'continue' on any error to prevent crashes
