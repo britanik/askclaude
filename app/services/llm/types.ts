@@ -125,7 +125,7 @@ export const RESPONSE_FORMAT_ANALYZE = {
         action: { type: 'string', enum: ['new', 'continue'] },
         assistant: { type: 'string', enum: ['normal', 'finance', 'websearch'] },
       },
-      required: ['action', 'assistant', 'why'],
+      required: ['action', 'assistant'],
       additionalProperties: false
     }
   }

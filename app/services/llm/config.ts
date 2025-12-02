@@ -18,7 +18,7 @@ export const MODEL_CONFIG: Record<string, ModelConfig> = {
   'gpt-5-nano': {
     provider: 'openai',
     apiType: 'completions',
-    reasoning: 'medium'
+    reasoning: 'low'
   },
 
   // OpenAI models - Responses API
