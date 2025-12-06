@@ -34,6 +34,9 @@ export async function isTokenLimit(user: IUser) {
     
     const hourlyExceeded = hourlyUsage >= hourlyLimit;
     const dailyExceeded = dailyUsage >= dailyLimit;
+
+    console.log('hourlyExceeded:', hourlyExceeded)
+    console.log('dailyExceeded: ', dailyExceeded)
     
     if (hourlyExceeded) {
       await logLimitHit(user, 'hourly_token', hourlyUsage, hourlyLimit);
@@ -385,6 +388,7 @@ export async function logWebSearchUsage(user: IUser, thread: any, searchCount: n
 }
 
 export async function logLimitHit(user: IUser, type: LimitType, usage: number, limit: number): Promise<void> {
+  console.log('function: logLimitHit', type, usage, limit)
   try {
     await new Limit({
       user: user._id,

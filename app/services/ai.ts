@@ -265,16 +265,16 @@ export async function analyzeConversation( lastMessages: Array<{role: string, co
     const result = JSON.parse(textContent.text);
     
     // Log performance metrics
-    const duration = Date.now() - startTime;
-    const durationSec = (duration / 1000).toFixed(2);
-    const model = process.env.MODEL_ANALYZE || 'gpt-5-mini';
-    const provider = process.env.MODEL_ANALYZE_PROVIDER || 'openai';
+    // const duration = Date.now() - startTime;
+    // const durationSec = (duration / 1000).toFixed(2);
+    // const model = process.env.MODEL_ANALYZE || 'gpt-5-mini';
+    // const provider = process.env.MODEL_ANALYZE_PROVIDER || 'openai';
     
-    logApiError(
-      'llm',
-      new Error(`[PERF] Conversation analysis: ${durationSec}s | Model: ${model} (${provider}) | Messages: ${messages.length} | Action: ${result.action} | Assistant: ${result.assistant}`),
-      'Performance metric'
-    ).catch(() => {});
+    // logApiError(
+    //   'llm',
+    //   new Error(`[PERF] Conversation analysis: ${durationSec}s | Model: ${model} (${provider}) | Messages: ${messages.length} | Action: ${result.action} | Assistant: ${result.assistant}`),
+    //   'Performance metric'
+    // ).catch(() => {});
     
     // Validate the result
     return { 
