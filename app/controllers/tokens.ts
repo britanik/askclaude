@@ -1,11 +1,11 @@
+import moment from 'moment';
+import TelegramBot from 'node-telegram-bot-api';
 import { IUser } from '../interfaces/users';
+import { LimitType } from '../interfaces/limits';
 import User from '../models/users';
 import Usage from '../models/usage';
 import Invite from '../models/invites';
-import TelegramBot from 'node-telegram-bot-api';
-import { sendMessage } from '../templates/sendMessage';
-import { isAdmin } from '../helpers/helpers';
-import moment from 'moment';
+import Limit from '../models/limits';
 
 // Update user schema to remove token_balance field
 export async function updateUserSchema() {
@@ -31,8 +31,19 @@ export async function isTokenLimit(user: IUser) {
     // Check daily limit as well
     const dailyUsage: number = await getDailyTokenUsage(user);
     const dailyLimit = await getDailyTokenLimit(user);
+    
+    const hourlyExceeded = hourlyUsage >= hourlyLimit;
+    const dailyExceeded = dailyUsage >= dailyLimit;
+    
+    if (hourlyExceeded) {
+      await logLimitHit(user, 'hourly_token', hourlyUsage, hourlyLimit);
+    }
+    
+    if (dailyExceeded) {
+      await logLimitHit(user, 'daily_token', dailyUsage, dailyLimit);
+    }
         
-    if (hourlyUsage >= hourlyLimit || dailyUsage >= dailyLimit) {
+    if (hourlyExceeded || dailyExceeded) {
       return true;
     }
     
@@ -76,6 +87,7 @@ export async function isWebSearchLimit(user: IUser):Promise<boolean> {
     const dailyLimit = await getDailyWebSearchLimit(user);
     
     if (usage >= dailyLimit) {
+      await logLimitHit(user, 'daily_websearch', usage, dailyLimit);
       return true;
     }
     
@@ -369,5 +381,18 @@ export async function logWebSearchUsage(user: IUser, thread: any, searchCount: n
     }
   } catch (error) {
     console.error('Error logging web search usage:', error);
+  }
+}
+
+export async function logLimitHit(user: IUser, type: LimitType, usage: number, limit: number): Promise<void> {
+  try {
+    await new Limit({
+      user: user._id,
+      type,
+      usage,
+      limit
+    }).save();
+  } catch (error) {
+    console.error('Error logging limit hit:', error);
   }
 }

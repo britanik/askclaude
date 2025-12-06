@@ -1,16 +1,16 @@
 import axios from 'axios';
-import { IUser } from '../interfaces/users';
-import { sendMessage } from '../templates/sendMessage';
-import TelegramBot from 'node-telegram-bot-api';
-import Image from '../models/images';
-import Invite from '../models/invites';
-import { InlineKeyboardButton } from 'node-telegram-bot-api';
+import moment from 'moment';
+import TelegramBot, { InlineKeyboardButton } from 'node-telegram-bot-api';
 import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { IUser } from '../interfaces/users';
 import { ImageProvider } from '../interfaces/image';
-import moment from 'moment';
+import Image from '../models/images';
+import Invite from '../models/invites';
 import { withChatAction } from '../helpers/chatAction';
+import { sendMessage } from '../templates/sendMessage';
+import { logLimitHit } from './tokens';
 
 // Function to save image locally
 export async function saveImageLocally(imageBuffer: Buffer): Promise<string> {
@@ -321,6 +321,7 @@ export async function isImageLimit(user: IUser) {
     const periodLimit: number = await getPeriodImageLimit(user);
         
     if (usage >= periodLimit) {
+      await logLimitHit(user, 'daily_image', usage, periodLimit);
       return true;
     }
     
