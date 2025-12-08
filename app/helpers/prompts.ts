@@ -124,6 +124,7 @@ analyzeConversation: () => `You route user messages to the correct assistant.
 - "continue" = user's message relates to any of the previous messages
 
 ## 2. Assistant type:
+- "image" = user wants to generate, create, or draw an image/picture
 - "finance" = user tracks money, asks about expenses/income, or manages transactions
 - "websearch" = user explicitly asks to search the web or needs current information (news, prices, weather)
 - "normal" = everything else (default)
@@ -154,7 +155,16 @@ Previous: [empty or first message]
 Current: "200 лари аренда"
 → {"action": "new", "assistant": "finance"}
 
+Previous: [user asks about cooking]
+Current: "нарисуй мне кота"
+→ {"action": "new", "assistant": "image"}
+
+Previous: [user generated cat image]
+Current: "сделай его рыжим"
+→ {"action": "continue", "assistant": "image"}
+
 # Finance keywords: лари, лар, $, USD, EUR, GEL, расход, доход, потратил, перевел, зп, транзакция, бюджет
+# Image keywords: нарисуй, нарисовать, сгенерируй, сгенерировать, картинку, картинка, изображение, draw, generate image, create image, picture
 
 Respond ONLY with JSON.`,
 }

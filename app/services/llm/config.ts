@@ -25,6 +25,12 @@ export const MODEL_CONFIG: Record<string, ModelConfig> = {
     reasoning: 'low'
   },
 
+  'gpt-5-mini': {
+    provider: 'openai',
+    apiType: 'completions',
+    reasoning: 'low'
+  },
+
   // OpenAI models - Responses API
   'gpt-5.1': {
     provider: 'openai',

@@ -8,7 +8,6 @@ import { getReadableId } from "../helpers/helpers"
 import { IMessage } from "../interfaces/messages"
 import { logApiError } from "../helpers/errorLogger"
 import { sendMessage } from "../templates/sendMessage"
-import { handleImageGeneration } from "../controllers/images"
 import { IUser } from "../interfaces/users"
 import { callLLM, RESPONSE_FORMAT_ANALYZE } from "./llm"
 
@@ -219,7 +218,7 @@ export async function saveImagePermanently(url, imageId) {
 
 export interface IConversationAnalysisResult {
   action: 'new' | 'continue',
-  assistant: 'normal' | 'finance' | 'websearch'
+  assistant: 'normal' | 'finance' | 'websearch' | 'image'
 }
 
 export async function analyzeConversation( lastMessages: Array<{role: string, content: string}>, currentMessage: string  ): Promise<IConversationAnalysisResult> {
@@ -294,84 +293,5 @@ export async function analyzeConversation( lastMessages: Array<{role: string, co
     
     // Always return 'continue' on any error to prevent crashes
     return { action: 'continue', assistant: 'normal' };
-  }
-}
-
-// Function to check content with OpenAI Moderation API
-export async function moderateContent(prompt: string): Promise<{flagged: boolean, categories: any}> {
-  try {
-    const response = await axios.post(
-      'https://api.openai.com/v1/moderations',
-      {
-        input: prompt
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
-        }
-      }
-    );
-    
-    // Return the moderation result
-    return {
-      flagged: response.data.results[0].flagged,
-      categories: response.data.results[0].categories
-    };
-  } catch (error) {
-    console.error('Error calling moderation API - details logged to file');
-    // Log the moderation error
-    await logApiError('openai', error, 'Content moderation failed')
-    
-    // Default to flagged: false when API call fails
-    return {
-      flagged: false,
-      categories: {}
-    };
-  }
-}
-
-// OpenAI image generation function
-export async function generateOpenAIImage(prompt: string, user: IUser, bot: TelegramBot): Promise<void> {
-  try {
-    const generateImage = async (prompt: string): Promise<string> => {
-      try {
-        const response = await axios.post(
-          'https://api.openai.com/v1/images/generations',
-          {
-            model: "dall-e-3",
-            style: 'vivid', // vivid or natural
-            prompt: prompt,
-            n: 1,
-            size: "1024x1024",
-            response_format: "url"
-          },
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
-            },
-            timeout: 120000
-          }
-        );
-        
-        // Extract image URL from response
-        return response.data.data[0].url;
-      } catch (imageError) {
-        // Log OpenAI image generation error
-        await logApiError('openai', imageError, 'DALL-E image generation failed')
-        throw imageError
-      }
-    };
-    
-    await handleImageGeneration(prompt, user, bot, generateImage, 'openai');
-
-  } catch (error) {
-    console.error('Error generating image - details logged to file');
-    await sendMessage({
-      text: 'Sorry, there was an error generating the image. Please try again later.',
-      user,
-      bot
-    });
   }
 }

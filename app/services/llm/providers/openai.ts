@@ -10,7 +10,7 @@ export class OpenAIProvider implements LLMProvider {
 
   constructor() {
     this.apiKey = process.env.OPENAI_API_KEY || '';
-    this.timeout = +(process.env.OPENAI_TIMEOUT || 60000);
+    this.timeout = +(process.env.OPENAI_TIMEOUT || 360000);
   }
 
   async call(request: LLMRequest): Promise<LLMResponse> {

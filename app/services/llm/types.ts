@@ -123,7 +123,7 @@ export const RESPONSE_FORMAT_ANALYZE = {
       type: 'object',
       properties: {
         action: { type: 'string', enum: ['new', 'continue'] },
-        assistant: { type: 'string', enum: ['normal', 'finance', 'websearch'] },
+        assistant: { type: 'string', enum: ['normal', 'finance', 'websearch', 'image'] },
       },
       required: ['action', 'assistant'],
       additionalProperties: false

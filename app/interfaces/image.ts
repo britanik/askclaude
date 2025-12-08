@@ -11,4 +11,6 @@ export interface IImage extends Document {
   telegramFileId?: string
   localPath?: string
   provider: ImageProvider
+  openaiResponseId?: string // For multi-turn image editing (OpenAI Responses API)
+  threadId?: Types.ObjectId // Link to conversation thread (for image assistant)
 }

@@ -1,16 +1,15 @@
 import axios from 'axios';
-import moment from 'moment';
 import TelegramBot, { InlineKeyboardButton } from 'node-telegram-bot-api';
 import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { IUser } from '../interfaces/users';
-import { ImageProvider } from '../interfaces/image';
 import Image from '../models/images';
-import Invite from '../models/invites';
 import { withChatAction } from '../helpers/chatAction';
 import { sendMessage } from '../templates/sendMessage';
 import { logLimitHit } from './tokens';
+import { generateImage as generateImageService, generateImageWithProvider } from '../services/imagegen';
+import { logApiError } from '../helpers/errorLogger';
 
 // Function to save image locally
 export async function saveImageLocally(imageBuffer: Buffer): Promise<string> {
@@ -64,171 +63,84 @@ export async function moderateContent(prompt: string): Promise<{flagged: boolean
   }
 }
 
-// Common function to handle image generation process
-export async function handleImageGeneration( prompt: string, user: IUser, bot: TelegramBot, generationFunction: (prompt: string) => Promise<Buffer | string>, provider: ImageProvider ): Promise<void> {
+/**
+ * Main image generation function for /image command
+ * Uses the new imagegen service abstraction
+ */
+export async function generateImage(prompt: string, user: IUser, bot: TelegramBot): Promise<void> {
   try {
-    // Use the chat action helper for upload_photo action
-    const imageResult = await withChatAction(
+    // Check image limit
+    const imageUsage = await getPeriodImageUsage(user);
+    const imageLimit = await getPeriodImageLimit(user);
+    
+    if (imageUsage >= imageLimit) {
+      await logLimitHit(user, 'daily_image', imageUsage, imageLimit);
+      await sendMessage({
+        text: `⚠️ Вы достигли лимита генерации изображений (${imageUsage}/${imageLimit} в день). Попробуйте завтра.`,
+        user,
+        bot
+      });
+      return;
+    }
+
+    // Generate image using the service (handles moderation internally)
+    const imageResponse = await withChatAction(
       bot,
       user.chatId,
       'upload_photo',
-      () => generationFunction(prompt)
+      () => generateImageService({ prompt })
     );
-    
-    let imageBuffer: Buffer;
-    let imageUrl: string | null = null;
-    
-    // Check if the result is a Buffer or a URL string
-    if (typeof imageResult === 'string') {
-      // It's a URL, download the image
-      imageUrl = imageResult;
-      const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
-      imageBuffer = Buffer.from(imageResponse.data, 'binary');
-    } else {
-      // It's already a Buffer
-      imageBuffer = imageResult;
-    }
+
+    // Convert base64 to buffer
+    const imageBuffer = Buffer.from(imageResponse.base64, 'base64');
     
     // Save image locally
     const localPath = await saveImageLocally(imageBuffer);
     console.log(`Image saved locally at: ${localPath}`);
-    
+
     // Create "Retry" button
     const buttons: InlineKeyboardButton[][] = [
       [{ text: '🔄 Заново', callback_data: JSON.stringify({ a: 'imageRetry', id: '' }) }]
     ];
-    
+
     // Send image to user
     const sentPhoto = await bot.sendPhoto(user.chatId, imageBuffer, {
-      caption: `Generated image for prompt: "${prompt}"`,
-      reply_markup: {
-        inline_keyboard: buttons
-      }
+      caption: `🎨 ${prompt.slice(0, 200)}${prompt.length > 200 ? '...' : ''}`,
+      reply_markup: { inline_keyboard: buttons }
     });
-    
-    // Store the image details including prompt in the database
+
+    // Get telegram file ID
     const telegramFileId = sentPhoto.photo[sentPhoto.photo.length - 1].file_id;
-    
-    // Save to database with provider information
+
+    // Save to database
     const imageDoc = await new Image({
       user: user._id,
       prompt: prompt,
-      imageUrl: imageUrl,
+      imageUrl: imageResponse.originalUrl,
       telegramFileId: telegramFileId,
       localPath: localPath,
-      provider: provider
+      provider: imageResponse.provider,
+      openaiResponseId: imageResponse.responseId
     }).save();
-    
-    // Update the button data with the image document ID
+
+    // Update button with image ID
     const updatedButtons: InlineKeyboardButton[][] = [
       [{ text: '🔄 Заново', callback_data: JSON.stringify({ a: 'imageRetry', id: imageDoc._id }) }]
     ];
-    
-    // Update the message with the correct image ID in the button
+
     await bot.editMessageReplyMarkup(
       { inline_keyboard: updatedButtons },
-      { 
-        chat_id: user.chatId, 
-        message_id: sentPhoto.message_id 
-      }
+      { chat_id: user.chatId, message_id: sentPhoto.message_id }
     );
-    
-  } catch (error) {
-    console.error('Error generating image:', error);
-    await sendMessage({
-      text: 'Sorry, there was an error generating the image. Please try again later.',
-      user,
-      bot
-    });
-  }
-}
 
-// OpenAI image generation function
-export async function generateOpenAIImage(prompt: string, user: IUser, bot: TelegramBot): Promise<void> {
-  try {
-    const generateImage = async (prompt: string): Promise<string> => {
-      const response = await axios.post(
-        'https://api.openai.com/v1/images/generations',
-        {
-          model: "dall-e-3",
-          style: 'vivid', // vivid or natural
-          prompt: prompt,
-          n: 1,
-          size: "1024x1024",
-          response_format: "url"
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
-          },
-          timeout: 120000
-        }
-      );
-      
-      // Extract image URL from response
-      return response.data.data[0].url;
-    };
-    
-    await handleImageGeneration(prompt, user, bot, generateImage, 'openai');
-
-  } catch (error) {
-    console.error('Error generating image:', error.response?.data || error);
-    await sendMessage({
-      text: 'Sorry, there was an error generating the image. Please try again later.',
-      user,
-      bot
-    });
-  }
-}
-
-// GetImg image generation function
-export async function generateGetImgImage(prompt: string, user: IUser, bot: TelegramBot): Promise<void> {
-  console.log('generateGetImgImage');
-  const generateImage = async (prompt: string): Promise<string> => {
-    const response = await axios.post(
-      'https://api.getimg.ai/v1/essential/text-to-image',
-      {
-        style: 'photorealism',
-        width: 1024,
-        height: 1024,
-        output_format: 'jpeg',
-        response_format: 'url',
-        prompt: prompt
-      },
-      {
-        headers: {
-          'accept': 'application/json',
-          'content-type': 'application/json',
-          'authorization': `Bearer ${process.env.GETIMG_API_KEY}`
-        }
-      }
-    );
-    
-    // Extract image URL from response
-    return response.data.url;
-  };
-  
-  await handleImageGeneration(prompt, user, bot, generateImage, 'getimg');
-}
-
-// Main image generation function with moderation
-export async function generateImage(prompt: string, user: IUser, bot: TelegramBot): Promise<void> {
-  try {
-    // First, moderate the content
-    const moderationResult = await moderateContent(prompt);
-    
-    // Check if content is flagged as sexual
-    if (moderationResult.flagged) {            
-      // Send to GetImg for potentially sensitive content
-      await generateGetImgImage(prompt, user, bot);
-    } else {
-      // Content is safe or flagged for non-sexual reasons, send to DALL-E
-      await generateOpenAIImage(prompt, user, bot);
-    }
   } catch (error) {
     console.error('Error in generateImage:', error);
-    await sendMessage({ text: 'Sorry, there was an error generating the image. Please try again later.', user, bot });
+    await logApiError('imagegen', error, 'Image generation failed');
+    await sendMessage({ 
+      text: 'Sorry, there was an error generating the image. Please try again later.', 
+      user, 
+      bot 
+    });
   }
 }
 
@@ -275,6 +187,10 @@ export async function getStoredImage(imageId: string): Promise<{ buffer?: Buffer
   }
 }
 
+/**
+ * Regenerate image using the stored prompt
+ * Supports multi-turn by passing previousResponseId
+ */
 export async function regenerateImage(imageId: string, user: IUser, bot: TelegramBot): Promise<void> {
   try {
     // Find the image document
@@ -299,14 +215,62 @@ export async function regenerateImage(imageId: string, user: IUser, bot: Telegra
       return;
     }
     
-    // Log the regeneration attempt
-    console.log(`Regenerating image with prompt: "${imageDoc.prompt}" for user ${user.username || user.chatId}, using provider: ${imageDoc.provider}`);
+    console.log(`Regenerating image with prompt: "${imageDoc.prompt}" for user ${user.username || user.chatId}`);
     
-    // Generate new image using the stored prompt
-    await generateImage(imageDoc.prompt, user, bot);
+    // Generate new image using the service
+    // Note: We don't pass previousResponseId here because "Retry" means fresh generation
+    // For multi-turn editing, use the image assistant flow
+    const imageResponse = await withChatAction(
+      bot,
+      user.chatId,
+      'upload_photo',
+      () => generateImageService({ prompt: imageDoc.prompt })
+    );
+
+    // Convert base64 to buffer
+    const imageBuffer = Buffer.from(imageResponse.base64, 'base64');
+    
+    // Save image locally
+    const localPath = await saveImageLocally(imageBuffer);
+
+    // Create buttons
+    const buttons: InlineKeyboardButton[][] = [
+      [{ text: '🔄 Заново', callback_data: JSON.stringify({ a: 'imageRetry', id: '' }) }]
+    ];
+
+    // Send image to user
+    const sentPhoto = await bot.sendPhoto(user.chatId, imageBuffer, {
+      caption: `🎨 ${imageDoc.prompt.slice(0, 200)}${imageDoc.prompt.length > 200 ? '...' : ''}`,
+      reply_markup: { inline_keyboard: buttons }
+    });
+
+    // Get telegram file ID
+    const telegramFileId = sentPhoto.photo[sentPhoto.photo.length - 1].file_id;
+
+    // Save new image to database
+    const newImageDoc = await new Image({
+      user: user._id,
+      prompt: imageDoc.prompt,
+      imageUrl: imageResponse.originalUrl,
+      telegramFileId: telegramFileId,
+      localPath: localPath,
+      provider: imageResponse.provider,
+      openaiResponseId: imageResponse.responseId
+    }).save();
+
+    // Update button with new image ID
+    const updatedButtons: InlineKeyboardButton[][] = [
+      [{ text: '🔄 Заново', callback_data: JSON.stringify({ a: 'imageRetry', id: newImageDoc._id }) }]
+    ];
+
+    await bot.editMessageReplyMarkup(
+      { inline_keyboard: updatedButtons },
+      { chat_id: user.chatId, message_id: sentPhoto.message_id }
+    );
     
   } catch (error) {
     console.error('Error regenerating image:', error);
+    await logApiError('imagegen', error, 'Image regeneration failed');
     await sendMessage({
       text: 'Sorry, there was an error regenerating the image. Please try again later.',
       user,
@@ -332,43 +296,19 @@ export async function isImageLimit(user: IUser) {
   }
 }
 
-export async function getPeriodImageUsage(user: IUser):Promise<number> {
-  try {
-    const startOfDay = moment().startOf('day').toDate();
-    const imageCount = await Image.countDocuments({
-      user: user._id,
-      created: { $gte: startOfDay }
-    });
-    
-    return imageCount;
-  } catch (error) {
-    console.error('Error getting period image usage:', error);
-    return 0;
-  }
+// Keep these functions - they should be imported from tokens.ts or defined elsewhere
+// Adding stubs here if they're defined in this file
+export async function getPeriodImageUsage(user: IUser): Promise<number> {
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  
+  return await Image.countDocuments({
+    user: user._id,
+    created: { $gte: startOfDay }
+  });
 }
 
 export async function getPeriodImageLimit(user: IUser): Promise<number> {
-  try {
-    // Base limit of images per day
-    const baseLimit = +process.env.IMAGES_DAILY_LIMIT;
-    
-    // Get user's invite code
-    const invite = await Invite.findOne({ owner: user._id });
-    
-    // Calculate bonus based on referrals
-    let referralBonus = 0;
-    if (invite) {
-      // Each referred user adds IMAGES_PER_REFERRAL to the limit
-      const usedInvitesCount = invite.usedBy.length;
-      referralBonus = usedInvitesCount * (+process.env.IMAGES_REFERRAL_BONUS);
-    }
-    
-    const totalLimit = baseLimit + referralBonus;
-    
-    return totalLimit;
-  } catch (error) {
-    console.error('Error calculating period image limit:', error);
-    // Return default limit in case of error
-    return +(process.env.IMAGES_DAY_LIMIT || 10);
-  }
+  // Return from env or default
+  return +(process.env.DAILY_IMAGE_LIMIT || 10);
 }

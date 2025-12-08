@@ -7,7 +7,7 @@ import { IUser } from "../interfaces/users"
 import { IMessage } from "../interfaces/messages"
 import { sendMessage } from "../templates/sendMessage"
 import { analyzeConversation, formatMessagesWithImages, IConversationAnalysisResult, saveImagePermanently } from "../services/ai"
-import { logTokenUsage, logWebSearchUsage } from "./tokens"
+import { logLimitHit, logTokenUsage, logWebSearchUsage } from "./tokens"
 import { saveAIResponse } from "../helpers/fileLogger"
 import { withChatAction } from "../helpers/chatAction"
 import { getReplyFooter, isAdmin } from "../helpers/helpers"
@@ -16,11 +16,14 @@ import { financeTools, searchTool } from "../helpers/tools"
 import { promptsDict } from "../helpers/prompts"
 import { logApiError } from "../helpers/errorLogger"
 import { callLLM, LLMRequest, isToolUse } from "../services/llm"
+import { generateImage as generateImageService } from "../services/imagegen"
+import Image from '../models/images'
+import { getPeriodImageLimit, getPeriodImageUsage, saveImageLocally } from './images';
 
 export interface IAssistantParams {
   user: IUser
   firstMessage?: string
-  assistantType?: 'normal' | 'finance' | 'websearch'
+  assistantType?: 'normal' | 'finance' | 'websearch' | 'image'
 }
 
 export async function startAssistant(params:IAssistantParams): Promise<IThread> {
@@ -196,7 +199,7 @@ export async function handleUserReply(
 
   // ===== CONVERSATION ANALYSIS (if enabled) =====
   const isAnalysisEnabled = parseInt(process.env.ENABLE_CONVERSATION_ANALYSIS || '0') === 1;
-  let assistantType: 'normal' | 'finance' | 'websearch' = 'normal';
+  let assistantType: 'normal' | 'finance' | 'websearch' | 'image' = 'normal';
   let shouldCreateNewThread = false;
   
   if (isAnalysisEnabled) {
@@ -218,6 +221,11 @@ export async function handleUserReply(
     thread.assistantType = 'finance';
     await thread.save();
   }
+
+  if (assistantType === 'image' && thread.assistantType !== 'image') {
+    thread.assistantType = 'image';
+    await thread.save();
+  }
   
   // Save user message
   await new Message({
@@ -233,6 +241,14 @@ export async function handleUserReply(
 
 export async function handleAssistantReply(thread: IThread, bot: TelegramBot, dict: Dict): Promise<void> {
   try {
+    const freshThread = await Thread.findById(thread._id).populate('owner')
+    
+    // Handle image generation separately
+    if (freshThread.assistantType === 'image') {
+      await handleImageAssistantReply(freshThread, bot, dict);
+      return;
+    }
+
     const assistantReply = await withChatAction(
       bot,
       thread.owner.chatId,
@@ -261,6 +277,114 @@ export async function handleAssistantReply(thread: IThread, bot: TelegramBot, di
     console.error('Error in handleAssistantReply:', error);
     await logApiError('anthropic', error, `Assistant reply failed for thread ${thread._id}`);
     await sendMessage({ text: dict.getString('ASSISTANT_ERROR'), user: thread.owner, bot });
+  }
+}
+
+async function handleImageAssistantReply(thread: IThread, bot: TelegramBot, dict: Dict): Promise<void> {
+  const user = thread.owner;
+  
+  try {
+    // Check image limit
+    const imageUsage = await getPeriodImageUsage(user);
+    const imageLimit = await getPeriodImageLimit(user);
+    
+    if (imageUsage >= imageLimit) {
+      await logLimitHit(user, 'daily_image', imageUsage, imageLimit);
+      await sendMessage({
+        text: dict.getString('IMAGE_LIMIT_REACHED') || `⚠️ Вы достигли лимита генерации изображений (${imageUsage}/${imageLimit} в день). Попробуйте завтра.`,
+        user,
+        bot
+      });
+      return;
+    }
+
+    // Get the last user message as the prompt
+    const lastUserMessage = await Message.findOne({ 
+      thread: thread._id, 
+      role: 'user' 
+    }).sort({ created: -1 });
+    
+    if (!lastUserMessage || !lastUserMessage.content) {
+      await sendMessage({ text: dict.getString('IMAGE_NO_PROMPT'), user, bot });
+      return;
+    }
+
+    const prompt = lastUserMessage.content;
+    
+    // Check for previous image in this thread (for multi-turn)
+    const previousImage = await Image.findOne({ 
+      threadId: thread._id 
+    }).sort({ created: -1 });
+
+    // Generate image with upload_photo action
+    const imageResponse = await withChatAction(
+      bot,
+      user.chatId,
+      'upload_photo',
+      () => generateImageService({
+        prompt,
+        previousResponseId: previousImage?.openaiResponseId
+      })
+    );
+
+    // Convert base64 to buffer
+    const imageBuffer = Buffer.from(imageResponse.base64, 'base64');
+
+    // Save image locally
+    const localPath = await saveImageLocally(imageBuffer);
+    console.log(`[ImageAssistant] Image saved locally at: ${localPath}`);
+
+    // Create buttons
+    const buttons = [
+      [{ text: '🔄 Заново', callback_data: JSON.stringify({ a: 'imageRetry', id: '' }) }]
+    ];
+
+    // Send image to user
+    const sentPhoto = await bot.sendPhoto(user.chatId, imageBuffer, {
+      caption: `🎨 ${prompt.slice(0, 200)}${prompt.length > 200 ? '...' : ''}`,
+      reply_markup: { inline_keyboard: buttons }
+    });
+
+    // Get telegram file ID
+    const telegramFileId = sentPhoto.photo[sentPhoto.photo.length - 1].file_id;
+
+    // Save image to database
+    const imageDoc = await new Image({
+      user: user._id,
+      prompt: prompt,
+      telegramFileId: telegramFileId,
+      localPath: localPath,
+      provider: imageResponse.provider,
+      openaiResponseId: imageResponse.responseId,
+      threadId: thread._id
+    }).save();
+
+    // Update button with image ID
+    const updatedButtons = [
+      [{ text: '🔄 Заново', callback_data: JSON.stringify({ a: 'imageRetry', id: imageDoc._id }) }]
+    ];
+
+    await bot.editMessageReplyMarkup(
+      { inline_keyboard: updatedButtons },
+      { chat_id: user.chatId, message_id: sentPhoto.message_id }
+    );
+
+    // Save assistant message (reference to image)
+    await new Message({
+      thread: thread._id,
+      role: 'assistant',
+      content: `[Image generated: ${imageDoc._id}]`,
+      telegramMessageId: sentPhoto.message_id
+    }).save();
+
+  } catch (error) {
+    console.error('Error in handleImageAssistantReply:', error);
+    await logApiError('imagegen', error, `Image generation failed for thread ${thread._id}`);
+    await sendMessage({ 
+      text: dict.getString('IMAGE_GENERATION_ERROR') || 'Sorry, there was an error generating the image. Please try again.', 
+      user, 
+      bot 
+    });
   }
 }
 

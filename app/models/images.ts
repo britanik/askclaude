@@ -12,10 +12,13 @@ const ImageSchema = new Schema<IImage>({
   imageUrl: { type: String },
   telegramFileId: { type: String },
   localPath: { type: String },
-  provider: { type: String, enum: ['openai', 'getimg', 'unknown'], default: 'unknown' }
+  provider: { type: String, enum: ['openai', 'getimg', 'unknown'], default: 'unknown' },
+  openaiResponseId: { type: String }, // For multi-turn image editing (OpenAI Responses API)
+  threadId: { type: Schema.Types.ObjectId, ref: 'Thread' } // Link to conversation thread (for image assistant)
 })
 
 // Add indexes for faster queries
 ImageSchema.index({ user: 1, created: -1 })
+ImageSchema.index({ threadId: 1 })
 
 export default mongoose.model('Image', ImageSchema)

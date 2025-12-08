@@ -121,6 +121,14 @@ export default class Dict {
         rus: () => `Пожалуйста, введите текст`,
         eng: () => `Please enter text`
       },
+      IMAGE_NO_PROMPT: {
+        rus: () => `Пожалуйста, опишите какое изображение вы хотите создать.`,
+        eng: () => `Please describe what image you want to create.`
+      },
+      IMAGE_GENERATION_ERROR: {
+        rus: () => `Извините, произошла ошибка при генерации изображения. Попробуйте ещё раз.`,
+        eng: () => `Sorry, there was an error generating the image. Please try again.`
+      },
       BUTTON_NEW_CHAT: {
         rus: () => `✅ Новый чат`,
         eng: () => `✅ New Chat`
