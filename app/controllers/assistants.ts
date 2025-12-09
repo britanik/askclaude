@@ -16,7 +16,8 @@ import { financeTools, searchTool } from "../helpers/tools"
 import { promptsDict } from "../helpers/prompts"
 import { logApiError } from "../helpers/errorLogger"
 import { callLLM, LLMRequest, isToolUse } from "../services/llm"
-import { generateImage as generateImageService } from "../services/image"
+import { generateImageWithFallback, ImageGenerationResult } from '../services/image'
+
 import Image from '../models/images'
 import { getPeriodImageLimit, getPeriodImageUsage, saveImageLocally } from './images';
 
@@ -316,16 +317,37 @@ async function handleImageAssistantReply(thread: IThread, bot: TelegramBot, dict
       threadId: thread._id 
     }).sort({ created: -1 });
 
-    // Generate image with upload_photo action
-    const imageResponse = await withChatAction(
-      bot,
-      user.chatId,
-      'upload_photo',
-      () => generateImageService({
-        prompt,
-        previousResponseId: previousImage?.openaiResponseId
-      })
-    );
+    // Generate image with fallback support
+    let result: ImageGenerationResult;
+    
+    try {
+      result = await withChatAction(
+        bot,
+        user.chatId,
+        'upload_photo',
+        async () => {
+          const genResult = await generateImageWithFallback({
+            prompt,
+            previousResponseId: previousImage?.openaiResponseId
+          });
+          
+          // If fallback was used, notify user (send message inside the action)
+          if (genResult.usedFallback) {
+            await sendMessage({
+              text: dict.getString('IMAGE_SWITCHING_TO_BACKUP') || '⏳ Основная модель перегружена. Переключаюсь на резервную...',
+              user,
+              bot
+            });
+          }
+          
+          return genResult;
+        }
+      );
+    } catch (error: any) {
+      throw error;
+    }
+
+    const imageResponse = result.response;
 
     // Convert base64 to buffer
     const imageBuffer = Buffer.from(imageResponse.base64, 'base64');

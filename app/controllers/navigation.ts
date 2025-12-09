@@ -21,6 +21,7 @@ import { IThread } from "../interfaces/threads"
 import Message from "../models/messages"
 import { generateImage } from "./images"
 import { generateUserStats } from "./stats"
+import { regenerateImage } from "../controllers/images"
 
 export interface INavigationParams {
   user?: IUser
@@ -455,7 +456,6 @@ export default class Navigation {
           }
           
           // Import regenerateImage function
-          const { regenerateImage } = require('../controllers/images');
           
           // Regenerate the image
           await regenerateImage(imageId, this.user, this.bot);

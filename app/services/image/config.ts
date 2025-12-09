@@ -43,5 +43,5 @@ export function getDefaultImageModel(): string {
 }
 
 export function getNsfwImageModel(): string {
-  return process.env.IMAGE_MODEL_NSFW || 'getimg-photorealism';
+  return process.env.IMAGE_MODEL_NSFW || 'getimg-essential';
 }

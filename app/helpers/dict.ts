@@ -129,6 +129,10 @@ export default class Dict {
         rus: () => `Извините, произошла ошибка при генерации изображения. Попробуйте ещё раз.`,
         eng: () => `Sorry, there was an error generating the image. Please try again.`
       },
+      IMAGE_SWITCHING_TO_BACKUP: {
+        rus: () => `⏳ Основная модель перегружена. Переключаюсь на резервную...`,
+        eng: () => `⏳ Main model is overloaded. Switching to backup...`
+      },
       BUTTON_NEW_CHAT: {
         rus: () => `✅ Новый чат`,
         eng: () => `✅ New Chat`

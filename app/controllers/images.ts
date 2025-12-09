@@ -8,7 +8,7 @@ import Image from '../models/images';
 import { withChatAction } from '../helpers/chatAction';
 import { sendMessage } from '../templates/sendMessage';
 import { logLimitHit } from './tokens';
-import { generateImage as generateImageService } from '../services/image';
+import { generateImageWithFallback } from '../services/image';
 import { logApiError } from '../helpers/errorLogger';
 
 export async function saveImageLocally(imageBuffer: Buffer): Promise<string> {
@@ -82,13 +82,28 @@ export async function generateImage(prompt: string, user: IUser, bot: TelegramBo
       return;
     }
 
-    // Generate image using the service (handles moderation internally)
-    const imageResponse = await withChatAction(
+    // Generate image with fallback support
+    const result = await withChatAction(
       bot,
       user.chatId,
       'upload_photo',
-      () => generateImageService({ prompt })
+      async () => {
+        const genResult = await generateImageWithFallback({ prompt });
+        
+        // Notify user if fallback was used
+        if (genResult.usedFallback) {
+          await sendMessage({
+            text: '⏳ Основная модель перегружена. Переключаюсь на резервную...',
+            user,
+            bot
+          });
+        }
+        
+        return genResult;
+      }
     );
+
+    const imageResponse = result.response;
 
     // Convert base64 to buffer
     const imageBuffer = Buffer.from(imageResponse.base64, 'base64');
@@ -211,15 +226,28 @@ export async function regenerateImage(imageId: string, user: IUser, bot: Telegra
     
     console.log(`Regenerating image with prompt: "${imageDoc.prompt}" for user ${user.username || user.chatId}`);
     
-    // Generate new image using the service
-    // Note: We don't pass previousResponseId here because "Retry" means fresh generation
-    // For multi-turn editing, use the image assistant flow
-    const imageResponse = await withChatAction(
+    // Generate new image with fallback support
+    const result = await withChatAction(
       bot,
       user.chatId,
       'upload_photo',
-      () => generateImageService({ prompt: imageDoc.prompt })
+      async () => {
+        const genResult = await generateImageWithFallback({ prompt: imageDoc.prompt });
+        
+        // Notify user if fallback was used
+        if (genResult.usedFallback) {
+          await sendMessage({
+            text: '⏳ Основная модель перегружена. Переключаюсь на резервную...',
+            user,
+            bot
+          });
+        }
+        
+        return genResult;
+      }
     );
+
+    const imageResponse = result.response;
 
     // Convert base64 to buffer
     const imageBuffer = Buffer.from(imageResponse.base64, 'base64');

@@ -65,7 +65,8 @@ export class GeminiImageProvider implements ImageProvider {
         errorMessage,
         'gemini',
         error.response?.data,
-        'api_error'
+        'api_error',
+        error.response?.status
       );
     }
 
@@ -129,12 +130,14 @@ export class GeminiImageProvider implements ImageProvider {
         }
       );
     } catch (error: any) {
+      // Network or HTTP error
       const errorMessage = this.extractAxiosError(error);
       throw new ImageError(
         errorMessage,
-        'gemini-imagen',
+        'gemini',
         error.response?.data,
-        'api_error'
+        'api_error',
+        error.response?.status
       );
     }
 
