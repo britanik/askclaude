@@ -10,7 +10,7 @@ export interface ImageGenRequest {
 export interface ImageGenResponse {
   base64: string; // Base64-encoded image data (providers convert URL to base64 if needed)
   responseId?: string; // Response ID for multi-turn conversations (OpenAI only)
-  provider: 'openai' | 'getimg'; // Provider that generated the image
+  provider: 'openai' | 'getimg' | 'gemini'; // Provider that generated the image
   originalUrl?: string; // Original URL if available (for reference/logging)
   usage?: {
     inputTokens?: number;

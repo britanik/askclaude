@@ -1,16 +1,25 @@
 // Image Generation Model Configuration
 
 export interface ImageModelConfig {
-  provider: 'openai' | 'getimg';
+  provider: 'openai' | 'getimg' | 'gemini';
   model?: string; // OpenAI specific
   style?: string; // GetImg specific
 }
 
 export const IMAGE_MODEL_CONFIG: Record<string, ImageModelConfig> = {
+  // Gemini models
+  'gemini-3-pro-image-preview': {
+    provider: 'gemini'
+  },
+
+  'gemini-imagen-4': {
+    provider: 'gemini'
+  },
+
   // OpenAI models
-  'gpt-5': {
+  'gpt-image-1': {
     provider: 'openai',
-    model: 'gpt-5'
+    model: 'gpt-image-1'
   },
 
   // GetImg models
@@ -24,16 +33,16 @@ export function getImageModelConfig(modelName: string): ImageModelConfig {
   const config = IMAGE_MODEL_CONFIG[modelName];
   
   if (!config) {
-    throw new Error(`Image model "${modelName}" not found in config. Add it to IMAGE_MODEL_CONFIG in services/imagegen/config.ts`);
+    throw new Error(`Image model "${modelName}" not found in config`);
   }
   
   return config;
 }
 
 export function getDefaultImageModel(): string {
-  return process.env.IMAGE_MODEL || 'gpt-5';
+  return process.env.IMAGE_MODEL_DEFAULT || 'gemini-3-pro-image-preview';
 }
 
 export function getNsfwImageModel(): string {
-  return process.env.IMAGE_MODEL_NSFW || 'getimg-essential';
+  return process.env.IMAGE_MODEL_NSFW || 'getimg-photorealism';
 }

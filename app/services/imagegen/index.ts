@@ -1,6 +1,7 @@
 import { ImageGenProvider, ImageGenRequest, ImageGenResponse } from './types';
 import { OpenAIImageProvider } from './providers/openai';
 import { GetImgProvider } from './providers/getimg';
+import { GeminiImageProvider } from './providers/gemini';
 import { getImageModelConfig, getDefaultImageModel, getNsfwImageModel } from './config';
 import { logApiError } from '../../helpers/errorLogger';
 import { moderateContent } from '../../controllers/images';
@@ -8,11 +9,12 @@ import { moderateContent } from '../../controllers/images';
 // Provider instances (lazy loaded)
 let openaiProvider: OpenAIImageProvider | null = null;
 let getimgProvider: GetImgProvider | null = null;
+let geminiProvider: GeminiImageProvider | null = null;
 
 /**
  * Get provider instance by name
  */
-function getProvider(name: 'openai' | 'getimg'): ImageGenProvider {
+function getProvider(name: 'openai' | 'getimg' | 'gemini'): ImageGenProvider {
   switch (name) {
     case 'openai':
       if (!openaiProvider) {
@@ -26,6 +28,12 @@ function getProvider(name: 'openai' | 'getimg'): ImageGenProvider {
       }
       return getimgProvider;
 
+    case 'gemini':
+      if (!geminiProvider) {
+        geminiProvider = new GeminiImageProvider();
+      }
+      return geminiProvider;
+
     default:
       throw new Error(`Unknown image provider: ${name}`);
   }
@@ -36,7 +44,7 @@ function getProvider(name: 'openai' | 'getimg'): ImageGenProvider {
  * 
  * - Runs content moderation first
  * - If flagged as NSFW → uses GetImg provider
- * - Otherwise → uses default provider (OpenAI)
+ * - Otherwise → uses default provider (Gemini)
  */
 export async function generateImage(request: ImageGenRequest): Promise<ImageGenResponse> {
   // Determine model to use
@@ -81,7 +89,7 @@ export async function generateImage(request: ImageGenRequest): Promise<ImageGenR
  */
 export async function generateImageWithProvider(
   request: ImageGenRequest, 
-  providerName: 'openai' | 'getimg'
+  providerName: 'openai' | 'getimg' | 'gemini'
 ): Promise<ImageGenResponse> {
   const provider = getProvider(providerName);
   return await provider.generate(request);
