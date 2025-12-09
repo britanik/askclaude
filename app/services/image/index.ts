@@ -1,9 +1,8 @@
-import { ImageGenProvider, ImageGenRequest, ImageGenResponse } from './types';
+import { ImageProvider, ImageRequest, ImageResponse } from './types';
 import { OpenAIImageProvider } from './providers/openai';
 import { GetImgProvider } from './providers/getimg';
 import { GeminiImageProvider } from './providers/gemini';
 import { getImageModelConfig, getDefaultImageModel, getNsfwImageModel } from './config';
-import { logApiError } from '../../helpers/errorLogger';
 import { moderateContent } from '../../controllers/images';
 
 // Provider instances (lazy loaded)
@@ -14,7 +13,7 @@ let geminiProvider: GeminiImageProvider | null = null;
 /**
  * Get provider instance by name
  */
-function getProvider(name: 'openai' | 'getimg' | 'gemini'): ImageGenProvider {
+function getProvider(name: 'openai' | 'getimg' | 'gemini'): ImageProvider {
   switch (name) {
     case 'openai':
       if (!openaiProvider) {
@@ -45,42 +44,38 @@ function getProvider(name: 'openai' | 'getimg' | 'gemini'): ImageGenProvider {
  * - Runs content moderation first
  * - If flagged as NSFW → uses GetImg provider
  * - Otherwise → uses default provider (Gemini)
+ * 
+ * Note: Error logging happens at the caller level (assistants.ts)
  */
-export async function generateImage(request: ImageGenRequest): Promise<ImageGenResponse> {
+export async function generateImage(request: ImageRequest): Promise<ImageResponse> {
   // Determine model to use
   const modelName = request.model || getDefaultImageModel();
   
-  try {
-    // Run content moderation
-    const moderation = await moderateContent(request.prompt);
+  // Run content moderation
+  const moderation = await moderateContent(request.prompt);
+  
+  if (moderation.flagged && moderation.scores.sexual > 0.9) {
+    console.log('[Image] Content flagged, using NSFW provider');
     
-    if (moderation.flagged) {
-      console.log('[ImageGen] Content flagged, using NSFW provider');
-      
-      // Use NSFW-safe provider (GetImg)
-      const nsfwModel = getNsfwImageModel();
-      const nsfwConfig = getImageModelConfig(nsfwModel);
-      const provider = getProvider(nsfwConfig.provider);
-      
-      return await provider.generate({
-        ...request,
-        model: nsfwModel
-      });
-    }
-    
-    // Use default provider
-    const config = getImageModelConfig(modelName);
-    const provider = getProvider(config.provider);
+    // Use NSFW-safe provider (GetImg)
+    const nsfwModel = getNsfwImageModel();
+    const nsfwConfig = getImageModelConfig(nsfwModel);
+    const provider = getProvider(nsfwConfig.provider);
     
     return await provider.generate({
       ...request,
-      model: modelName
+      model: nsfwModel
     });
-
-  } catch (error) {
-    await logApiError('imagegen', error, `Image generation failed for model ${modelName}`);
-    throw error;
   }
+  
+  // Use default provider
+  const config = getImageModelConfig(modelName);
+  const provider = getProvider(config.provider);
+  
+  return await provider.generate({
+    ...request,
+    model: modelName
+  });
 }
 
 /**
@@ -88,13 +83,12 @@ export async function generateImage(request: ImageGenRequest): Promise<ImageGenR
  * Used for regeneration where we already know the provider
  */
 export async function generateImageWithProvider(
-  request: ImageGenRequest, 
+  request: ImageRequest, 
   providerName: 'openai' | 'getimg' | 'gemini'
-): Promise<ImageGenResponse> {
+): Promise<ImageResponse> {
   const provider = getProvider(providerName);
   return await provider.generate(request);
 }
 
 // Re-export types
 export * from './types';
-export { getDefaultImageModel, getNsfwImageModel } from './config';

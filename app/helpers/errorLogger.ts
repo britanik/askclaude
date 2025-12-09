@@ -4,7 +4,7 @@ import moment from 'moment'
 
 interface ErrorLog {
   timestamp: string
-  service: 'anthropic' | 'openai' | 'llm' | 'openai-imagegen' | 'getimg' | 'imagegen' | 'gemini-imagegen'
+  service: 'anthropic' | 'openai' | 'llm' | 'openai-image' | 'getimg' | 'image' | 'gemini-image'
   status?: number
   statusText?: string
   data?: any
@@ -14,7 +14,7 @@ interface ErrorLog {
 }
 
 export async function logApiError(
-  service: 'anthropic' | 'openai' | 'llm' | 'openai-imagegen' | 'getimg' | 'imagegen' | 'gemini-imagegen',
+  service: 'anthropic' | 'openai' | 'llm' | 'openai-image' | 'getimg' | 'image' | 'gemini-image',
   error: any,
   context?: string
 ): Promise<void> {
@@ -32,7 +32,15 @@ export async function logApiError(
     }
 
     // Extract error information
-    if (error.response) {
+    if (error.name === 'ImageError') {
+      // Custom ImageGenError from imagegen service
+      errorLog.message = error.message
+      errorLog['reason'] = error.reason
+      errorLog['provider'] = error.provider
+      if (error.apiResponse) {
+        errorLog['apiResponse'] = error.apiResponse
+      }
+    } else if (error.response) {
       // API responded with an error status
       errorLog.status = error.response.status
       errorLog.statusText = error.response.statusText

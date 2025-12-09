@@ -16,7 +16,7 @@ import { financeTools, searchTool } from "../helpers/tools"
 import { promptsDict } from "../helpers/prompts"
 import { logApiError } from "../helpers/errorLogger"
 import { callLLM, LLMRequest, isToolUse } from "../services/llm"
-import { generateImage as generateImageService } from "../services/imagegen"
+import { generateImage as generateImageService } from "../services/image"
 import Image from '../models/images'
 import { getPeriodImageLimit, getPeriodImageUsage, saveImageLocally } from './images';
 
@@ -377,14 +377,21 @@ async function handleImageAssistantReply(thread: IThread, bot: TelegramBot, dict
       telegramMessageId: sentPhoto.message_id
     }).save();
 
-  } catch (error) {
-    console.error('Error in handleImageAssistantReply:', error);
-    await logApiError('imagegen', error, `Image generation failed for thread ${thread._id}`);
-    await sendMessage({ 
-      text: dict.getString('IMAGE_GENERATION_ERROR') || 'Sorry, there was an error generating the image. Please try again.', 
-      user, 
-      bot 
-    });
+  } catch (error: any) {
+    console.error('Error in handleImageAssistantReply:', error.message);
+    
+    // Log with full context - this is the only place we log imagegen errors
+    await logApiError('image', error, `Image generation failed for thread ${thread._id}`);
+    
+    // Provide user-friendly message based on error type
+    let userMessage = dict.getString('IMAGE_GENERATION_ERROR') || 'Sorry, there was an error generating the image. Please try again.';
+    
+    // Check if it's our custom ImageError with a reason
+    if (error.reason === 'blocked' || error.reason === 'safety') {
+      userMessage = '⚠️ Изображение не может быть сгенерировано из-за ограничений безопасности. Попробуйте изменить запрос.';
+    }
+    
+    await sendMessage({ text: userMessage, user, bot });
   }
 }
 

@@ -1,8 +1,8 @@
 import axios from 'axios';
-import { ImageGenProvider, ImageGenRequest, ImageGenResponse } from '../types';
+import { ImageProvider, ImageRequest, ImageResponse } from '../types';
 import { logApiError } from '../../../helpers/errorLogger';
 
-export class OpenAIImageProvider implements ImageGenProvider {
+export class OpenAIImageProvider implements ImageProvider {
   name: 'openai' = 'openai';
   
   private apiKey: string;
@@ -13,14 +13,14 @@ export class OpenAIImageProvider implements ImageGenProvider {
     this.timeout = +process.env.TIMEOUT_IMAGE;
   }
 
-  async generate(request: ImageGenRequest): Promise<ImageGenResponse> {
-    console.log('[ImageGen:OpenAI] Generating image');
-    console.log('[ImageGen:OpenAI] Prompt:', request.prompt.slice(0, 100) + '...');
+  async generate(request: ImageRequest): Promise<ImageResponse> {
+    console.log('[Image:OpenAI] Generating image');
+    console.log('[Image:OpenAI] Prompt:', request.prompt.slice(0, 100) + '...');
     
     try {
       // Build request for Responses API with image_generation tool
       const openaiRequest: any = {
-        model: request.model || 'gpt-image-1',
+        model: request.model || 'gpt-5',
         input: request.prompt,
         tools: [{ type: 'image_generation' }]
       };
@@ -28,7 +28,7 @@ export class OpenAIImageProvider implements ImageGenProvider {
       // Add previous response ID for multi-turn editing
       if (request.previousResponseId) {
         openaiRequest.previous_response_id = request.previousResponseId;
-        console.log('[ImageGen:OpenAI] Multi-turn with previous:', request.previousResponseId);
+        console.log('[Image:OpenAI] Multi-turn with previous:', request.previousResponseId);
       }
 
       // Build tool config with optional size and quality
@@ -74,7 +74,7 @@ export class OpenAIImageProvider implements ImageGenProvider {
       };
 
     } catch (error) {
-      await logApiError('openai-imagegen', error, 'OpenAI image generation failed');
+      await logApiError('openai-image', error, 'OpenAI image generation failed');
       throw error;
     }
   }

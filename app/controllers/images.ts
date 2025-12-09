@@ -8,10 +8,9 @@ import Image from '../models/images';
 import { withChatAction } from '../helpers/chatAction';
 import { sendMessage } from '../templates/sendMessage';
 import { logLimitHit } from './tokens';
-import { generateImage as generateImageService, generateImageWithProvider } from '../services/imagegen';
+import { generateImage as generateImageService } from '../services/image';
 import { logApiError } from '../helpers/errorLogger';
 
-// Function to save image locally
 export async function saveImageLocally(imageBuffer: Buffer): Promise<string> {
   // Create images directory if it doesn't exist
   const imagesDir = path.join(__dirname, '../images');
@@ -32,8 +31,7 @@ export async function saveImageLocally(imageBuffer: Buffer): Promise<string> {
   });
 }
 
-// Function to check content with OpenAI Moderation API
-export async function moderateContent(prompt: string): Promise<{flagged: boolean, categories: any}> {
+export async function moderateContent(prompt: string): Promise<{flagged: boolean, categories: any, scores: any}> {
   try {
     const response = await axios.post(
       'https://api.openai.com/v1/moderations',
@@ -48,9 +46,13 @@ export async function moderateContent(prompt: string): Promise<{flagged: boolean
       }
     );
     
+    console.log('Moderate data: ', response.data)
+    console.log('category_scores ', response.data.results[0].category_scores)
+
     // Return the moderation result
     return {
       flagged: response.data.results[0].flagged,
+      scores: response.data.results[0].category_scores,
       categories: response.data.results[0].categories
     };
   } catch (error) {
@@ -58,15 +60,12 @@ export async function moderateContent(prompt: string): Promise<{flagged: boolean
     // Default to flagged: false when API call fails
     return {
       flagged: false,
-      categories: {}
+      categories: {},
+      scores: {}
     };
   }
 }
 
-/**
- * Main image generation function for /image command
- * Uses the new imagegen service abstraction
- */
 export async function generateImage(prompt: string, user: IUser, bot: TelegramBot): Promise<void> {
   try {
     // Check image limit
@@ -76,7 +75,7 @@ export async function generateImage(prompt: string, user: IUser, bot: TelegramBo
     if (imageUsage >= imageLimit) {
       await logLimitHit(user, 'daily_image', imageUsage, imageLimit);
       await sendMessage({
-        text: `⚠️ Вы достигли лимита генерации изображений (${imageUsage}/${imageLimit} в день). Попробуйте завтра.`,
+        text: `Вы достигли лимита генерации изображений (${imageUsage}/${imageLimit} в день). Попробуйте завтра.`,
         user,
         bot
       });
@@ -135,23 +134,22 @@ export async function generateImage(prompt: string, user: IUser, bot: TelegramBo
 
   } catch (error) {
     console.error('Error in generateImage:', error);
-    await logApiError('imagegen', error, 'Image generation failed');
+    await logApiError('image', error, 'Image generation failed');
     await sendMessage({ 
-      text: 'Sorry, there was an error generating the image. Please try again later.', 
+      text: 'Произошла ошибка при генерации изображения. Пожалуйста, попробуйте позже.', 
       user, 
       bot 
     });
   }
 }
 
-// Function to get an image either from local storage or by Telegram file ID
 export async function getStoredImage(imageId: string): Promise<{ buffer?: Buffer, telegramFileId?: string, error?: string }> {
   try {
     // Find the image document
     const imageDoc = await Image.findById(imageId);
     
     if (!imageDoc) {
-      return { error: 'Image not found' };
+      return { error: 'Изображение не найдено' };
     }
     
     // Try to get the image from local storage first
@@ -180,17 +178,13 @@ export async function getStoredImage(imageId: string): Promise<{ buffer?: Buffer
       return { buffer };
     }
     
-    return { error: 'No image source available' };
+    return { error: 'Источник изображения недоступен' };
   } catch (error) {
     console.error('Error retrieving stored image:', error);
-    return { error: 'Failed to retrieve image' };
+    return { error: 'Не удалось загрузить изображение' };
   }
 }
 
-/**
- * Regenerate image using the stored prompt
- * Supports multi-turn by passing previousResponseId
- */
 export async function regenerateImage(imageId: string, user: IUser, bot: TelegramBot): Promise<void> {
   try {
     // Find the image document
@@ -198,7 +192,7 @@ export async function regenerateImage(imageId: string, user: IUser, bot: Telegra
     
     if (!imageDoc) {
       await sendMessage({
-        text: 'Sorry, could not find the image to regenerate. Please try a new image generation.',
+        text: 'Не удалось найти изображение для повторной генерации. Пожалуйста, создайте новое изображение.',
         user,
         bot
       });
@@ -208,7 +202,7 @@ export async function regenerateImage(imageId: string, user: IUser, bot: Telegra
     // Make sure this user owns the image
     if (imageDoc.user.toString() !== user._id.toString()) {
       await sendMessage({
-        text: 'Sorry, you do not have permission to regenerate this image.',
+        text: 'У вас нет прав для повторной генерации этого изображения.',
         user,
         bot
       });
@@ -270,9 +264,9 @@ export async function regenerateImage(imageId: string, user: IUser, bot: Telegra
     
   } catch (error) {
     console.error('Error regenerating image:', error);
-    await logApiError('imagegen', error, 'Image regeneration failed');
+    await logApiError('image', error, 'Image regeneration failed');
     await sendMessage({
-      text: 'Sorry, there was an error regenerating the image. Please try again later.',
+      text: 'Произошла ошибка при повторной генерации изображения. Пожалуйста, попробуйте позже.',
       user,
       bot
     });
@@ -296,8 +290,6 @@ export async function isImageLimit(user: IUser) {
   }
 }
 
-// Keep these functions - they should be imported from tokens.ts or defined elsewhere
-// Adding stubs here if they're defined in this file
 export async function getPeriodImageUsage(user: IUser): Promise<number> {
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);

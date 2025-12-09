@@ -1,4 +1,4 @@
-export interface ImageGenRequest {
+export interface ImageRequest {
   prompt: string;
   size?: '1024x1024' | '1024x1536' | '1536x1024';
   quality?: 'low' | 'medium' | 'high' | 'auto'; // (OpenAI specific)
@@ -7,7 +7,7 @@ export interface ImageGenRequest {
 }
 
 // Response from image generation
-export interface ImageGenResponse {
+export interface ImageResponse {
   base64: string; // Base64-encoded image data (providers convert URL to base64 if needed)
   responseId?: string; // Response ID for multi-turn conversations (OpenAI only)
   provider: 'openai' | 'getimg' | 'gemini'; // Provider that generated the image
@@ -19,7 +19,7 @@ export interface ImageGenResponse {
 }
 
 // Provider interface
-export interface ImageGenProvider {
+export interface ImageProvider {
   name: string;
-  generate(request: ImageGenRequest): Promise<ImageGenResponse>;
+  generate(request: ImageRequest): Promise<ImageResponse>;
 }

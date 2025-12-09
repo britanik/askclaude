@@ -1,8 +1,8 @@
 import axios from 'axios';
-import { ImageGenProvider, ImageGenRequest, ImageGenResponse } from '../types';
+import { ImageProvider, ImageRequest, ImageResponse } from '../types';
 import { logApiError } from '../../../helpers/errorLogger';
 
-export class GetImgProvider implements ImageGenProvider {
+export class GetImgProvider implements ImageProvider {
   name: 'getimg' = 'getimg';
   
   private apiKey: string;
@@ -13,9 +13,9 @@ export class GetImgProvider implements ImageGenProvider {
     this.timeout = 120000; // 2 minutes for image generation
   }
 
-  async generate(request: ImageGenRequest): Promise<ImageGenResponse> {
-    console.log('[ImageGen:GetImg] Generating image');
-    console.log('[ImageGen:GetImg] Prompt:', request.prompt.slice(0, 100) + '...');
+  async generate(request: ImageRequest): Promise<ImageResponse> {
+    console.log('[Image:GetImg] Generating image');
+    console.log('[Image:GetImg] Prompt:', request.prompt.slice(0, 100) + '...');
     
     try {
       // Parse size to width/height

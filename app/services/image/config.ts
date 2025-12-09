@@ -17,11 +17,10 @@ export const IMAGE_MODEL_CONFIG: Record<string, ImageModelConfig> = {
   },
 
   // OpenAI models
-  'gpt-image-1': {
+  'gpt-5': {
     provider: 'openai',
-    model: 'gpt-image-1'
+    model: 'gpt-5'
   },
-
   // GetImg models
   'getimg-essential': {
     provider: 'getimg',
