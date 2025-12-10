@@ -6,84 +6,35 @@ import { getImageModelConfig, getDefaultImageModel, getNsfwImageModel } from './
 import { moderateContent } from '../../controllers/images';
 import { ImageError } from './errors';
 
-// Provider instances (lazy loaded)
+/**
+ * Provider instances cache
+ * We use lazy loading because providers need env vars that load after module import
+ */
 let openaiProvider: OpenAIImageProvider | null = null;
 let getimgProvider: GetImgProvider | null = null;
 let geminiProvider: GeminiImageProvider | null = null;
 
-/**
- * Get provider instance by name
- */
 function getProvider(name: 'openai' | 'getimg' | 'gemini'): ImageProvider {
-  switch (name) {
-    case 'openai':
-      if (!openaiProvider) {
-        openaiProvider = new OpenAIImageProvider();
-      }
-      return openaiProvider;
-
-    case 'getimg':
-      if (!getimgProvider) {
-        getimgProvider = new GetImgProvider();
-      }
-      return getimgProvider;
-
-    case 'gemini':
-      if (!geminiProvider) {
-        geminiProvider = new GeminiImageProvider();
-      }
-      return geminiProvider;
-
-    default:
-      throw new Error(`Unknown image provider: ${name}`);
+  if (name === 'openai') {
+    if (!openaiProvider) openaiProvider = new OpenAIImageProvider();
+    return openaiProvider;
   }
+  
+  if (name === 'getimg') {
+    if (!getimgProvider) getimgProvider = new GetImgProvider();
+    return getimgProvider;
+  }
+  
+  if (name === 'gemini') {
+    if (!geminiProvider) geminiProvider = new GeminiImageProvider();
+    return geminiProvider;
+  }
+  
+  throw new Error(`Unknown image provider: ${name}`);
 }
 
-/**
- * Get backup image model name
- */
 export function getBackupImageModel(): string {
   return process.env.IMAGE_MODEL_BACKUP || 'gpt-5';
-}
-
-/**
- * Generate image with automatic provider selection
- * 
- * - Runs content moderation first
- * - If flagged as NSFW → uses GetImg provider
- * - Otherwise → uses default provider (Gemini)
- * 
- * Note: Error logging happens at the caller level (assistants.ts)
- */
-export async function generateImage(request: ImageRequest): Promise<ImageResponse> {
-  // Determine model to use
-  const modelName = request.model || getDefaultImageModel();
-  
-  // Run content moderation
-  const moderation = await moderateContent(request.prompt);
-  
-  if (moderation.flagged && moderation.scores.sexual > 0.9) {
-    console.log('[Image] Content flagged, using NSFW provider');
-    
-    // Use NSFW-safe provider (GetImg)
-    const nsfwModel = getNsfwImageModel();
-    const nsfwConfig = getImageModelConfig(nsfwModel);
-    const provider = getProvider(nsfwConfig.provider);
-    
-    return await provider.generate({
-      ...request,
-      model: nsfwModel
-    });
-  }
-  
-  // Use default provider
-  const config = getImageModelConfig(modelName);
-  const provider = getProvider(config.provider);
-  
-  return await provider.generate({
-    ...request,
-    model: modelName
-  });
 }
 
 /**
@@ -98,17 +49,19 @@ export interface ImageGenerationResult {
 /**
  * Generate image with automatic fallback to backup model on overload errors
  * 
- * @returns ImageGenerationResult with fallback info
- * @throws ImageError if both main and backup models fail
+ * Flow:
+ * 1. Run content moderation
+ * 2. If NSFW → use GetImg provider (no fallback)
+ * 3. Otherwise → try main model, fallback to backup on overload
  */
 export async function generateImageWithFallback(request: ImageRequest): Promise<ImageGenerationResult> {
   const mainModel = request.model || getDefaultImageModel();
   const backupModel = getBackupImageModel();
   
-  // Run content moderation first
+  // Step 1: Content moderation
   const moderation = await moderateContent(request.prompt);
   
-  // If NSFW, use dedicated provider (no fallback logic needed)
+  // Step 2: NSFW content goes to dedicated provider
   if (moderation.flagged && moderation.scores.sexual > 0.9) {
     console.log('[Image] Content flagged, using NSFW provider');
     
@@ -124,9 +77,10 @@ export async function generateImageWithFallback(request: ImageRequest): Promise<
     return { response, usedFallback: false };
   }
   
-  // Try main model first
+  // Step 3: Try main model
   try {
     console.log(`[Image] Trying main model: ${mainModel}`);
+    
     const config = getImageModelConfig(mainModel);
     const provider = getProvider(config.provider);
     
@@ -138,18 +92,17 @@ export async function generateImageWithFallback(request: ImageRequest): Promise<
     return { response, usedFallback: false };
     
   } catch (error: any) {
-    // Check if error is retryable
+    // Only retry on overload/rate limit errors
     const isRetryable = error instanceof ImageError && error.isRetryable();
     
     if (!isRetryable) {
-      // Not a retryable error, throw it
       throw error;
     }
     
-    console.log(`[Image] Main model failed with retryable error: ${error.message}`);
-    console.log(`[Image] Switching to backup model: ${backupModel}`);
+    console.log(`[Image] Main model failed: ${error.message}`);
+    console.log(`[Image] Switching to backup: ${backupModel}`);
     
-    // Try backup model
+    // Step 4: Try backup model
     try {
       const backupConfig = getImageModelConfig(backupModel);
       const backupProvider = getProvider(backupConfig.provider);
@@ -166,23 +119,10 @@ export async function generateImageWithFallback(request: ImageRequest): Promise<
       };
       
     } catch (backupError: any) {
-      console.error(`[Image] Backup model also failed: ${backupError.message}`);
-      // Throw the backup error, but could also throw original
+      console.error(`[Image] Backup also failed: ${backupError.message}`);
       throw backupError;
     }
   }
-}
-
-/**
- * Generate image with specific provider (skip moderation)
- * Used for regeneration where we already know the provider
- */
-export async function generateImageWithProvider(
-  request: ImageRequest, 
-  providerName: 'openai' | 'getimg' | 'gemini'
-): Promise<ImageResponse> {
-  const provider = getProvider(providerName);
-  return await provider.generate(request);
 }
 
 // Re-export types

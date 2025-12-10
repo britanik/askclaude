@@ -21,7 +21,7 @@ export class OpenAIImageProvider implements ImageProvider {
       // Build request for Responses API with image_generation tool
       const openaiRequest: any = {
         model: request.model || 'gpt-5',
-        input: request.prompt,
+        input: 'Generate image: ' + request.prompt,
         tools: [{ type: 'image_generation' }]
       };
 
@@ -55,6 +55,8 @@ export class OpenAIImageProvider implements ImageProvider {
           timeout: this.timeout
         }
       );
+
+      console.log('response.data.output[1].content', response.data.output[1].content)
 
       // Extract image data from response
       const imageData = this.extractImageData(response.data);

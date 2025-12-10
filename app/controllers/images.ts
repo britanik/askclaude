@@ -8,7 +8,7 @@ import Image from '../models/images';
 import { withChatAction } from '../helpers/chatAction';
 import { sendMessage } from '../templates/sendMessage';
 import { logLimitHit } from './tokens';
-import { generateImageWithFallback } from '../services/image';
+import { generateImageWithFallback, ImageGenerationResult } from '../services/image';
 import { logApiError } from '../helpers/errorLogger';
 
 export async function saveImageLocally(imageBuffer: Buffer): Promise<string> {
@@ -66,16 +66,71 @@ export async function moderateContent(prompt: string): Promise<{flagged: boolean
   }
 }
 
+export interface SendGeneratedImageParams {
+  prompt: string;
+  user: IUser;
+  bot: TelegramBot;
+  result: ImageGenerationResult;
+  threadId?: string;  // Optional: for assistant flow
+}
+
+export async function sendGeneratedImage(params: SendGeneratedImageParams): Promise<{ imageDoc: any; sentPhoto: any }> {
+  const { prompt, user, bot, result, threadId } = params;
+  const imageResponse = result.response;
+
+  // Convert base64 to buffer
+  const imageBuffer = Buffer.from(imageResponse.base64, 'base64');
+  
+  // Save image locally
+  const localPath = await saveImageLocally(imageBuffer);
+  console.log(`[Image] Saved locally at: ${localPath}`);
+
+  // Create "Retry" button (with empty ID initially)
+  const buttons: InlineKeyboardButton[][] = [
+    [{ text: '🔄 Заново', callback_data: JSON.stringify({ a: 'imageRetry', id: '' }) }]
+  ];
+
+  // Send image to user
+  const sentPhoto = await bot.sendPhoto(user.chatId, imageBuffer, {
+    caption: `🎨 ${prompt.slice(0, 200)}${prompt.length > 200 ? '...' : ''}`,
+    reply_markup: { inline_keyboard: buttons }
+  });
+
+  // Get telegram file ID
+  const telegramFileId = sentPhoto.photo[sentPhoto.photo.length - 1].file_id;
+
+  // Save to database
+  const imageDoc = await new Image({
+    user: user._id,
+    prompt: prompt,
+    imageUrl: imageResponse.originalUrl,
+    telegramFileId: telegramFileId,
+    localPath: localPath,
+    provider: imageResponse.provider,
+    openaiResponseId: imageResponse.responseId,
+    ...(threadId && { threadId })  // Only include if provided
+  }).save();
+
+  // Update button with image ID
+  const updatedButtons: InlineKeyboardButton[][] = [
+    [{ text: '🔄 Заново', callback_data: JSON.stringify({ a: 'imageRetry', id: imageDoc._id }) }]
+  ];
+
+  await bot.editMessageReplyMarkup(
+    { inline_keyboard: updatedButtons },
+    { chat_id: user.chatId, message_id: sentPhoto.message_id }
+  );
+
+  return { imageDoc, sentPhoto };
+}
+
 export async function generateImage(prompt: string, user: IUser, bot: TelegramBot): Promise<void> {
   try {
     // Check image limit
-    const imageUsage = await getPeriodImageUsage(user);
-    const imageLimit = await getPeriodImageLimit(user);
-    
-    if (imageUsage >= imageLimit) {
-      await logLimitHit(user, 'daily_image', imageUsage, imageLimit);
+    if (await isImageLimit(user)) {
+      const imageLimit = await getPeriodImageLimit(user);
       await sendMessage({
-        text: `Вы достигли лимита генерации изображений (${imageUsage}/${imageLimit} в день). Попробуйте завтра.`,
+        text: `Вы достигли лимита генерации изображений (${imageLimit} в день). Попробуйте завтра.`,
         user,
         bot
       });
@@ -90,7 +145,6 @@ export async function generateImage(prompt: string, user: IUser, bot: TelegramBo
       async () => {
         const genResult = await generateImageWithFallback({ prompt });
         
-        // Notify user if fallback was used
         if (genResult.usedFallback) {
           await sendMessage({
             text: '⏳ Основная модель перегружена. Переключаюсь на резервную...',
@@ -103,49 +157,8 @@ export async function generateImage(prompt: string, user: IUser, bot: TelegramBo
       }
     );
 
-    const imageResponse = result.response;
-
-    // Convert base64 to buffer
-    const imageBuffer = Buffer.from(imageResponse.base64, 'base64');
-    
-    // Save image locally
-    const localPath = await saveImageLocally(imageBuffer);
-    console.log(`Image saved locally at: ${localPath}`);
-
-    // Create "Retry" button
-    const buttons: InlineKeyboardButton[][] = [
-      [{ text: '🔄 Заново', callback_data: JSON.stringify({ a: 'imageRetry', id: '' }) }]
-    ];
-
-    // Send image to user
-    const sentPhoto = await bot.sendPhoto(user.chatId, imageBuffer, {
-      caption: `🎨 ${prompt.slice(0, 200)}${prompt.length > 200 ? '...' : ''}`,
-      reply_markup: { inline_keyboard: buttons }
-    });
-
-    // Get telegram file ID
-    const telegramFileId = sentPhoto.photo[sentPhoto.photo.length - 1].file_id;
-
-    // Save to database
-    const imageDoc = await new Image({
-      user: user._id,
-      prompt: prompt,
-      imageUrl: imageResponse.originalUrl,
-      telegramFileId: telegramFileId,
-      localPath: localPath,
-      provider: imageResponse.provider,
-      openaiResponseId: imageResponse.responseId
-    }).save();
-
-    // Update button with image ID
-    const updatedButtons: InlineKeyboardButton[][] = [
-      [{ text: '🔄 Заново', callback_data: JSON.stringify({ a: 'imageRetry', id: imageDoc._id }) }]
-    ];
-
-    await bot.editMessageReplyMarkup(
-      { inline_keyboard: updatedButtons },
-      { chat_id: user.chatId, message_id: sentPhoto.message_id }
-    );
+    // Send image and save to DB
+    await sendGeneratedImage({ prompt, user, bot, result });
 
   } catch (error) {
     console.error('Error in generateImage:', error);
@@ -234,7 +247,6 @@ export async function regenerateImage(imageId: string, user: IUser, bot: Telegra
       async () => {
         const genResult = await generateImageWithFallback({ prompt: imageDoc.prompt });
         
-        // Notify user if fallback was used
         if (genResult.usedFallback) {
           await sendMessage({
             text: '⏳ Основная модель перегружена. Переключаюсь на резервную...',
@@ -247,48 +259,14 @@ export async function regenerateImage(imageId: string, user: IUser, bot: Telegra
       }
     );
 
-    const imageResponse = result.response;
-
-    // Convert base64 to buffer
-    const imageBuffer = Buffer.from(imageResponse.base64, 'base64');
-    
-    // Save image locally
-    const localPath = await saveImageLocally(imageBuffer);
-
-    // Create buttons
-    const buttons: InlineKeyboardButton[][] = [
-      [{ text: '🔄 Заново', callback_data: JSON.stringify({ a: 'imageRetry', id: '' }) }]
-    ];
-
-    // Send image to user
-    const sentPhoto = await bot.sendPhoto(user.chatId, imageBuffer, {
-      caption: `🎨 ${imageDoc.prompt.slice(0, 200)}${imageDoc.prompt.length > 200 ? '...' : ''}`,
-      reply_markup: { inline_keyboard: buttons }
+    // Send image and save to DB (reuse helper)
+    await sendGeneratedImage({ 
+      prompt: imageDoc.prompt, 
+      user, 
+      bot, 
+      result,
+      threadId: imageDoc.threadId?.toString()
     });
-
-    // Get telegram file ID
-    const telegramFileId = sentPhoto.photo[sentPhoto.photo.length - 1].file_id;
-
-    // Save new image to database
-    const newImageDoc = await new Image({
-      user: user._id,
-      prompt: imageDoc.prompt,
-      imageUrl: imageResponse.originalUrl,
-      telegramFileId: telegramFileId,
-      localPath: localPath,
-      provider: imageResponse.provider,
-      openaiResponseId: imageResponse.responseId
-    }).save();
-
-    // Update button with new image ID
-    const updatedButtons: InlineKeyboardButton[][] = [
-      [{ text: '🔄 Заново', callback_data: JSON.stringify({ a: 'imageRetry', id: newImageDoc._id }) }]
-    ];
-
-    await bot.editMessageReplyMarkup(
-      { inline_keyboard: updatedButtons },
-      { chat_id: user.chatId, message_id: sentPhoto.message_id }
-    );
     
   } catch (error) {
     console.error('Error regenerating image:', error);
@@ -301,7 +279,7 @@ export async function regenerateImage(imageId: string, user: IUser, bot: Telegra
   }
 }
 
-export async function isImageLimit(user: IUser) {
+export async function isImageLimit(user: IUser): Promise<boolean> {
   try {
     const usage: number = await getPeriodImageUsage(user);
     const periodLimit: number = await getPeriodImageLimit(user);

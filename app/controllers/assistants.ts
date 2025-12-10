@@ -17,9 +17,8 @@ import { promptsDict } from "../helpers/prompts"
 import { logApiError } from "../helpers/errorLogger"
 import { callLLM, LLMRequest, isToolUse } from "../services/llm"
 import { generateImageWithFallback, ImageGenerationResult } from '../services/image'
-
 import Image from '../models/images'
-import { getPeriodImageLimit, getPeriodImageUsage, saveImageLocally } from './images';
+import { getPeriodImageLimit, getPeriodImageUsage, isImageLimit, sendGeneratedImage } from './images';
 
 export interface IAssistantParams {
   user: IUser
@@ -286,13 +285,10 @@ async function handleImageAssistantReply(thread: IThread, bot: TelegramBot, dict
   
   try {
     // Check image limit
-    const imageUsage = await getPeriodImageUsage(user);
-    const imageLimit = await getPeriodImageLimit(user);
-    
-    if (imageUsage >= imageLimit) {
-      await logLimitHit(user, 'daily_image', imageUsage, imageLimit);
+    if (await isImageLimit(user)) {
+      const imageLimit = await getPeriodImageLimit(user);
       await sendMessage({
-        text: dict.getString('IMAGE_LIMIT_REACHED') || `⚠️ Вы достигли лимита генерации изображений (${imageUsage}/${imageLimit} в день). Попробуйте завтра.`,
+        text: dict.getString('IMAGE_LIMIT_REACHED') || `⚠️ Вы достигли лимита генерации изображений (${imageLimit} в день). Попробуйте завтра.`,
         user,
         bot
       });
@@ -318,78 +314,36 @@ async function handleImageAssistantReply(thread: IThread, bot: TelegramBot, dict
     }).sort({ created: -1 });
 
     // Generate image with fallback support
-    let result: ImageGenerationResult;
-    
-    try {
-      result = await withChatAction(
-        bot,
-        user.chatId,
-        'upload_photo',
-        async () => {
-          const genResult = await generateImageWithFallback({
-            prompt,
-            previousResponseId: previousImage?.openaiResponseId
+    const result = await withChatAction(
+      bot,
+      user.chatId,
+      'upload_photo',
+      async () => {
+        const genResult = await generateImageWithFallback({
+          prompt,
+          previousResponseId: previousImage?.openaiResponseId
+        });
+        
+        if (genResult.usedFallback) {
+          await sendMessage({
+            text: dict.getString('IMAGE_SWITCHING_TO_BACKUP') || '⏳ Основная модель перегружена. Переключаюсь на резервную...',
+            user,
+            bot
           });
-          
-          // If fallback was used, notify user (send message inside the action)
-          if (genResult.usedFallback) {
-            await sendMessage({
-              text: dict.getString('IMAGE_SWITCHING_TO_BACKUP') || '⏳ Основная модель перегружена. Переключаюсь на резервную...',
-              user,
-              bot
-            });
-          }
-          
-          return genResult;
         }
-      );
-    } catch (error: any) {
-      throw error;
-    }
-
-    const imageResponse = result.response;
-
-    // Convert base64 to buffer
-    const imageBuffer = Buffer.from(imageResponse.base64, 'base64');
-
-    // Save image locally
-    const localPath = await saveImageLocally(imageBuffer);
-    console.log(`[ImageAssistant] Image saved locally at: ${localPath}`);
-
-    // Create buttons
-    const buttons = [
-      [{ text: '🔄 Заново', callback_data: JSON.stringify({ a: 'imageRetry', id: '' }) }]
-    ];
-
-    // Send image to user
-    const sentPhoto = await bot.sendPhoto(user.chatId, imageBuffer, {
-      caption: `🎨 ${prompt.slice(0, 200)}${prompt.length > 200 ? '...' : ''}`,
-      reply_markup: { inline_keyboard: buttons }
-    });
-
-    // Get telegram file ID
-    const telegramFileId = sentPhoto.photo[sentPhoto.photo.length - 1].file_id;
-
-    // Save image to database
-    const imageDoc = await new Image({
-      user: user._id,
-      prompt: prompt,
-      telegramFileId: telegramFileId,
-      localPath: localPath,
-      provider: imageResponse.provider,
-      openaiResponseId: imageResponse.responseId,
-      threadId: thread._id
-    }).save();
-
-    // Update button with image ID
-    const updatedButtons = [
-      [{ text: '🔄 Заново', callback_data: JSON.stringify({ a: 'imageRetry', id: imageDoc._id }) }]
-    ];
-
-    await bot.editMessageReplyMarkup(
-      { inline_keyboard: updatedButtons },
-      { chat_id: user.chatId, message_id: sentPhoto.message_id }
+        
+        return genResult;
+      }
     );
+
+    // Send image and save to DB (using shared helper)
+    const { imageDoc, sentPhoto } = await sendGeneratedImage({
+      prompt,
+      user,
+      bot,
+      result,
+      threadId: thread._id.toString()
+    });
 
     // Save assistant message (reference to image)
     await new Message({
@@ -401,14 +355,10 @@ async function handleImageAssistantReply(thread: IThread, bot: TelegramBot, dict
 
   } catch (error: any) {
     console.error('Error in handleImageAssistantReply:', error.message);
-    
-    // Log with full context - this is the only place we log imagegen errors
     await logApiError('image', error, `Image generation failed for thread ${thread._id}`);
     
-    // Provide user-friendly message based on error type
     let userMessage = dict.getString('IMAGE_GENERATION_ERROR') || 'Sorry, there was an error generating the image. Please try again.';
     
-    // Check if it's our custom ImageError with a reason
     if (error.reason === 'blocked' || error.reason === 'safety') {
       userMessage = '⚠️ Изображение не может быть сгенерировано из-за ограничений безопасности. Попробуйте изменить запрос.';
     }
