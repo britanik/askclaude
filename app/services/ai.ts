@@ -218,7 +218,7 @@ export async function saveImagePermanently(url, imageId) {
 
 export interface IConversationAnalysisResult {
   action: 'new' | 'continue',
-  assistant: 'normal' | 'finance' | 'websearch' | 'image'
+  assistant: 'normal' | 'finance' | 'websearch'
 }
 
 export async function analyzeConversation( lastMessages: Array<{role: string, content: string}>, currentMessage: string  ): Promise<IConversationAnalysisResult> {

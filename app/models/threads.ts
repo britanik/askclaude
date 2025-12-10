@@ -7,7 +7,7 @@ const Schema = mongoose.Schema
 
 const ThreadSchema = new Schema<IThread>({
   owner: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-  assistantType: { type: String, enum: ['normal', 'finance', 'websearch', 'image'], default: 'normal' },
+  assistantType: { type: String, enum: ['normal', 'finance', 'websearch'], default: 'normal' },
   created: { type: Date, default: () => moment().utc() },
   parent: {
     thread: { type: Schema.Types.ObjectId, ref: 'Thread' },

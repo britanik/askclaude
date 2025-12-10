@@ -11,8 +11,8 @@ const ImageSchema = new Schema({
   telegramFileId: { type: String },
   localPath: { type: String },
   provider: { type: String, enum: ['openai', 'getimg', 'gemini', 'unknown'], default: 'unknown' },
-  openaiResponseId: { type: String }, // For multi-turn image editing (OpenAI Responses API)
-  threadId: { type: Schema.Types.ObjectId, ref: 'Thread' } // Link to conversation thread (for image assistant)
+  multiTurnData: { type: Schema.Types.Mixed }, // Provider-specific data for multi-turn editing
+  threadId: { type: Schema.Types.ObjectId, ref: 'Thread' } // Link to conversation thread
 })
 
 // Add indexes for faster queries

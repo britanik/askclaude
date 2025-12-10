@@ -19,7 +19,6 @@ import { sendNotification } from "./notifications"
 import { getPeriodImageLimit, isImageLimit } from "./images"
 import { IThread } from "../interfaces/threads"
 import Message from "../models/messages"
-import { generateImage } from "./images"
 import { generateUserStats } from "./stats"
 import { regenerateImage } from "../controllers/images"
 
@@ -397,27 +396,24 @@ export default class Navigation {
   image() {
     return {
       action: async () => {
-        if( await isImageLimit(this.user) ){
-          await sendMessage({ text: this.dict.getString('SETTINGS_IMAGE_LIMIT_EXCEEDED', { limit: await getPeriodImageLimit(this.user) } ), user: this.user, bot: this.bot });
+        if (await isImageLimit(this.user)) {
+          await sendMessage({ 
+            text: this.dict.getString('SETTINGS_IMAGE_LIMIT_EXCEEDED', { limit: await getPeriodImageLimit(this.user) }), 
+            user: this.user, 
+            bot: this.bot 
+          });
           return;
         }
   
-        this.user = await userController.addStep(this.user, 'image');
-        await sendMessage({ text: this.dict.getString('IMAGE_ASK_PROMPT'), user: this.user, bot: this.bot, });
+        // Send prompt asking user to describe the image they want
+        await sendMessage({ 
+          text: this.dict.getString('IMAGE_ASK_PROMPT'), 
+          user: this.user, 
+          bot: this.bot 
+        });
       },
       callback: async () => {
-        if( await isImageLimit(this.user) ){
-          await sendMessage({ text: this.dict.getString('SETTINGS_IMAGE_LIMIT_EXCEEDED', { limit: await getPeriodImageLimit(this.user) } ), user: this.user, bot: this.bot });
-          return;
-        }
-  
-        let prompt = this.msg.text
-        if (!prompt || prompt.trim() === '') {
-          await sendMessage({ text: this.dict.getString('IMAGE_ASK_PROMPT_VALIDATE_ERROR'), user: this.user, bot: this.bot, });
-          return;
-        }
-  
-        await generateImage(prompt, this.user, this.bot);
+        this.assistant().callback();
       },
     }
   }

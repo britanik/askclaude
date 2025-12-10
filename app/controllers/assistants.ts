@@ -12,18 +12,18 @@ import { saveAIResponse } from "../helpers/fileLogger"
 import { withChatAction } from "../helpers/chatAction"
 import { getReplyFooter, isAdmin } from "../helpers/helpers"
 import { trackExpense, editTransaction, createBudget, getBudgetInfoString, deleteBudget, deleteTransaction, getTransactionsString } from "./expense"
-import { financeTools, searchTool } from "../helpers/tools"
+import { financeTools, searchTool, imageGenerationTool } from "../helpers/tools"
 import { promptsDict } from "../helpers/prompts"
 import { logApiError } from "../helpers/errorLogger"
 import { callLLM, LLMRequest, isToolUse } from "../services/llm"
 import { generateImageWithFallback, ImageGenerationResult } from '../services/image'
 import Image from '../models/images'
-import { getPeriodImageLimit, getPeriodImageUsage, isImageLimit, sendGeneratedImage } from './images';
+import { getPeriodImageLimit, getPeriodImageUsage, isImageLimit, sendGeneratedImage } from './images'
 
 export interface IAssistantParams {
   user: IUser
   firstMessage?: string
-  assistantType?: 'normal' | 'finance' | 'websearch' | 'image'
+  assistantType?: 'normal' | 'finance' | 'websearch'
 }
 
 export async function startAssistant(params:IAssistantParams): Promise<IThread> {
@@ -199,7 +199,7 @@ export async function handleUserReply(
 
   // ===== CONVERSATION ANALYSIS (if enabled) =====
   const isAnalysisEnabled = parseInt(process.env.ENABLE_CONVERSATION_ANALYSIS || '0') === 1;
-  let assistantType: 'normal' | 'finance' | 'websearch' | 'image' = 'normal';
+  let assistantType: 'normal' | 'finance' | 'websearch' = 'normal';
   let shouldCreateNewThread = false;
   
   if (isAnalysisEnabled) {
@@ -221,11 +221,6 @@ export async function handleUserReply(
     thread.assistantType = 'finance';
     await thread.save();
   }
-
-  if (assistantType === 'image' && thread.assistantType !== 'image') {
-    thread.assistantType = 'image';
-    await thread.save();
-  }
   
   // Save user message
   await new Message({
@@ -242,12 +237,6 @@ export async function handleUserReply(
 export async function handleAssistantReply(thread: IThread, bot: TelegramBot, dict: Dict): Promise<void> {
   try {
     const freshThread = await Thread.findById(thread._id).populate('owner')
-    
-    // Handle image generation separately
-    if (freshThread.assistantType === 'image') {
-      await handleImageAssistantReply(freshThread, bot, dict);
-      return;
-    }
 
     const assistantReply = await withChatAction(
       bot,
@@ -277,93 +266,6 @@ export async function handleAssistantReply(thread: IThread, bot: TelegramBot, di
     console.error('Error in handleAssistantReply:', error);
     await logApiError('anthropic', error, `Assistant reply failed for thread ${thread._id}`);
     await sendMessage({ text: dict.getString('ASSISTANT_ERROR'), user: thread.owner, bot });
-  }
-}
-
-async function handleImageAssistantReply(thread: IThread, bot: TelegramBot, dict: Dict): Promise<void> {
-  const user = thread.owner;
-  
-  try {
-    // Check image limit
-    if (await isImageLimit(user)) {
-      const imageLimit = await getPeriodImageLimit(user);
-      await sendMessage({
-        text: dict.getString('IMAGE_LIMIT_REACHED') || `⚠️ Вы достигли лимита генерации изображений (${imageLimit} в день). Попробуйте завтра.`,
-        user,
-        bot
-      });
-      return;
-    }
-
-    // Get the last user message as the prompt
-    const lastUserMessage = await Message.findOne({ 
-      thread: thread._id, 
-      role: 'user' 
-    }).sort({ created: -1 });
-    
-    if (!lastUserMessage || !lastUserMessage.content) {
-      await sendMessage({ text: dict.getString('IMAGE_NO_PROMPT'), user, bot });
-      return;
-    }
-
-    const prompt = lastUserMessage.content;
-    
-    // Check for previous image in this thread (for multi-turn)
-    const previousImage = await Image.findOne({ 
-      threadId: thread._id 
-    }).sort({ created: -1 });
-
-    // Generate image with fallback support
-    const result = await withChatAction(
-      bot,
-      user.chatId,
-      'upload_photo',
-      async () => {
-        const genResult = await generateImageWithFallback({
-          prompt,
-          previousResponseId: previousImage?.openaiResponseId
-        });
-        
-        if (genResult.usedFallback) {
-          await sendMessage({
-            text: dict.getString('IMAGE_SWITCHING_TO_BACKUP') || '⏳ Основная модель перегружена. Переключаюсь на резервную...',
-            user,
-            bot
-          });
-        }
-        
-        return genResult;
-      }
-    );
-
-    // Send image and save to DB (using shared helper)
-    const { imageDoc, sentPhoto } = await sendGeneratedImage({
-      prompt,
-      user,
-      bot,
-      result,
-      threadId: thread._id.toString()
-    });
-
-    // Save assistant message (reference to image)
-    await new Message({
-      thread: thread._id,
-      role: 'assistant',
-      content: `[Image generated: ${imageDoc._id}]`,
-      telegramMessageId: sentPhoto.message_id
-    }).save();
-
-  } catch (error: any) {
-    console.error('Error in handleImageAssistantReply:', error.message);
-    await logApiError('image', error, `Image generation failed for thread ${thread._id}`);
-    
-    let userMessage = dict.getString('IMAGE_GENERATION_ERROR') || 'Sorry, there was an error generating the image. Please try again.';
-    
-    if (error.reason === 'blocked' || error.reason === 'safety') {
-      userMessage = '⚠️ Изображение не может быть сгенерировано из-за ограничений безопасности. Попробуйте изменить запрос.';
-    }
-    
-    await sendMessage({ text: userMessage, user, bot });
   }
 }
 
@@ -397,9 +299,16 @@ async function chatWithFunctionCalling(params: { thread: IThread, bot: TelegramB
     const executedFunctions = []
     let usedModel = ''
     
+    // Get previous images in this thread for context
+    const threadImages = await Image.find({ threadId: thread._id }).sort({ created: -1 }).limit(10)
+    const imagesContext = threadImages.length > 0 
+      ? threadImages.map(img => `- ID: ${img._id}, prompt: "${img.prompt.slice(0, 100)}...", created: ${img.created}`).join('\n')
+      : 'No previous images in this conversation.'
+    
     while (true) {
       try {
-        let tools = [];
+        // Always include image generation tool
+        let tools: any[] = [...imageGenerationTool];
         let transactionsInfo = '';
         let budgetInfo = '';
         
@@ -413,11 +322,17 @@ async function chatWithFunctionCalling(params: { thread: IThread, bot: TelegramB
           budgetInfo = await getBudgetInfoString(user)
         }
 
+        // Build system prompt with images context
+        let systemPrompt = freshThread.assistantType === 'finance' 
+          ? promptsDict.finance(transactionsInfo, budgetInfo) 
+          : promptsDict.system();
+        
+        // Add images context to system prompt
+        systemPrompt += `\n\n# Previous Images in Conversation\n${imagesContext}`
+
         const request: LLMRequest = {
           model: process.env.MODEL_NORMAL || process.env.CLAUDE_MODEL,
-          system: freshThread.assistantType === 'finance' 
-            ? promptsDict.finance(transactionsInfo, budgetInfo) 
-            : promptsDict.system(),
+          system: systemPrompt,
           messages: messages,
           max_tokens: +(process.env.CLAUDE_MAX_OUTPUT || 4096),
           temperature: 1,
@@ -446,7 +361,8 @@ async function chatWithFunctionCalling(params: { thread: IThread, bot: TelegramB
         messages.push({ role: "assistant", content: response.content });
 
         const toolUses = response.content.filter(isToolUse);
-        
+        console.log('toolUses:', toolUses)
+
         if (toolUses.length === 0) {
           let responseText = '';
           let searchResults = [];
@@ -484,36 +400,133 @@ async function chatWithFunctionCalling(params: { thread: IThread, bot: TelegramB
           }
           
           finalResponse += responseText;
-          
-          if (isAdmin(user)) {
-            finalResponse += getReplyFooter(freshThread.assistantType, isNewThread, usedModel);
-          }
-          
           return finalResponse;
         }
 
+        // Process tool calls
         const toolResults = [];
+        
         for (const toolUse of toolUses) {
-          try {
-            const toolResult = await executeFunction(toolUse.name, toolUse.input, user);
-            executedFunctions.push({ name: toolUse.name, input: toolUse.input, result: toolResult });
-            toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: toolResult });
-          } catch (error) {
-            await logApiError('llm', error, `Function ${toolUse.name} failed`);
-            executedFunctions.push({ name: toolUse.name, input: toolUse.input, result: `Error: ${error.message}`, failed: true });
-            toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: `Error: ${error.message}`, is_error: true });
+          let result: string;
+          
+          executedFunctions.push({ name: toolUse.name, input: toolUse.input });
+
+          // Handle image generation tool
+          if (toolUse.name === 'generateImage') {
+            result = await handleImageGenerationTool(
+              toolUse.input as { prompt: string; editImageId?: string }, 
+              user, 
+              freshThread, 
+              bot
+            );
+            console.log('tool result:', result)
           }
+          // Finance tools
+          else if (toolUse.name === 'trackExpense') {
+            result = await trackExpense(user, toolUse.input);
+          } else if (toolUse.name === 'editTransaction') {
+            result = await editTransaction(user, toolUse.input);
+          } else if (toolUse.name === 'deleteTransaction') {
+            result = await deleteTransaction(user, toolUse.input);
+          } else if (toolUse.name === 'createBudget') {
+            result = await createBudget(user, toolUse.input);
+          } else if (toolUse.name === 'deleteBudget') {
+            result = await deleteBudget(user, toolUse.input);
+          } else if (toolUse.name === 'loadMore') {
+            const moreTransactions = await getTransactionsString(user, {
+              count: toolUse.input.count || 20,
+              start_date: toolUse.input.start_date,
+              end_date: toolUse.input.end_date,
+              includeBudgetInfo: false
+            });
+            result = moreTransactions;
+          } else {
+            result = `Unknown tool: ${toolUse.name}`;
+          }
+
+          toolResults.push({
+            type: "tool_result",
+            tool_use_id: toolUse.id,
+            content: result
+          });
         }
 
         messages.push({ role: "user", content: toolResults });
+        
       } catch (error) {
-        await logApiError('llm', error, 'LLM API call failed')
-        throw error
+        console.error('Error in chatWithFunctionCalling loop:', error);
+        await logApiError('llm', error, `Chat function calling failed for thread ${thread._id}`);
+        throw error;
       }
     }
-  } catch(e) {
-    console.log('Failed to process thread:', e)
-    throw e
+  } catch (error) {
+    console.error('Error in chatWithFunctionCalling:', error);
+    throw error;
+  }
+}
+
+async function handleImageGenerationTool(
+  input: Record<string, any>,
+  user: IUser,
+  thread: IThread,
+  bot: TelegramBot
+): Promise<string> {
+  const { prompt, editImageId } = input as { prompt: string; editImageId?: string };
+  
+  // Validate prompt exists
+  if (!prompt || typeof prompt !== 'string') {
+    return 'Error: No prompt provided for image generation.';
+  }
+  
+  try {
+    // Check image limit
+    if (await isImageLimit(user)) {
+      const imageLimit = await getPeriodImageLimit(user);
+      return `Error: Daily image generation limit reached (${imageLimit} images). The user should try again tomorrow.`;
+    }
+
+    // Look up previous image for multi-turn if editImageId provided
+    let previousMultiTurnData: any = undefined;
+    if (editImageId) {
+      const previousImage = await Image.findById(editImageId);
+      if (previousImage && previousImage.multiTurnData) {
+        previousMultiTurnData = previousImage.multiTurnData;
+        console.log(`[Image Tool] Editing previous image ${editImageId} with multiTurnData`);
+      }
+    }
+
+    // Generate image with fallback support
+    const result: ImageGenerationResult = await withChatAction(
+      bot,
+      user.chatId,
+      'upload_photo',
+      () => generateImageWithFallback({ 
+        prompt,
+        previousMultiTurnData 
+      })
+    );
+
+    // Send image to user and save to DB
+    const { imageDoc } = await sendGeneratedImage({
+      prompt,
+      user,
+      bot,
+      result,
+      threadId: thread._id.toString()
+    });
+
+    // Return success message with image ID for potential future edits
+    return `Image generated successfully. Image ID: ${imageDoc._id}. The image has been sent to the user.`;
+
+  } catch (error: any) {
+    console.error('Error in handleImageGenerationTool:', error);
+    await logApiError('image', error, `Image generation tool failed`);
+    
+    if (error.reason === 'blocked' || error.reason === 'safety') {
+      return 'Error: Image could not be generated due to content safety restrictions. Please ask the user to modify their request.';
+    }
+    
+    return `Error generating image: ${error.message}. Please inform the user and suggest they try again.`;
   }
 }
 

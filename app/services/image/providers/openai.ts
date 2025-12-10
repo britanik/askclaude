@@ -26,9 +26,9 @@ export class OpenAIImageProvider implements ImageProvider {
       };
 
       // Add previous response ID for multi-turn editing
-      if (request.previousResponseId) {
-        openaiRequest.previous_response_id = request.previousResponseId;
-        console.log('[Image:OpenAI] Multi-turn with previous:', request.previousResponseId);
+      if (request.previousMultiTurnData?.responseId) {
+        openaiRequest.previous_response_id = request.previousMultiTurnData.responseId;
+        console.log('[Image:OpenAI] Multi-turn with previous:', request.previousMultiTurnData.responseId);
       }
 
       // Build tool config with optional size and quality
@@ -67,7 +67,7 @@ export class OpenAIImageProvider implements ImageProvider {
 
       return {
         base64: imageData,
-        responseId: response.data.id,
+        multiTurnData: { responseId: response.data.id }, // Store for next turn
         provider: 'openai',
         usage: {
           inputTokens: response.data.usage?.input_tokens,

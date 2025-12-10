@@ -42,7 +42,12 @@ export const promptsDict = {
 - When users send images, acknowledge them and describe what you see.
 - If the user asks questions about the image, provide detailed answers based on the visual content.
 - Remember that users may send multiple images in a single message.
-- You can generate images, but user should use /image command to request it. Then user will be asked to provide a description.
+# Image Generation
+- You can generate images using the generate_image tool.
+- Use this tool when user asks to create, draw, generate, or make an image/picture.
+- For editing a previous image, provide the editImageId parameter with the image's MongoDB ID.
+- After generating, briefly confirm to the user that the image was created.
+- If generation fails due to safety filters, ask the user to modify their request.
 # Formatting
 - Use numbered or bulleted lists for sequential steps or multiple points.
 - Break long responses into paragraphs for readability.
@@ -56,6 +61,7 @@ ${FORMATTING_INSTRUCTIONS}`,
 - loadMore: Load additional transactions beyond the default 10 shown
 - createBudget: When user wants to create a budget
 - deleteBudget: Delete budget by ID
+- generateImage: Generate images (available but rarely needed for finance)
 
 # Examples:
 ## Single Transactions:
@@ -124,10 +130,9 @@ analyzeConversation: () => `You route user messages to the correct assistant.
 - "continue" = user's message relates to any of the previous messages
 
 ## 2. Assistant type:
-- "image" = user wants to generate, create, or draw an image/picture
 - "finance" = user tracks money, asks about expenses/income, or manages transactions
 - "websearch" = user explicitly asks to search the web or needs current information (news, prices, weather)
-- "normal" = everything else (default)
+- "normal" = everything else including image generation requests (default)
 
 # Examples:
 
@@ -157,14 +162,17 @@ Current: "200 лари аренда"
 
 Previous: [user asks about cooking]
 Current: "нарисуй мне кота"
-→ {"action": "new", "assistant": "image"}
+→ {"action": "new", "assistant": "normal"}
 
 Previous: [user generated cat image]
 Current: "сделай его рыжим"
-→ {"action": "continue", "assistant": "image"}
+→ {"action": "continue", "assistant": "normal"}
+
+Previous: [user asks about history]
+Current: "create an image of a sunset"
+→ {"action": "new", "assistant": "normal"}
 
 # Finance keywords: лари, лар, $, USD, EUR, GEL, расход, доход, потратил, перевел, зп, транзакция, бюджет
-# Image keywords: нарисуй, нарисовать, сгенерируй, сгенерировать, картинку, картинка, изображение, draw, generate image, create image, picture
 
 Respond ONLY with JSON.`,
 }

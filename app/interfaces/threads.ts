@@ -10,7 +10,7 @@ export interface IThreadParent {
 export interface IThread extends Document {
   _id: ObjectId
   owner: IUser
-  assistantType?: 'normal' | 'finance' | 'websearch' | 'image'
+  assistantType?: 'normal' | 'finance' | 'websearch'
   created?: Date
   parent?: IThreadParent  // if this thread is a branch from another thread
 }

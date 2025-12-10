@@ -107,7 +107,7 @@ export async function sendGeneratedImage(params: SendGeneratedImageParams): Prom
     telegramFileId: telegramFileId,
     localPath: localPath,
     provider: imageResponse.provider,
-    openaiResponseId: imageResponse.responseId,
+    multiTurnData: imageResponse.multiTurnData,
     ...(threadId && { threadId })  // Only include if provided
   }).save();
 
@@ -122,53 +122,6 @@ export async function sendGeneratedImage(params: SendGeneratedImageParams): Prom
   );
 
   return { imageDoc, sentPhoto };
-}
-
-export async function generateImage(prompt: string, user: IUser, bot: TelegramBot): Promise<void> {
-  try {
-    // Check image limit
-    if (await isImageLimit(user)) {
-      const imageLimit = await getPeriodImageLimit(user);
-      await sendMessage({
-        text: `Вы достигли лимита генерации изображений (${imageLimit} в день). Попробуйте завтра.`,
-        user,
-        bot
-      });
-      return;
-    }
-
-    // Generate image with fallback support
-    const result = await withChatAction(
-      bot,
-      user.chatId,
-      'upload_photo',
-      async () => {
-        const genResult = await generateImageWithFallback({ prompt });
-        
-        if (genResult.usedFallback) {
-          await sendMessage({
-            text: '⏳ Основная модель перегружена. Переключаюсь на резервную...',
-            user,
-            bot
-          });
-        }
-        
-        return genResult;
-      }
-    );
-
-    // Send image and save to DB
-    await sendGeneratedImage({ prompt, user, bot, result });
-
-  } catch (error) {
-    console.error('Error in generateImage:', error);
-    await logApiError('image', error, 'Image generation failed');
-    await sendMessage({ 
-      text: 'Произошла ошибка при генерации изображения. Пожалуйста, попробуйте позже.', 
-      user, 
-      bot 
-    });
-  }
 }
 
 export async function getStoredImage(imageId: string): Promise<{ buffer?: Buffer, telegramFileId?: string, error?: string }> {

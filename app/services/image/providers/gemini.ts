@@ -34,18 +34,32 @@ export class GeminiImageProvider implements ImageProvider {
   private async generateWithGemini(request: ImageRequest, model: string): Promise<ImageResponse> {
     const baseUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
     
+    // Build conversation history for multi-turn
+    let contents: any[] = [];
+    
+    if (request.previousMultiTurnData?.conversationHistory) {
+      // Continue from previous conversation
+      contents = [...request.previousMultiTurnData.conversationHistory];
+      contents.push({
+        role: 'user',
+        parts: [{ text: request.prompt }]
+      });
+      console.log('[Image:Gemini] Multi-turn with', contents.length - 1, 'previous messages');
+    } else {
+      // New conversation
+      contents = [{
+        role: 'user',
+        parts: [{ text: request.prompt }]
+      }];
+    }
+    
     let response: any;
     
     try {
       response = await axios.post(
         baseUrl,
         {
-          contents: [{
-            role: 'user',
-            parts: [
-              { text: request.prompt }
-            ]
-          }],
+          contents,
           generationConfig: {
             responseModalities: ['IMAGE', 'TEXT']
           }
@@ -94,9 +108,17 @@ export class GeminiImageProvider implements ImageProvider {
       );
     }
 
+    // Build updated conversation history for multi-turn
+    const updatedHistory = [...contents];
+    // Add assistant response to history
+    if (response.data.candidates?.[0]?.content) {
+      updatedHistory.push(response.data.candidates[0].content);
+    }
+
     return {
       base64,
-      provider: 'gemini'
+      provider: 'gemini',
+      multiTurnData: { conversationHistory: updatedHistory }
     };
   }
 
@@ -156,6 +178,7 @@ export class GeminiImageProvider implements ImageProvider {
     return {
       base64,
       provider: 'gemini'
+      // Imagen doesn't support multi-turn, so no multiTurnData
     };
   }
 
@@ -206,7 +229,7 @@ export class GeminiImageProvider implements ImageProvider {
           .join(', ');
 
         return {
-          message: `Generation stopped: ${candidate.finishReason}${highRisk ? ` (${highRisk})` : ''}`,
+          message: `Gemini stopped: ${candidate.finishReason}${highRisk ? ` (${highRisk})` : ''}`,
           reason: candidate.finishReason.toLowerCase()
         };
       }
@@ -216,15 +239,15 @@ export class GeminiImageProvider implements ImageProvider {
   }
 
   /**
-   * Extract base64 image data from generateContent response (Gemini 3 Pro Image)
+   * Extract base64 image data from generateContent response
    */
   private extractImageFromGenerateContent(data: any): string | null {
-    if (!data.candidates || !Array.isArray(data.candidates) || data.candidates.length === 0) {
+    if (!data.candidates || data.candidates.length === 0) {
       return null;
     }
 
-    const content = data.candidates[0]?.content;
-    if (!content || !content.parts || !Array.isArray(content.parts)) {
+    const content = data.candidates[0].content;
+    if (!content || !content.parts) {
       return null;
     }
 

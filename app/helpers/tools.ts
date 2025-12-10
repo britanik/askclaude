@@ -100,3 +100,24 @@ export const financeTools = [
     }
   }
 ];
+
+export const imageGenerationTool = [
+  {
+    name: "generateImage",
+    description: "Generate a new image or edit a previous image based on user request. Use this when user wants to create, draw, generate, or modify an image.",
+    input_schema: {
+      type: "object",
+      properties: {
+        prompt: { 
+          type: "string", 
+          description: "Detailed description of the image to generate, or edit instructions if editing a previous image" 
+        },
+        editImageId: { 
+          type: "string", 
+          description: "Optional: MongoDB ID of a previous image to edit/continue. Only use if user wants to modify an existing image from this conversation." 
+        }
+      },
+      required: ["prompt"]
+    }
+  }
+];
