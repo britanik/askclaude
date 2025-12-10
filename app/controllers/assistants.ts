@@ -299,8 +299,12 @@ async function chatWithFunctionCalling(params: { thread: IThread, bot: TelegramB
     const executedFunctions = []
     let usedModel = ''
     
-    // Get previous images in this thread for context
-    const threadImages = await Image.find({ threadId: thread._id }).sort({ created: -1 }).limit(10)
+    // Get previous images in this thread for context (including parent thread for branches)
+    const threadIds: any[] = [thread._id]
+    if (freshThread.parent?.thread) {
+      threadIds.push(freshThread.parent.thread)
+    }
+    const threadImages = await Image.find({ threadId: { $in: threadIds } }).sort({ created: -1 }).limit(10)
     const imagesContext = threadImages.length > 0 
       ? threadImages.map(img => `- ID: ${img._id}, prompt: "${img.prompt.slice(0, 100)}...", created: ${img.created}`).join('\n')
       : 'No previous images in this conversation.'
@@ -507,13 +511,22 @@ async function handleImageGenerationTool(
     );
 
     // Send image to user and save to DB
-    const { imageDoc } = await sendGeneratedImage({
+    const { imageDoc, sentPhoto } = await sendGeneratedImage({
       prompt,
       user,
       bot,
       result,
       threadId: thread._id.toString()
     });
+
+    // Save image as a Message so reply functionality works
+    await new Message({
+      thread: thread._id,
+      role: 'assistant',
+      content: null,
+      imageId: imageDoc._id,
+      telegramMessageId: sentPhoto.message_id
+    }).save();
 
     // Return success message with image ID for potential future edits
     return `Image generated successfully. Image ID: ${imageDoc._id}. The image has been sent to the user.`;

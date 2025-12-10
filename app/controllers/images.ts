@@ -46,9 +46,6 @@ export async function moderateContent(prompt: string): Promise<{flagged: boolean
       }
     );
     
-    console.log('Moderate data: ', response.data)
-    console.log('category_scores ', response.data.results[0].category_scores)
-
     // Return the moderation result
     return {
       flagged: response.data.results[0].flagged,

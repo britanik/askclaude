@@ -36,15 +36,27 @@ export class GeminiImageProvider implements ImageProvider {
     
     // Build conversation history for multi-turn
     let contents: any[] = [];
+    let fullHistory: any[] = []; // Keep full history for local storage
     
     if (request.previousMultiTurnData?.conversationHistory) {
-      // Continue from previous conversation
-      contents = [...request.previousMultiTurnData.conversationHistory];
-      contents.push({
-        role: 'user',
-        parts: [{ text: request.prompt }]
-      });
-      console.log('[Image:Gemini] Multi-turn with', contents.length - 1, 'previous messages');
+      // Continue from previous conversation - but only send last image to API
+      fullHistory = [...request.previousMultiTurnData.conversationHistory];
+      
+      // Find the last model response (contains the most recent image)
+      const lastModelResponse = fullHistory.filter(m => m.role === 'model').pop();
+      
+      if (lastModelResponse) {
+        // Only send: last image + new prompt (not entire history)
+        contents = [
+          lastModelResponse,
+          { role: 'user', parts: [{ text: request.prompt }] }
+        ];
+      } else {
+        // Fallback: just send new prompt
+        contents = [{ role: 'user', parts: [{ text: request.prompt }] }];
+      }
+      
+      console.log('[Image:Gemini] Multi-turn: sending last image + new prompt (full history has', fullHistory.length, 'messages)');
     } else {
       // New conversation
       contents = [{
@@ -55,13 +67,19 @@ export class GeminiImageProvider implements ImageProvider {
     
     let response: any;
     
+    console.log('[Contents to send]', contents)
+
     try {
       response = await axios.post(
         baseUrl,
         {
           contents,
           generationConfig: {
-            responseModalities: ['IMAGE', 'TEXT']
+            responseModalities: ['IMAGE', 'TEXT'],
+            imageConfig: {
+              imageSize: '1K', // Lowest allowed resolution
+              aspectRatio: '1:1' // Standard square (most optimized)
+            }
           }
         },
         {
@@ -108,8 +126,10 @@ export class GeminiImageProvider implements ImageProvider {
       );
     }
 
-    // Build updated conversation history for multi-turn
-    const updatedHistory = [...contents];
+    // Build updated conversation history for multi-turn (store full history locally)
+    const updatedHistory = fullHistory.length > 0 ? [...fullHistory] : [...contents];
+    // Add new user prompt to history
+    updatedHistory.push({ role: 'user', parts: [{ text: request.prompt }] });
     // Add assistant response to history
     if (response.data.candidates?.[0]?.content) {
       updatedHistory.push(response.data.candidates[0].content);
