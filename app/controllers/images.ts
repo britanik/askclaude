@@ -93,12 +93,12 @@ export async function sendGeneratedImage(params: SendGeneratedImageParams): Prom
 
   // Create "Retry" button (with empty ID initially)
   const buttons: InlineKeyboardButton[][] = [
-    [{ text: '🔄 Заново', callback_data: JSON.stringify({ a: 'imageRetry', id: '' }) }]
+    [{ text: '🔄 Повторить', callback_data: JSON.stringify({ a: 'imageRetry', id: '' }) }]
   ];
 
   // Send image to user
   const sentPhoto = await bot.sendPhoto(user.chatId, imageBuffer, {
-    caption: `🎨 ${prompt.slice(0, 200)}${prompt.length > 200 ? '...' : ''}`,
+    // caption: `🎨 ${prompt.slice(0, 200)}${prompt.length > 200 ? '...' : ''}`,
     reply_markup: { inline_keyboard: buttons }
   });
 
@@ -119,7 +119,7 @@ export async function sendGeneratedImage(params: SendGeneratedImageParams): Prom
 
   // Update button with image ID
   const updatedButtons: InlineKeyboardButton[][] = [
-    [{ text: '🔄 Заново', callback_data: JSON.stringify({ a: 'imageRetry', id: imageDoc._id }) }]
+    [{ text: '🔄 Повторить', callback_data: JSON.stringify({ a: 'imageRetry', id: imageDoc._id }) }]
   ];
 
   await bot.editMessageReplyMarkup(
