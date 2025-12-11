@@ -299,12 +299,15 @@ async function chatWithFunctionCalling(params: { thread: IThread, bot: TelegramB
     const executedFunctions = []
     let usedModel = ''
     
-    // Get previous images in this thread for context (including parent thread for branches)
-    const threadIds: any[] = [thread._id]
-    if (freshThread.parent?.thread) {
-      threadIds.push(freshThread.parent.thread)
-    }
-    const threadImages = await Image.find({ threadId: { $in: threadIds } }).sort({ created: -1 }).limit(10)
+    // Get previous images from messages in this conversation context (respects branch points)
+    const imageIdsFromMessages = threadMessages
+      .filter(msg => msg.imageId)
+      .map(msg => msg.imageId)
+    
+    const threadImages = imageIdsFromMessages.length > 0
+      ? await Image.find({ _id: { $in: imageIdsFromMessages } }).sort({ created: -1 })
+      : []
+    
     const imagesContext = threadImages.length > 0 
       ? threadImages.map(img => `- ID: ${img._id}, prompt: "${img.prompt.slice(0, 100)}...", created: ${img.created}`).join('\n')
       : 'No previous images in this conversation.'

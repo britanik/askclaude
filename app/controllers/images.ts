@@ -82,6 +82,15 @@ export async function sendGeneratedImage(params: SendGeneratedImageParams): Prom
   const localPath = await saveImageLocally(imageBuffer);
   console.log(`[Image] Saved locally at: ${localPath}`);
 
+  // Debug: log multiTurnData size before saving
+  if (imageResponse.multiTurnData) {
+    const dataSize = JSON.stringify(imageResponse.multiTurnData).length;
+    console.log(`[Image] multiTurnData size: ${(dataSize / 1024).toFixed(1)}KB`);
+    if (dataSize > 10 * 1024 * 1024) {
+      console.warn(`[Image] WARNING: multiTurnData is very large (${(dataSize / 1024 / 1024).toFixed(1)}MB), may exceed MongoDB limit`);
+    }
+  }
+
   // Create "Retry" button (with empty ID initially)
   const buttons: InlineKeyboardButton[][] = [
     [{ text: '🔄 Заново', callback_data: JSON.stringify({ a: 'imageRetry', id: '' }) }]
@@ -210,13 +219,27 @@ export async function regenerateImage(imageId: string, user: IUser, bot: Telegra
     );
 
     // Send image and save to DB (reuse helper)
-    await sendGeneratedImage({ 
+    const { imageDoc: newImageDoc, sentPhoto } = await sendGeneratedImage({ 
       prompt: imageDoc.prompt, 
       user, 
       bot, 
       result,
       threadId: imageDoc.threadId?.toString()
     });
+    
+    // Save regenerated image as a Message so Claude knows about it
+    if (newImageDoc.threadId) {
+      const Message = (await import('../models/messages')).default;
+      await new Message({
+        thread: newImageDoc.threadId,
+        role: 'assistant',
+        content: null,
+        imageId: newImageDoc._id,
+        telegramMessageId: sentPhoto.message_id
+      }).save();
+      
+      console.log(`[Regenerate] Saved Message linking image ${newImageDoc._id} to thread ${newImageDoc.threadId}`);
+    }
     
   } catch (error) {
     console.error('Error regenerating image:', error);

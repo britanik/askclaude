@@ -34,29 +34,20 @@ export class GeminiImageProvider implements ImageProvider {
   private async generateWithGemini(request: ImageRequest, model: string): Promise<ImageResponse> {
     const baseUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
     
-    // Build conversation history for multi-turn
+    // Build conversation for multi-turn
     let contents: any[] = [];
-    let fullHistory: any[] = []; // Keep full history for local storage
     
-    if (request.previousMultiTurnData?.conversationHistory) {
-      // Continue from previous conversation - but only send last image to API
-      fullHistory = [...request.previousMultiTurnData.conversationHistory];
-      
-      // Find the last model response (contains the most recent image)
-      const lastModelResponse = fullHistory.filter(m => m.role === 'model').pop();
-      
-      if (lastModelResponse) {
-        // Only send: last image + new prompt (not entire history)
-        contents = [
-          lastModelResponse,
-          { role: 'user', parts: [{ text: request.prompt }] }
-        ];
-      } else {
-        // Fallback: just send new prompt
-        contents = [{ role: 'user', parts: [{ text: request.prompt }] }];
-      }
-      
-      console.log('[Image:Gemini] Multi-turn: sending last image + new prompt (full history has', fullHistory.length, 'messages)');
+    // Check for previous multi-turn data (now stores only lastModelResponse, not full history)
+    const previousResponse = request.previousMultiTurnData?.lastModelResponse 
+      || request.previousMultiTurnData?.conversationHistory?.filter((m: any) => m.role === 'model').pop(); // backward compat
+    
+    if (previousResponse) {
+      // Continue from previous image - send last image + new prompt
+      contents = [
+        previousResponse,
+        { role: 'user', parts: [{ text: request.prompt }] }
+      ];
+      console.log('[Image:Gemini] Multi-turn: sending last image + new prompt');
     } else {
       // New conversation
       contents = [{
@@ -126,19 +117,13 @@ export class GeminiImageProvider implements ImageProvider {
       );
     }
 
-    // Build updated conversation history for multi-turn (store full history locally)
-    const updatedHistory = fullHistory.length > 0 ? [...fullHistory] : [...contents];
-    // Add new user prompt to history
-    updatedHistory.push({ role: 'user', parts: [{ text: request.prompt }] });
-    // Add assistant response to history
-    if (response.data.candidates?.[0]?.content) {
-      updatedHistory.push(response.data.candidates[0].content);
-    }
+    // Store only the last model response for multi-turn (not full history to avoid MongoDB size limits)
+    const lastModelResponse = response.data.candidates?.[0]?.content;
 
     return {
       base64,
       provider: 'gemini',
-      multiTurnData: { conversationHistory: updatedHistory }
+      multiTurnData: lastModelResponse ? { lastModelResponse } : undefined
     };
   }
 
