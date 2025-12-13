@@ -16,11 +16,13 @@ import { tmplInvite } from "../templates/tmplInvite"
 import { getTokenLimitMessage, isTokenLimit, isWebSearchLimit, updateUserSchema } from "./tokens"
 import { isValidInviteCode, processReferral } from "./invites"
 import { sendNotification } from "./notifications"
-import { getPeriodImageLimit, isImageLimit } from "./images"
+import { getPeriodImageLimit, isImageLimit, moderateContent, sendGeneratedImage } from "./images"
 import { IThread } from "../interfaces/threads"
 import Message from "../models/messages"
 import { generateUserStats } from "./stats"
 import { regenerateImage } from "../controllers/images"
+import { withChatAction } from "../helpers/chatAction"
+import { generateImageWithFallback } from "../services/image"
 
 export interface INavigationParams {
   user?: IUser
@@ -397,22 +399,53 @@ export default class Navigation {
     return {
       action: async () => {
         if (await isImageLimit(this.user)) {
-          await sendMessage({ 
-            text: this.dict.getString('SETTINGS_IMAGE_LIMIT_EXCEEDED', { limit: await getPeriodImageLimit(this.user) }), 
-            user: this.user, 
-            bot: this.bot 
-          });
+          await sendMessage({ text: this.dict.getString('SETTINGS_IMAGE_LIMIT_EXCEEDED', { limit: await getPeriodImageLimit(this.user) }), user: this.user, bot: this.bot });
           return;
         }
-  
+
+        this.user = await userController.addStep(this.user, 'image')
+
         // Send prompt asking user to describe the image they want
-        await sendMessage({ 
-          text: this.dict.getString('IMAGE_ASK_PROMPT'), 
-          user: this.user, 
-          bot: this.bot 
-        });
+        await sendMessage({ text: this.dict.getString('IMAGE_ASK_PROMPT'), user: this.user, bot: this.bot });
       },
       callback: async () => {
+        console.log('image().callback()')
+        const prompt = this.msg?.text?.trim();
+        
+        // Validate prompt
+        if (!prompt) {
+          await sendMessage({ text: this.dict.getString('IMAGE_NO_PROMPT'), user: this.user, bot: this.bot });
+          return;
+        }
+
+        // Check image limit
+        if (await isImageLimit(this.user)) {
+          await sendMessage({ text: this.dict.getString('SETTINGS_IMAGE_LIMIT_EXCEEDED', { limit: await getPeriodImageLimit(this.user) }), user: this.user, bot: this.bot });
+          return;
+        }
+
+        // Check for NSFW content
+        const moderation = await moderateContent(prompt);
+        console.log('moderation', moderation)
+        if (moderation.flagged && moderation.scores.sexual > 0.9) {
+          // NSFW: Direct generation with GetImg, no threads, no assistant
+          try {
+            const result = await withChatAction(
+              this.bot,
+              this.user.chatId,
+              'upload_photo',
+              () => generateImageWithFallback({ prompt })
+            );
+            // Send image and save to DB (no threadId)
+            await sendGeneratedImage({ prompt, user: this.user, bot: this.bot, result });
+          } catch (error) {
+            console.error('Error generating NSFW image:', error);
+            await sendMessage({ text: this.dict.getString('IMAGE_GENERATION_ERROR'), user: this.user, bot: this.bot });
+          }
+          return;
+        }
+
+        // Not NSFW: Use assistant flow with threads and Claude
         this.assistant().callback();
       },
     }

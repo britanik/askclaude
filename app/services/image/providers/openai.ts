@@ -34,14 +34,10 @@ export class OpenAIImageProvider implements ImageProvider {
       // Build tool config with optional size and quality
       const imageGenTool: any = { type: 'image_generation' };
 
-      if (request.size) {
-        imageGenTool.size = request.size;
-      }
+      imageGenTool.size = (request.size) ? request.size : '1024x1024';
+      imageGenTool.quality = (request.quality) ? request.quality : 'medium'
 
-      if (request.quality) {
-        imageGenTool.quality = request.quality;
-      }
-
+      // console.log('imageGenTool:', imageGenTool)
       openaiRequest.tools = [imageGenTool];
 
       const response = await axios.post(
@@ -56,7 +52,8 @@ export class OpenAIImageProvider implements ImageProvider {
         }
       );
 
-      console.log('response.data.output[1].content', response.data.output[1].content)
+      // console.log('response.data.output', response.data.output)
+      // console.log('response.data.output[1].content', response.data.output[1].content)
 
       // Extract image data from response
       const imageData = this.extractImageData(response.data);
