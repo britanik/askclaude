@@ -16,7 +16,7 @@ import { tmplInvite } from "../templates/tmplInvite"
 import { getTokenLimitMessage, isTokenLimit, isWebSearchLimit, updateUserSchema } from "./tokens"
 import { isValidInviteCode, processReferral } from "./invites"
 import { sendNotification } from "./notifications"
-import { getPeriodImageLimit, isImageLimit, moderateContent, sendGeneratedImage } from "./images"
+import { getCurrentTier, getPeriodImageLimit, isImageLimit, moderateContent, sendGeneratedImage } from "./images"
 import { IThread } from "../interfaces/threads"
 import Message from "../models/messages"
 import { generateUserStats } from "./stats"
@@ -430,14 +430,10 @@ export default class Navigation {
         if (moderation.flagged && moderation.scores.sexual > 0.9) {
           // NSFW: Direct generation with GetImg, no threads, no assistant
           try {
-            const result = await withChatAction(
-              this.bot,
-              this.user.chatId,
-              'upload_photo',
-              () => generateImageWithFallback({ prompt })
-            );
+            const result = await withChatAction( this.bot, this.user.chatId, 'upload_photo', () => generateImageWithFallback({ prompt, tier: 'normal' }) );
             // Send image and save to DB (no threadId)
-            await sendGeneratedImage({ prompt, user: this.user, bot: this.bot, result });
+            const actualTier = result.actualTier;
+            await sendGeneratedImage({ prompt, user: this.user, bot: this.bot, result, tier: actualTier });
           } catch (error) {
             console.error('Error generating NSFW image:', error);
             await sendMessage({ text: this.dict.getString('IMAGE_GENERATION_ERROR'), user: this.user, bot: this.bot });

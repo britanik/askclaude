@@ -8,7 +8,7 @@ import Image from '../models/images';
 import { withChatAction } from '../helpers/chatAction';
 import { sendMessage } from '../templates/sendMessage';
 import { logLimitHit } from './tokens';
-import { generateImageWithFallback, ImageGenerationResult } from '../services/image';
+import { generateImageWithFallback, ImageGenerationResult, ImageTier } from '../services/image';
 import { logApiError } from '../helpers/errorLogger';
 
 export async function saveImageLocally(imageBuffer: Buffer): Promise<string> {
@@ -68,11 +68,12 @@ export interface SendGeneratedImageParams {
   user: IUser;
   bot: TelegramBot;
   result: ImageGenerationResult;
+  tier: ImageTier;
   threadId?: string;  // Optional: for assistant flow
 }
 
 export async function sendGeneratedImage(params: SendGeneratedImageParams): Promise<{ imageDoc: any; sentPhoto: any }> {
-  const { prompt, user, bot, result, threadId } = params;
+  const { prompt, user, bot, result, tier, threadId } = params;
   const imageResponse = result.response;
 
   // Convert base64 to buffer
@@ -105,7 +106,7 @@ export async function sendGeneratedImage(params: SendGeneratedImageParams): Prom
   // Get telegram file ID
   const telegramFileId = sentPhoto.photo[sentPhoto.photo.length - 1].file_id;
 
-  // Save to database
+  // Save to database with tier
   const imageDoc = await new Image({
     user: user._id,
     prompt: prompt,
@@ -113,6 +114,7 @@ export async function sendGeneratedImage(params: SendGeneratedImageParams): Prom
     telegramFileId: telegramFileId,
     localPath: localPath,
     provider: imageResponse.provider,
+    tier: tier,
     multiTurnData: imageResponse.multiTurnData,
     ...(threadId && { threadId })  // Only include if provided
   }).save();
@@ -196,7 +198,19 @@ export async function regenerateImage(imageId: string, user: IUser, bot: Telegra
       return;
     }
     
-    console.log(`Regenerating image with prompt: "${imageDoc.prompt}" for user ${user.username || user.chatId}`);
+    // Check limits and get current tier
+    if (await isImageLimit(user)) {
+      await sendMessage({
+        text: 'Достигнут дневной лимит генерации изображений. Попробуйте завтра.',
+        user,
+        bot
+      });
+      return;
+    }
+    
+    const tier = await getCurrentTier(user);
+    
+    console.log(`Regenerating image with prompt: "${imageDoc.prompt}" for user ${user.username || user.chatId}, tier: ${tier}`);
     
     // Generate new image with fallback support
     const result = await withChatAction(
@@ -204,7 +218,7 @@ export async function regenerateImage(imageId: string, user: IUser, bot: Telegra
       user.chatId,
       'upload_photo',
       async () => {
-        const genResult = await generateImageWithFallback({ prompt: imageDoc.prompt });
+        const genResult = await generateImageWithFallback({ prompt: imageDoc.prompt, tier });
         
         if (genResult.usedFallback) {
           await sendMessage({
@@ -218,12 +232,16 @@ export async function regenerateImage(imageId: string, user: IUser, bot: Telegra
       }
     );
 
+    // Use actual tier (may have fallen back from top to normal)
+    const actualTier = result.actualTier || tier;
+
     // Send image and save to DB (reuse helper)
     const { imageDoc: newImageDoc, sentPhoto } = await sendGeneratedImage({ 
       prompt: imageDoc.prompt, 
       user, 
       bot, 
       result,
+      tier: actualTier,
       threadId: imageDoc.threadId?.toString()
     });
     
@@ -250,6 +268,34 @@ export async function regenerateImage(imageId: string, user: IUser, bot: Telegra
       bot
     });
   }
+}
+
+// ===== Tier and Limit Functions =====
+
+export async function getTopTierLimit(): Promise<number> {
+  return +(process.env.IMAGE_LIMIT_DAILY_TOP || 5);
+}
+
+export async function getTopTierUsage(user: IUser): Promise<number> {
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  
+  return await Image.countDocuments({
+    user: user._id,
+    tier: 'top',
+    created: { $gte: startOfDay }
+  });
+}
+
+export async function getCurrentTier(user: IUser): Promise<ImageTier> {
+  const topUsage = await getTopTierUsage(user);
+  const topLimit = await getTopTierLimit();
+  
+  if (topUsage >= topLimit) {
+    return 'normal';
+  }
+  
+  return 'top';
 }
 
 export async function isImageLimit(user: IUser): Promise<boolean> {
@@ -280,6 +326,6 @@ export async function getPeriodImageUsage(user: IUser): Promise<number> {
 }
 
 export async function getPeriodImageLimit(user: IUser): Promise<number> {
-  // Return from env or default
-  return +(process.env.DAILY_IMAGE_LIMIT || 10);
+  // Return total daily limit (top + normal)
+  return +(process.env.IMAGE_LIMIT_DAILY_TOTAL || 15);
 }

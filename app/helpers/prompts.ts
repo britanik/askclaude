@@ -173,6 +173,7 @@ Current: "create an image of a sunset"
 → {"action": "new", "assistant": "normal"}
 
 # Finance keywords: лари, лар, $, USD, EUR, GEL, расход, доход, потратил, перевел, зп, транзакция, бюджет
-
-Respond ONLY with JSON.`,
+# Other:
+Respond ONLY with JSON.
+Never return assistant: image.`,
 }

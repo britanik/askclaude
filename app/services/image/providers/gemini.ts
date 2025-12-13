@@ -17,10 +17,8 @@ export class GeminiImageProvider implements ImageProvider {
     console.log('[Image:Gemini] Generating image');
     console.log('[Image:Gemini] Prompt:', request.prompt.slice(0, 100) + '...');
     
-    // Determine which model to use
     const model = request.model || 'gemini-3-pro-image-preview';
     
-    // Use different API based on model
     if (model === 'gemini-imagen-4' || model.startsWith('imagen')) {
       return this.generateWithImagen(request);
     } else {
@@ -28,28 +26,41 @@ export class GeminiImageProvider implements ImageProvider {
     }
   }
 
-  /**
-   * Generate image using Gemini 3 Pro Image (generateContent API)
-   */
   private async generateWithGemini(request: ImageRequest, model: string): Promise<ImageResponse> {
     const baseUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
     
-    // Build conversation for multi-turn
+    // Build contents based on available data
     let contents: any[] = [];
     
-    // Check for previous multi-turn data (now stores only lastModelResponse, not full history)
-    const previousResponse = request.previousMultiTurnData?.lastModelResponse 
-      || request.previousMultiTurnData?.conversationHistory?.filter((m: any) => m.role === 'model').pop(); // backward compat
+    // Check for native multi-turn data
+    const previousResponse = request.image?.multiTurnData?.lastModelResponse;
     
     if (previousResponse) {
-      // Continue from previous image - send last image + new prompt
+      // Native multi-turn: send last model response + new prompt
       contents = [
         previousResponse,
         { role: 'user', parts: [{ text: request.prompt }] }
       ];
-      console.log('[Image:Gemini] Multi-turn: sending last image + new prompt');
+      console.log('[Image:Gemini] Native multi-turn with lastModelResponse');
+      
+    } else if (request.imageBase64) {
+      // Cross-provider fallback: send image as inline data
+      contents = [{
+        role: 'user',
+        parts: [
+          { 
+            inlineData: { 
+              mimeType: 'image/jpeg', 
+              data: request.imageBase64 
+            } 
+          },
+          { text: 'Edit this image: ' + request.prompt }
+        ]
+      }];
+      console.log('[Image:Gemini] Cross-provider edit with base64 image');
+      
     } else {
-      // New conversation
+      // New image generation
       contents = [{
         role: 'user',
         parts: [{ text: request.prompt }]
@@ -57,9 +68,6 @@ export class GeminiImageProvider implements ImageProvider {
     }
     
     let response: any;
-    
-    console.log('[Contents to send]', contents)
-
     try {
       response = await axios.post(
         baseUrl,
@@ -68,8 +76,8 @@ export class GeminiImageProvider implements ImageProvider {
           generationConfig: {
             responseModalities: ['IMAGE', 'TEXT'],
             imageConfig: {
-              imageSize: '1K', // Lowest allowed resolution
-              aspectRatio: '1:1' // Standard square (most optimized)
+              imageSize: '1K',
+              aspectRatio: '1:1'
             }
           }
         },
@@ -82,7 +90,6 @@ export class GeminiImageProvider implements ImageProvider {
         }
       );
     } catch (error: any) {
-      // Network or HTTP error
       const errorMessage = this.extractAxiosError(error);
       throw new ImageError(
         errorMessage,
@@ -93,7 +100,6 @@ export class GeminiImageProvider implements ImageProvider {
       );
     }
 
-    // Check for block reason or other issues
     const blockInfo = this.extractBlockInfo(response.data);
     if (blockInfo) {
       throw new ImageError(
@@ -104,11 +110,9 @@ export class GeminiImageProvider implements ImageProvider {
       );
     }
 
-    // Extract base64 image from response
     const base64 = this.extractImageFromGenerateContent(response.data);
     
     if (!base64) {
-      // No image but also no clear block reason - include full response for debugging
       throw new ImageError(
         'No image data in Gemini response',
         'gemini',
@@ -117,7 +121,6 @@ export class GeminiImageProvider implements ImageProvider {
       );
     }
 
-    // Store only the last model response for multi-turn (not full history to avoid MongoDB size limits)
     const lastModelResponse = response.data.candidates?.[0]?.content;
 
     return {
@@ -127,9 +130,6 @@ export class GeminiImageProvider implements ImageProvider {
     };
   }
 
-  /**
-   * Generate image using Imagen 4.0 (predict API)
-   */
   private async generateWithImagen(request: ImageRequest): Promise<ImageResponse> {
     const baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict';
     
@@ -139,14 +139,8 @@ export class GeminiImageProvider implements ImageProvider {
       response = await axios.post(
         baseUrl,
         {
-          instances: [
-            {
-              prompt: request.prompt
-            }
-          ],
-          parameters: {
-            sampleCount: 1
-          }
+          instances: [{ prompt: request.prompt }],
+          parameters: { sampleCount: 1 }
         },
         {
           headers: {
@@ -157,7 +151,6 @@ export class GeminiImageProvider implements ImageProvider {
         }
       );
     } catch (error: any) {
-      // Network or HTTP error
       const errorMessage = this.extractAxiosError(error);
       throw new ImageError(
         errorMessage,
@@ -168,7 +161,6 @@ export class GeminiImageProvider implements ImageProvider {
       );
     }
 
-    // Extract base64 image from response
     const base64 = this.extractImageFromPredict(response.data);
     
     if (!base64) {
@@ -183,13 +175,10 @@ export class GeminiImageProvider implements ImageProvider {
     return {
       base64,
       provider: 'gemini'
-      // Imagen doesn't support multi-turn, so no multiTurnData
+      // Imagen doesn't support multi-turn
     };
   }
 
-  /**
-   * Extract meaningful error message from axios error
-   */
   private extractAxiosError(error: any): string {
     if (error.response?.data?.error?.message) {
       return error.response.data.error.message;
@@ -203,11 +192,7 @@ export class GeminiImageProvider implements ImageProvider {
     return 'Unknown API error';
   }
 
-  /**
-   * Check if response contains block/safety info
-   */
   private extractBlockInfo(data: any): { message: string; reason: string } | null {
-    // Check promptFeedback for blocking
     if (data.promptFeedback?.blockReason) {
       const reason = data.promptFeedback.blockReason;
       const safetyRatings = data.promptFeedback.safetyRatings || [];
@@ -222,7 +207,6 @@ export class GeminiImageProvider implements ImageProvider {
       };
     }
 
-    // Check candidates for finish reason
     if (data.candidates && data.candidates.length > 0) {
       const candidate = data.candidates[0];
       
@@ -243,9 +227,6 @@ export class GeminiImageProvider implements ImageProvider {
     return null;
   }
 
-  /**
-   * Extract base64 image data from generateContent response
-   */
   private extractImageFromGenerateContent(data: any): string | null {
     if (!data.candidates || data.candidates.length === 0) {
       return null;
@@ -256,7 +237,6 @@ export class GeminiImageProvider implements ImageProvider {
       return null;
     }
 
-    // Find the first part with inlineData (image)
     for (const part of content.parts) {
       if (part.inlineData && part.inlineData.data) {
         return part.inlineData.data;
@@ -266,9 +246,6 @@ export class GeminiImageProvider implements ImageProvider {
     return null;
   }
 
-  /**
-   * Extract base64 image data from predict response (Imagen 4.0)
-   */
   private extractImageFromPredict(data: any): string | null {
     if (data.predictions && Array.isArray(data.predictions) && data.predictions.length > 0) {
       const prediction = data.predictions[0];

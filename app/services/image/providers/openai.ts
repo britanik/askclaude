@@ -18,27 +18,37 @@ export class OpenAIImageProvider implements ImageProvider {
     console.log('[Image:OpenAI] Prompt:', request.prompt.slice(0, 100) + '...');
     
     try {
-      // Build request for Responses API with image_generation tool
       const openaiRequest: any = {
         model: request.model || 'gpt-5',
-        input: 'Generate image: ' + request.prompt,
-        tools: [{ type: 'image_generation' }]
+        tools: [{ 
+          type: 'image_generation',
+          size: request.size || '1024x1024',
+          quality: request.quality || 'medium'
+        }]
       };
 
-      // Add previous response ID for multi-turn editing
-      if (request.previousMultiTurnData?.responseId) {
-        openaiRequest.previous_response_id = request.previousMultiTurnData.responseId;
-        console.log('[Image:OpenAI] Multi-turn with previous:', request.previousMultiTurnData.responseId);
+      // Build input based on available data
+      if (request.image?.multiTurnData?.responseId) {
+        // Native multi-turn: use previous response ID
+        openaiRequest.previous_response_id = request.image.multiTurnData.responseId;
+        openaiRequest.input = 'Edit the image: ' + request.prompt;
+        console.log('[Image:OpenAI] Native multi-turn with responseId:', request.image.multiTurnData.responseId);
+        
+      } else if (request.imageBase64) {
+        // Cross-provider fallback: send image as input with role
+        openaiRequest.input = [{ 
+          role: 'user', 
+          content: [
+            { type: 'input_image', image_url: `data:image/jpeg;base64,${request.imageBase64}` },
+            { type: 'input_text', text: 'Edit this image: ' + request.prompt }
+          ]
+        }];
+        console.log('[Image:OpenAI] Cross-provider edit with base64 image');
+        
+      } else {
+        // New image generation
+        openaiRequest.input = 'Generate image: ' + request.prompt;
       }
-
-      // Build tool config with optional size and quality
-      const imageGenTool: any = { type: 'image_generation' };
-
-      imageGenTool.size = (request.size) ? request.size : '1024x1024';
-      imageGenTool.quality = (request.quality) ? request.quality : 'medium'
-
-      // console.log('imageGenTool:', imageGenTool)
-      openaiRequest.tools = [imageGenTool];
 
       const response = await axios.post(
         'https://api.openai.com/v1/responses',
@@ -52,10 +62,8 @@ export class OpenAIImageProvider implements ImageProvider {
         }
       );
 
-      // console.log('response.data.output', response.data.output)
-      // console.log('response.data.output[1].content', response.data.output[1].content)
+      console.log('response.data.output', response.data.output);
 
-      // Extract image data from response
       const imageData = this.extractImageData(response.data);
       
       if (!imageData) {
@@ -64,7 +72,7 @@ export class OpenAIImageProvider implements ImageProvider {
 
       return {
         base64: imageData,
-        multiTurnData: { responseId: response.data.id }, // Store for next turn
+        multiTurnData: { responseId: response.data.id },
         provider: 'openai',
         usage: {
           inputTokens: response.data.usage?.input_tokens,
@@ -78,9 +86,6 @@ export class OpenAIImageProvider implements ImageProvider {
     }
   }
 
-  /**
-   * Extract base64 image data from Responses API output
-   */
   private extractImageData(data: any): string | null {
     if (!data.output || !Array.isArray(data.output)) {
       return null;

@@ -1,8 +1,9 @@
-import { ImageProvider, ImageRequest, ImageResponse } from './types';
+import fs from 'fs';
+import { ImageProvider, ImageRequest, ImageResponse, ImageTier, PreviousImage } from './types';
 import { OpenAIImageProvider } from './providers/openai';
 import { GetImgProvider } from './providers/getimg';
 import { GeminiImageProvider } from './providers/gemini';
-import { getImageModelConfig, getDefaultImageModel, getNsfwImageModel } from './config';
+import { getImageModelConfig, getNsfwImageModel } from './config';
 import { moderateContent } from '../../controllers/images';
 import { ImageError } from './errors';
 
@@ -33,8 +34,12 @@ function getProvider(name: 'openai' | 'getimg' | 'gemini'): ImageProvider {
   throw new Error(`Unknown image provider: ${name}`);
 }
 
-export function getBackupImageModel(): string {
-  return process.env.IMAGE_MODEL_BACKUP || 'gpt-5';
+export function getTopImageModel(): string {
+  return process.env.IMAGE_MODEL_TOP || 'gemini-3-pro-image-preview';
+}
+
+export function getNormalImageModel(): string {
+  return process.env.IMAGE_MODEL_NORMAL || 'gpt-5';
 }
 
 /**
@@ -43,26 +48,77 @@ export function getBackupImageModel(): string {
 export interface ImageGenerationResult {
   response: ImageResponse;
   usedFallback: boolean;
+  actualTier: ImageTier;
   originalError?: ImageError;
 }
 
 /**
- * Generate image with automatic fallback to backup model on overload errors
+ * Load image as base64 from file path
+ */
+function loadImageAsBase64(path: string): string | null {
+  try {
+    const buffer = fs.readFileSync(path);
+    return buffer.toString('base64');
+  } catch (error) {
+    console.error(`[Image] Failed to load image from ${path}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Prepare image data for provider
+ * Returns multiTurnData if same provider, or base64 for cross-provider fallback
+ */
+function prepareImageForProvider(
+  image: PreviousImage | undefined,
+  targetProvider: string
+): { multiTurnData?: any; imageBase64?: string } {
+  if (!image) {
+    return {};
+  }
+
+  // Same provider - use native multi-turn
+  if (image.provider === targetProvider && image.multiTurnData) {
+    console.log(`[Image] Same provider (${targetProvider}), using native multi-turn`);
+    return { multiTurnData: image.multiTurnData };
+  }
+
+  // Different provider - load image as base64 fallback
+  if (image.path) {
+    console.log(`[Image] Provider mismatch (${image.provider} → ${targetProvider}), using base64 fallback`);
+    const imageBase64 = loadImageAsBase64(image.path);
+    if (imageBase64) {
+      return { imageBase64 };
+    }
+  }
+
+  console.log(`[Image] No multi-turn data available for ${targetProvider}`);
+  return {};
+}
+
+/**
+ * Generate image with tier-based model selection and fallback
  * 
  * Flow:
  * 1. Run content moderation
- * 2. If NSFW → use GetImg provider (no fallback)
- * 3. Otherwise → try main model, fallback to backup on overload
+ * 2. If NSFW → use GetImg provider (no multi-turn)
+ * 3. Generate with primary model (TOP or NORMAL based on tier)
+ * 4. TOP tier only: fallback to NORMAL on retryable errors
+ * 
+ * Multi-turn handling:
+ * - Same provider: use native multiTurnData (responseId for OpenAI, lastModelResponse for Gemini)
+ * - Different provider: load previous image as base64 and send as image input
  */
 export async function generateImageWithFallback(request: ImageRequest): Promise<ImageGenerationResult> {
-  const mainModel = request.model || getDefaultImageModel();
-  const backupModel = getBackupImageModel();
+  const { tier, image } = request;
+  const topModel = getTopImageModel();
+  const normalModel = getNormalImageModel();
   
   // Step 1: Content moderation
   const moderation = await moderateContent(request.prompt);
-  console.log(moderation,'moderation')
+  console.log(moderation, 'moderation');
   
-  // Step 2: NSFW content goes to dedicated provider
+  // Step 2: NSFW content goes to dedicated provider (no multi-turn)
   if (moderation.flagged && moderation.scores.sexual > 0.85) {
     console.log('[Image] Content flagged, using NSFW provider');
     
@@ -71,58 +127,69 @@ export async function generateImageWithFallback(request: ImageRequest): Promise<
     const provider = getProvider(nsfwConfig.provider);
     
     const response = await provider.generate({
-      ...request,
+      prompt: request.prompt,
+      size: request.size,
+      quality: request.quality,
       model: nsfwModel
     });
     
-    return { response, usedFallback: false };
+    return { response, usedFallback: false, actualTier: tier };
   }
   
-  // Step 3: Try main model
+  // Step 3: Generate with primary model
+  const primaryModel = tier === 'top' ? topModel : normalModel;
+  const primaryConfig = getImageModelConfig(primaryModel);
+  const primaryProvider = getProvider(primaryConfig.provider);
+  const primaryImageData = prepareImageForProvider(image, primaryConfig.provider);
+  
+  console.log(`[Image] ${tier.toUpperCase()} tier, using: ${primaryModel}`);
+  
   try {
-    console.log(`[Image] Trying main model: ${mainModel}`);
-    
-    const config = getImageModelConfig(mainModel);
-    const provider = getProvider(config.provider);
-    
-    const response = await provider.generate({
-      ...request,
-      model: mainModel
+    const response = await primaryProvider.generate({
+      prompt: request.prompt,
+      size: request.size,
+      quality: request.quality,
+      model: primaryModel,
+      image: primaryImageData.multiTurnData ? { multiTurnData: primaryImageData.multiTurnData } : undefined,
+      imageBase64: primaryImageData.imageBase64
     });
     
-    return { response, usedFallback: false };
+    return { response, usedFallback: false, actualTier: tier };
     
   } catch (error: any) {
-    // Only retry on overload/rate limit errors
-    const isRetryable = error instanceof ImageError && error.isRetryable();
+    // NORMAL tier has no fallback
+    if (tier === 'normal') {
+      throw error;
+    }
     
+    // TOP tier - fallback to normal on retryable errors
+    const isRetryable = error instanceof ImageError && error.isRetryable();
     if (!isRetryable) {
       throw error;
     }
     
-    console.log(`[Image] Main model failed: ${error.message}`);
-    console.log(`[Image] Switching to backup: ${backupModel}`);
+    console.log(`[Image] TOP model failed: ${error.message}`);
+    console.log(`[Image] Falling back to NORMAL: ${normalModel}`);
     
-    // Step 4: Try backup model
-    try {
-      const backupConfig = getImageModelConfig(backupModel);
-      const backupProvider = getProvider(backupConfig.provider);
-      
-      const response = await backupProvider.generate({
-        ...request,
-        model: backupModel
-      });
-      
-      return { 
-        response, 
-        usedFallback: true,
-        originalError: error
-      };
-      
-    } catch (backupError: any) {
-      console.error(`[Image] Backup also failed: ${backupError.message}`);
-      throw backupError;
-    }
+    const normalConfig = getImageModelConfig(normalModel);
+    const normalProvider = getProvider(normalConfig.provider);
+    const normalImageData = prepareImageForProvider(image, normalConfig.provider);
+    
+    const response = await normalProvider.generate({
+      prompt: request.prompt,
+      size: request.size,
+      quality: request.quality,
+      model: normalModel,
+      image: normalImageData.multiTurnData ? { multiTurnData: normalImageData.multiTurnData } : undefined,
+      imageBase64: normalImageData.imageBase64
+    });
+    
+    return { 
+      response, 
+      usedFallback: true,
+      actualTier: 'normal',
+      originalError: error
+    };
   }
 }
 

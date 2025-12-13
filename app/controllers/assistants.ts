@@ -7,10 +7,9 @@ import { IUser } from "../interfaces/users"
 import { IMessage } from "../interfaces/messages"
 import { sendMessage } from "../templates/sendMessage"
 import { analyzeConversation, formatMessagesWithImages, IConversationAnalysisResult, saveImagePermanently } from "../services/ai"
-import { logLimitHit, logTokenUsage, logWebSearchUsage } from "./tokens"
+import { logTokenUsage, logWebSearchUsage } from "./tokens"
 import { saveAIResponse } from "../helpers/fileLogger"
 import { withChatAction } from "../helpers/chatAction"
-import { getReplyFooter, isAdmin } from "../helpers/helpers"
 import { trackExpense, editTransaction, createBudget, getBudgetInfoString, deleteBudget, deleteTransaction, getTransactionsString } from "./expense"
 import { financeTools, searchTool, imageGenerationTool } from "../helpers/tools"
 import { promptsDict } from "../helpers/prompts"
@@ -18,7 +17,7 @@ import { logApiError } from "../helpers/errorLogger"
 import { callLLM, LLMRequest, isToolUse } from "../services/llm"
 import { generateImageWithFallback, ImageGenerationResult } from '../services/image'
 import Image from '../models/images'
-import { getPeriodImageLimit, getPeriodImageUsage, isImageLimit, sendGeneratedImage } from './images'
+import { getCurrentTier, getPeriodImageLimit, isImageLimit, sendGeneratedImage } from './images'
 
 export interface IAssistantParams {
   user: IUser
@@ -492,26 +491,35 @@ async function handleImageGenerationTool(
       return `Error: Daily image generation limit reached (${imageLimit} images). The user should try again tomorrow.`;
     }
 
+    // Get current tier based on usage
+    const tier = await getCurrentTier(user);
+    console.log(`[Image Tool] User tier: ${tier}`);
+
     // Look up previous image for multi-turn if editImageId provided
-    let previousMultiTurnData: any = undefined;
+    let image: { multiTurnData?: any; provider?: string; path?: string } | undefined;
     if (editImageId) {
       const previousImage = await Image.findById(editImageId);
-      if (previousImage && previousImage.multiTurnData) {
-        previousMultiTurnData = previousImage.multiTurnData;
-        console.log(`[Image Tool] Editing previous image ${editImageId} with multiTurnData`);
+      if (previousImage) {
+        image = {
+          multiTurnData: previousImage.multiTurnData,
+          provider: previousImage.provider,
+          path: previousImage.localPath
+        };
+        console.log(`[Image Tool] Found previous image ${editImageId}, provider: ${image.provider}`);
       }
     }
 
-    // Generate image with fallback support
+    // Generate image with tier-based model selection
     const result: ImageGenerationResult = await withChatAction(
       bot,
       user.chatId,
       'upload_photo',
-      () => generateImageWithFallback({ 
-        prompt,
-        previousMultiTurnData 
-      })
+      () => generateImageWithFallback({ prompt, tier, image })
     );
+
+    // Use actual tier (may have fallen back from top to normal)
+    const actualTier = result.actualTier;
+    console.log(`[Image Tool] Actual tier used: ${actualTier}`);
 
     // Send image to user and save to DB
     const { imageDoc, sentPhoto } = await sendGeneratedImage({
@@ -519,6 +527,7 @@ async function handleImageGenerationTool(
       user,
       bot,
       result,
+      tier: actualTier,
       threadId: thread._id.toString()
     });
 
