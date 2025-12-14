@@ -664,7 +664,7 @@ export default class Navigation {
         if (!isAdmin(this.user)) return;
         this.user = await userController.addStep(this.user, 'notificationsText');
         await sendMessage({
-          text: "Введите текст уведомления для всех пользователей:",
+          text: "Отправьте текст или фото с подписью для рассылки всем пользователям:",
           user: this.user,
           bot: this.bot,
         });
@@ -709,13 +709,23 @@ export default class Navigation {
       action: async () => { },
       callback: async () => {
         if (!isAdmin(this.user)) return;
+
+        // Check if message has photo
+        let photoId: string | undefined;
+        let notificationText: string;
+
+        if (this.msg.photo && this.msg.photo.length > 0) {
+          // Get the largest photo (last in array)
+          photoId = this.msg.photo[this.msg.photo.length - 1].file_id;
+          notificationText = this.msg.caption || '';
+        } else {
+          notificationText = this.msg.text || '';
+        }
         
-        const notificationText = this.msg.text;
-        
-        // Check if notification text is valid
-        if (!notificationText || notificationText.trim() === '') {
+        // Check if notification has content
+        if (!notificationText.trim() && !photoId) {
           await sendMessage({
-            text: 'Текст уведомления не может быть пустым. Попробуйте снова:',
+            text: 'Отправьте текст или фото с подписью для рассылки:',
             user: this.user,
             bot: this.bot,
           });
@@ -730,7 +740,7 @@ export default class Navigation {
         });
         
         // Send notifications using the controller
-        const results = await sendNotification(notificationText, this.user, this.bot);
+        await sendNotification(notificationText, this.user, this.bot, photoId);
                 
         // Reset the step
         this.user = await userController.addStep(this.user, 'assistant');
