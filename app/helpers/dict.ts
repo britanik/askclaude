@@ -133,6 +133,10 @@ export default class Dict {
         rus: () => `⏳ Основная модель перегружена. Переключаюсь на резервную...`,
         eng: () => `⏳ Main model is overloaded. Switching to backup...`
       },
+      IMAGE_UNSUPPORTED_IMAGE_FORMAT: {
+        rus: () => `К сожалению, формат HEIC не поддерживается. Пожалуйста, отправьте изображение в формате JPG.`,
+        eng: () => `Unfortunately, HEIC format is not supported. Please send in JPG format.`
+      },
       BUTTON_NEW_CHAT: {
         rus: () => `✅ Новый чат`,
         eng: () => `✅ New Chat`

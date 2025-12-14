@@ -295,10 +295,13 @@ export default class Navigation {
           // For thread branching: detect if user replied to an old message
           const replyToMessageId = this.msg.reply_to_message?.message_id;
           
+          console.log('this.msg:')
+          console.dir(this.msg, { depth: 5 })
+
           // Handle voice messages
           if (this.msg.voice) {
             text = await getTranscription(this.msg, this.bot);
-          } 
+          }
   
           // Handle photo messages
           else if (this.msg.photo && this.msg.photo.length > 0) {
@@ -310,6 +313,24 @@ export default class Navigation {
             images.push(photoId);
             
             console.log('Received image:', photoId);
+          }
+
+          // Handle documents (files sent as attachments)
+          else if (this.msg.document) {
+            const mimeType = this.msg.document.mime_type;
+            
+            // HEIC not supported
+            if (mimeType === 'image/heic' || mimeType === 'image/heif') {
+              await sendMessage({ text: this.dict.getString('IMAGE_UNSUPPORTED_IMAGE_FORMAT'), user: this.user, bot: this.bot });
+              return;
+            }
+            
+            // JPG/PNG sent as document - treat as photo
+            if (mimeType === 'image/jpeg' || mimeType === 'image/png' || mimeType === 'image/webp' || mimeType === 'image/gif') {
+              text = this.msg.caption || '';
+              images.push(this.msg.document.file_id);
+              console.log('Received image as document:', this.msg.document.file_id);
+            }
           }
   
           // Handle regular text messages
