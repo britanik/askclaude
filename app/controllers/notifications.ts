@@ -3,7 +3,7 @@ import User from '../models/users';
 import { sendMessage } from '../templates/sendMessage';
 import TelegramBot from 'node-telegram-bot-api';
 
-export async function sendNotification(text: string, adminUser: IUser, bot: TelegramBot): Promise<void> {
+export async function sendNotification(text: string, adminUser: IUser, bot: TelegramBot, photoId?: string): Promise<void> {
   let users = await User.find()
 
   // Send in-progress message to admin
@@ -16,21 +16,29 @@ export async function sendNotification(text: string, adminUser: IUser, bot: Tele
   if (users.length > 0) {
     let success = 0;
     let failed = 0;
-    let i = 0;
 
     // Process users sequentially with delay
     for (const user of users) {      
       try {
-        await sendMessage({
-          user,
-          text,
-          bot,
-        });
+        if (photoId) {
+          // Send photo with caption
+          await bot.sendPhoto(user.chatId, photoId, {
+            caption: text,
+            parse_mode: 'HTML'
+          });
+        } else {
+          // Send text only
+          await sendMessage({
+            user,
+            text,
+            bot,
+          });
+        }
         success++;
       } catch (e) {
         failed++;
         if (e.response?.body?.error_code === 403) {
-          console.log(e.response.body.error_code, 'Send text error');
+          console.log(e.response.body.error_code, 'Send notification error');
           user.blocked = true;
           await user.save();
         }
@@ -41,7 +49,7 @@ export async function sendNotification(text: string, adminUser: IUser, bot: Tele
     }
 
     await sendMessage({
-      text: `Результаты: ${success} успешно, ${failed} остальные не доставлены.`,
+      text: `Результаты: ${success} успешно, ${failed} не доставлено.`,
       user: adminUser,
       bot
     });
