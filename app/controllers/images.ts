@@ -87,14 +87,13 @@ export async function sendGeneratedImage(params: SendGeneratedImageParams): Prom
   console.log(`[Image] Saved locally at: ${localPath}`);
 
   // Create "Retry" button (with empty ID initially)
-  const buttons: InlineKeyboardButton[][] = [
-    // [{ text: '🔄 Повторить', callback_data: JSON.stringify({ a: 'imageRetry', id: '' }) }]
-  ];
+  // const buttons: InlineKeyboardButton[][] = [
+  //   [{ text: '🔄 Повторить', callback_data: JSON.stringify({ a: 'imageRetry', id: '' }) }]
+  // ];
 
   // Send image to user
-  const sentPhoto = await bot.sendPhoto(user.chatId, imageBuffer, {
-    reply_markup: { inline_keyboard: buttons }
-  });
+  // const sentPhoto = await bot.sendPhoto(user.chatId, imageBuffer, { reply_markup: { inline_keyboard: buttons } });
+  const sentPhoto = await bot.sendPhoto(user.chatId, imageBuffer);
 
   // Get telegram file ID
   const telegramFileId = sentPhoto.photo[sentPhoto.photo.length - 1].file_id;
@@ -119,14 +118,14 @@ export async function sendGeneratedImage(params: SendGeneratedImageParams): Prom
   }).save();
 
   // Update button with image ID
-  const updatedButtons: InlineKeyboardButton[][] = [
+  // const updatedButtons: InlineKeyboardButton[][] = [
     // [{ text: '🔄 Повторить', callback_data: JSON.stringify({ a: 'imageRetry', id: savedImage._id }) }]
-  ];
+  // ];
 
-  await bot.editMessageReplyMarkup(
-    { inline_keyboard: updatedButtons },
-    { chat_id: user.chatId, message_id: sentPhoto.message_id }
-  );
+  // await bot.editMessageReplyMarkup(
+  //   { inline_keyboard: updatedButtons },
+  //   { chat_id: user.chatId, message_id: sentPhoto.message_id }
+  // );
 
   return savedImage;
 }
