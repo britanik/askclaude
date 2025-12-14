@@ -22,24 +22,15 @@ import { getCurrentTier, getPeriodImageLimit, isImageLimit, sendGeneratedImage }
 
 export interface IAssistantParams {
   user: IUser
-  firstMessage?: string
   assistantType?: 'normal' | 'finance' | 'websearch'
 }
 
 export async function startAssistant(params:IAssistantParams): Promise<IThread> {
-  const { user, firstMessage, assistantType = 'normal' } = params
+  const { user, assistantType = 'normal' } = params
   try {
-    // Create a new thread
     const thread: IThread = await new Thread({ 
       owner: user, 
       assistantType
-    }).save()
-    
-    // Create and add the first message
-    await new Message({
-      thread: thread._id,
-      role: 'user',
-      content: firstMessage
     }).save()
     
     return thread
@@ -116,6 +107,7 @@ async function processUploadedImages( imageIds: string[], user: IUser, threadId:
 
 export async function handleUserReply( user: IUser, userReply: string, bot: TelegramBot, images: string[] = [], mediaGroupId?: string, replyToTelegramMessageId?: number, userTelegramMessageId?: number ): Promise<{ thread: IThread, isNew: boolean, oldMessageNotFound?: boolean }> {
   let thread: IThread = await getRecentThread(user);
+  let isNew = false;
   
   // Process images: save to disk and create Image documents
   let imageObjectIds: any[] = []
@@ -125,7 +117,7 @@ export async function handleUserReply( user: IUser, userReply: string, bot: Tele
   
   console.log('imageObjectIds:', imageObjectIds)
 
-  // Handle media group
+  // === Handle media group (особый случай, early return) ===
   if (mediaGroupId) {
     console.log('mediaGroupId', mediaGroupId)
     const lastMediaMessage = await Message.findOne({ 
@@ -153,92 +145,74 @@ export async function handleUserReply( user: IUser, userReply: string, bot: Tele
     return { thread, isNew: false };
   }
 
-  // Reply to old message
+  // === Reply to old message: определяем thread ===
   if (replyToTelegramMessageId) {
-    // Find the message user replied to
     const repliedMessage = await Message.findOne({ telegramMessageId: replyToTelegramMessageId })
     
     if (!repliedMessage) {
-      // Message not found - it's from before we started tracking
       console.log(`[REPLY] Message ${replyToTelegramMessageId} not found in DB`)
       return { thread: null, isNew: false, oldMessageNotFound: true }
     }
     
-    if (repliedMessage) {
-      // Verify it belongs to this user's thread
-      const repliedThread = await Thread.findOne({ 
-        _id: repliedMessage.thread, 
-        owner: user._id 
-      }).populate('owner')
+    const repliedThread = await Thread.findOne({ 
+      _id: repliedMessage.thread, 
+      owner: user._id 
+    }).populate('owner')
+    
+    if (repliedThread) {
+      const lastMessage = await Message.findOne({ thread: repliedThread._id }).sort({ created: -1 })
+      const isLastMessage = lastMessage?._id.equals(repliedMessage._id)
       
-      if (repliedThread) {
-        // Check if it's the last message (continue) or older (branch)
-        const lastMessage = await Message.findOne({ thread: repliedThread._id }).sort({ created: -1 })
-        const isLastMessage = lastMessage?._id.equals(repliedMessage._id)
-        
-        if (isLastMessage) {
-          // Continue existing thread
-          thread = repliedThread
-        } else {
-          // Create branch thread
-          thread = await new Thread({
-            owner: user,
-            assistantType: repliedThread.assistantType,
-            parent: {
-              thread: repliedThread._id,
-              point: repliedMessage._id
-            }
-          }).save()
-          
-          console.log(`[BRANCH] Created ${thread._id} from ${repliedThread._id}`)
-          
-          // Re-process images for new thread if any
-          if (images.length > 0) {
-            imageObjectIds = await processUploadedImages(images, user, thread._id, bot)
+      if (isLastMessage) {
+        // Continue existing thread
+        thread = repliedThread
+      } else {
+        // Create branch thread
+        thread = await new Thread({
+          owner: user,
+          assistantType: repliedThread.assistantType,
+          parent: {
+            thread: repliedThread._id,
+            point: repliedMessage._id
           }
-          
-          // Save user message and return
-          await new Message({
-            thread: thread._id,
-            role: 'user',
-            content: userReply || " ",
-            images: imageObjectIds.length > 0 ? imageObjectIds : undefined,
-            telegramMessageId: userTelegramMessageId
-          }).save()
-          
-          return { thread, isNew: true }
+        }).save()
+        
+        console.log(`[BRANCH] Created ${thread._id} from ${repliedThread._id}`)
+        isNew = true
+        
+        // Re-process images for new thread
+        if (images.length > 0) {
+          imageObjectIds = await processUploadedImages(images, user, thread._id, bot)
         }
       }
     }
-  }
-
-  // Conversation analysis
-  const isAnalysisEnabled = parseInt(process.env.ENABLE_CONVERSATION_ANALYSIS || '0') === 1;
-  let assistantType: 'normal' | 'finance' | 'websearch' = 'normal';
-  let shouldCreateNewThread = false;
-  
-  if (isAnalysisEnabled) {
-    const lastMessages = await Message.find({ thread: thread._id }).sort({ created: -1 }).limit(5);
-    if (lastMessages.length > 0) {
-      const formattedMessages = lastMessages.reverse().map(msg => ({ role: msg.role, content: msg.content || "" }));
-      const analysis: IConversationAnalysisResult = await analyzeConversation(formattedMessages, userReply);
-      assistantType = analysis.assistant;
-      shouldCreateNewThread = analysis.action === 'new';
+  } else {
+    // === Conversation analysis (только если НЕ reply) ===
+    const isAnalysisEnabled = parseInt(process.env.ENABLE_CONVERSATION_ANALYSIS || '0') === 1;
+    let assistantType: 'normal' | 'finance' | 'websearch' = 'normal';
+    
+    if (isAnalysisEnabled) {
+      const lastMessages = await Message.find({ thread: thread._id }).sort({ created: -1 }).limit(5);
+      if (lastMessages.length > 0) {
+        const formattedMessages = lastMessages.reverse().map(msg => ({ role: msg.role, content: msg.content || "" }));
+        const analysis: IConversationAnalysisResult = await analyzeConversation(formattedMessages, userReply);
+        assistantType = analysis.assistant;
+        
+        if (analysis.action === 'new') {
+          thread = await startAssistant({ user, assistantType });
+          isNew = true;
+        }
+      }
+    }
+    
+    // Update assistant type if needed
+    if (assistantType === 'finance' && thread.assistantType !== 'finance') {
+      thread.assistantType = 'finance';
+      await thread.save();
     }
   }
-  
-  if (shouldCreateNewThread) {
-    thread = await startAssistant({ user, firstMessage: userReply, assistantType });
-    return { thread, isNew: true };
-  }
 
-  if (assistantType === 'finance' && thread.assistantType !== 'finance') {
-    thread.assistantType = 'finance';
-    await thread.save();
-  }
-  
-  // Save user message
-  let message = await new Message({
+  await new Message({
     thread: thread._id,
     role: 'user',
     content: userReply || " ",
@@ -246,9 +220,7 @@ export async function handleUserReply( user: IUser, userReply: string, bot: Tele
     telegramMessageId: userTelegramMessageId
   }).save();
 
-  console.log('Message', message)
-
-  return { thread, isNew: false };
+  return { thread, isNew };
 }
 
 export async function handleAssistantReply(thread: IThread, bot: TelegramBot, dict: Dict): Promise<void> {
@@ -313,9 +285,7 @@ async function chatWithFunctionCalling(params: { thread: IThread, bot: TelegramB
     // const isNewThread = ownMessages.length === 1
     
     const formattedMessages = await formatMessagesWithImages(threadMessages, user, bot)
-    console.log('formattedMessages:', formattedMessages)
     const messages = [...formattedMessages]
-    console.log('messages', messages)
     const executedFunctions = []
     let usedModel = ''
     
@@ -356,6 +326,8 @@ async function chatWithFunctionCalling(params: { thread: IThread, bot: TelegramB
         
         // Add images context to system prompt
         systemPrompt += `\n\n# Previous Images in Conversation\n${imagesContext}`
+
+        console.log('systemPrompt:', systemPrompt)
 
         const request: LLMRequest = {
           model: process.env.MODEL_NORMAL || process.env.CLAUDE_MODEL,

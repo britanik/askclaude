@@ -259,7 +259,6 @@ export default class Navigation {
         // Prepare parameters for starting the assistant
         let startAssistantParams:IAssistantParams = {
           user: this.user,
-          firstMessage
         }
 
         // if it's /search command
