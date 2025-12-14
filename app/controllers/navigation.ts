@@ -295,8 +295,8 @@ export default class Navigation {
           // For thread branching: detect if user replied to an old message
           const replyToMessageId = this.msg.reply_to_message?.message_id;
           
-          console.log('this.msg:')
-          console.dir(this.msg, { depth: 5 })
+          // console.log('this.msg:')
+          // console.dir(this.msg, { depth: 5 })
 
           // Handle voice messages
           if (this.msg.voice) {
@@ -311,8 +311,6 @@ export default class Navigation {
             // Get the highest quality photo (last in array)
             const photoId = this.msg.photo[this.msg.photo.length - 1].file_id;
             images.push(photoId);
-            
-            console.log('Received image:', photoId);
           }
 
           // Handle documents (files sent as attachments)
@@ -329,7 +327,6 @@ export default class Navigation {
             if (mimeType === 'image/jpeg' || mimeType === 'image/png' || mimeType === 'image/webp' || mimeType === 'image/gif') {
               text = this.msg.caption || '';
               images.push(this.msg.document.file_id);
-              console.log('Received image as document:', this.msg.document.file_id);
             }
           }
   

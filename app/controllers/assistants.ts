@@ -291,7 +291,7 @@ async function chatWithFunctionCalling(params:IChatWithFunctionCalling) {
     
     // Get all messages (handles branched threads automatically)
     const threadMessages = await getThreadMessages(freshThread)
-    console.log('threadMessages:', threadMessages)
+    // console.log('threadMessages:', threadMessages)
     
     // const ownMessages = await Message.find({ thread: thread._id })
     // const isNewThread = ownMessages.length === 1
@@ -301,8 +301,8 @@ async function chatWithFunctionCalling(params:IChatWithFunctionCalling) {
     // console.dir(formattedMessages, { depth: 3 })
     
     const messages = [...formattedMessages]
-    console.log('messages:')
-    console.dir(messages, { depth: 4 })
+    // console.log('messages:')
+    // console.dir(messages, { depth: 4 })
     const executedFunctions = []
     let usedModel = ''
     
