@@ -88,7 +88,7 @@ export async function sendGeneratedImage(params: SendGeneratedImageParams): Prom
 
   // Create "Retry" button (with empty ID initially)
   const buttons: InlineKeyboardButton[][] = [
-    [{ text: '🔄 Повторить', callback_data: JSON.stringify({ a: 'imageRetry', id: '' }) }]
+    // [{ text: '🔄 Повторить', callback_data: JSON.stringify({ a: 'imageRetry', id: '' }) }]
   ];
 
   // Send image to user
@@ -120,7 +120,7 @@ export async function sendGeneratedImage(params: SendGeneratedImageParams): Prom
 
   // Update button with image ID
   const updatedButtons: InlineKeyboardButton[][] = [
-    [{ text: '🔄 Повторить', callback_data: JSON.stringify({ a: 'imageRetry', id: savedImage._id }) }]
+    // [{ text: '🔄 Повторить', callback_data: JSON.stringify({ a: 'imageRetry', id: savedImage._id }) }]
   ];
 
   await bot.editMessageReplyMarkup(
