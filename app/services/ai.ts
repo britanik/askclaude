@@ -7,9 +7,9 @@ import path from 'path'
 import { getReadableId } from "../helpers/helpers"
 import { IMessage } from "../interfaces/messages"
 import { logApiError } from "../helpers/errorLogger"
-import { sendMessage } from "../templates/sendMessage"
 import { IUser } from "../interfaces/users"
 import { callLLM, RESPONSE_FORMAT_ANALYZE } from "./llm"
+import { IImage } from "../interfaces/image"
 
 export interface IChatCallParams {
   messages: Array<{
@@ -126,26 +126,30 @@ export async function formatMessagesWithImages(messages: IMessage[], user, bot) 
         })
       }
       
-      // Process images
-      for (const imageId of message.images) {
+      // Process images from Image documents
+      for (const imageRef of message.images) {
         try {
-          // Get file link from Telegram
-          const fileLink = await bot.getFileLink(imageId)
+          // imageRef is populated IImage document
+          const image = imageRef as IImage
           
-          // Get image as base64
-          const imageBase64 = await getImageAsBase64(fileLink)
-          
-          // Add image to content array
-          formattedMessage.content.push({
-            type: "image",
-            source: {
-              type: "base64",
-              media_type: "image/jpeg", // Default to JPEG
-              data: imageBase64
-            }
-          })
+          if (image.localPath && fs.existsSync(image.localPath)) {
+            // Read from local file
+            const imageBuffer = fs.readFileSync(image.localPath)
+            const imageBase64 = imageBuffer.toString('base64')
+            
+            formattedMessage.content.push({
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: "image/jpeg",
+                data: imageBase64
+              }
+            })
+          } else {
+            console.error(`Image file not found: ${image.localPath}`)
+          }
         } catch (error) {
-          console.error(`Error processing image ${imageId}:`, error)
+          console.error(`Error processing image:`, error)
         }
       }
     } else {

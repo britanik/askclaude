@@ -5,7 +5,7 @@ const Schema = mongoose.Schema
 
 const ImageSchema = new Schema({
   user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-  prompt: { type: String, required: true },
+  prompt: { type: String }, // Optional - not set for user-uploaded images
   created: { type: Date, default: () => moment().utc() },
   imageUrl: { type: String },
   telegramFileId: { type: String },
@@ -20,5 +20,6 @@ const ImageSchema = new Schema({
 ImageSchema.index({ user: 1, created: -1 })
 ImageSchema.index({ threadId: 1 })
 ImageSchema.index({ user: 1, tier: 1, created: -1 }) // For tier usage queries
+ImageSchema.index({ telegramFileId: 1 }) // For finding images by Telegram file ID
 
 export default mongoose.model('Image', ImageSchema)

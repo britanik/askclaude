@@ -2,6 +2,7 @@ import TelegramBot from "node-telegram-bot-api"
 import Dict from "../helpers/dict"
 import Thread from '../models/threads'
 import Message from '../models/messages'
+import { Types } from 'mongoose'
 import { IThread } from "../interfaces/threads"
 import { IUser } from "../interfaces/users"
 import { IMessage } from "../interfaces/messages"
@@ -69,54 +70,64 @@ export async function createNewThread(params): Promise<IThread> {
   }
 }
 
-/**
- * Get all messages for a thread, including parent thread messages if it's a branch.
- * For branched threads: parent messages (up to branch point) + own messages
- */
 export async function getThreadMessages(thread: IThread): Promise<IMessage[]> {
   const fullThread = await Thread.findById(thread._id)
   
   // Simple case: no parent, just get own messages
   if (!fullThread.parent?.thread) {
-    return Message.find({ thread: thread._id }).sort({ created: 1 })
+    return Message.find({ thread: thread._id }).sort({ created: 1 }).populate('images')
   }
   
   // Branched thread: get parent messages up to branch point, then own messages
   const parentMessages = await Message.find({ 
     thread: fullThread.parent.thread,
     _id: { $lte: fullThread.parent.point }  // Messages up to and including branch point
-  }).sort({ created: 1 })
+  }).sort({ created: 1 }).populate('images')
   
-  const ownMessages = await Message.find({ thread: thread._id }).sort({ created: 1 })
+  const ownMessages = await Message.find({ thread: thread._id }).sort({ created: 1 }).populate('images')
   
   return [...parentMessages, ...ownMessages]
 }
 
-export async function handleUserReply( 
-  user: IUser, 
-  userReply: string, 
-  bot: TelegramBot, 
-  images: string[] = [], 
-  mediaGroupId?: string,
-  replyToTelegramMessageId?: number,
-  userTelegramMessageId?: number
-): Promise<{ thread: IThread, isNew: boolean, oldMessageNotFound?: boolean }> {
-  let thread: IThread = await getRecentThread(user);
-  
-  // Process images if any
-  if (images.length > 0) {
-    for (const imageId of images) {
-      try {
-        const fileLink = await bot.getFileLink(imageId);
-        await saveImagePermanently(fileLink, imageId);
-      } catch (error) {
-        console.error(`Error saving image ${imageId}:`, error);
-      }
+async function processUploadedImages( imageIds: string[], user: IUser, threadId: any, bot: TelegramBot ): Promise<any[]> {
+  const imageObjectIds: any[] = []
+
+  for (const telegramFileId of imageIds) {
+    try {
+      const fileLink = await bot.getFileLink(telegramFileId)
+      const localPath = await saveImagePermanently(fileLink, telegramFileId)
+      
+      const image = await new Image({
+        user: user._id,
+        telegramFileId,
+        localPath,
+        threadId,
+        provider: 'unknown'  // User-uploaded, not AI-generated
+      }).save()
+      
+      imageObjectIds.push(image._id)
+    } catch (error) {
+      console.error(`Error processing image ${telegramFileId}:`, error)
     }
   }
+  
+  return imageObjectIds
+}
+
+export async function handleUserReply( user: IUser, userReply: string, bot: TelegramBot, images: string[] = [], mediaGroupId?: string, replyToTelegramMessageId?: number, userTelegramMessageId?: number ): Promise<{ thread: IThread, isNew: boolean, oldMessageNotFound?: boolean }> {
+  let thread: IThread = await getRecentThread(user);
+  
+  // Process images: save to disk and create Image documents
+  let imageObjectIds: any[] = []
+  if (images.length > 0) {
+    imageObjectIds = await processUploadedImages(images, user, thread._id, bot)
+  }
+  
+  console.log('imageObjectIds:', imageObjectIds)
 
   // Handle media group
   if (mediaGroupId) {
+    console.log('mediaGroupId', mediaGroupId)
     const lastMediaMessage = await Message.findOne({ 
       thread: thread._id, 
       mediaGroupId,
@@ -125,7 +136,7 @@ export async function handleUserReply(
     
     if (lastMediaMessage) {
       lastMediaMessage.images = lastMediaMessage.images || [];
-      lastMediaMessage.images.push(...images);
+      lastMediaMessage.images.push(...imageObjectIds);
       if (userReply?.trim()) lastMediaMessage.content = userReply;
       await lastMediaMessage.save();
       return { thread, isNew: false };
@@ -135,14 +146,14 @@ export async function handleUserReply(
       thread: thread._id,
       role: 'user',
       content: userReply || " ",
-      images: images.length > 0 ? images : undefined,
+      images: imageObjectIds.length > 0 ? imageObjectIds : undefined,
       mediaGroupId,
       telegramMessageId: userTelegramMessageId
     }).save();
     return { thread, isNew: false };
   }
 
-  // ===== HANDLE REPLY TO OLD MESSAGE =====
+  // Reply to old message
   if (replyToTelegramMessageId) {
     // Find the message user replied to
     const repliedMessage = await Message.findOne({ telegramMessageId: replyToTelegramMessageId })
@@ -181,12 +192,17 @@ export async function handleUserReply(
           
           console.log(`[BRANCH] Created ${thread._id} from ${repliedThread._id}`)
           
+          // Re-process images for new thread if any
+          if (images.length > 0) {
+            imageObjectIds = await processUploadedImages(images, user, thread._id, bot)
+          }
+          
           // Save user message and return
           await new Message({
             thread: thread._id,
             role: 'user',
             content: userReply || " ",
-            images: images.length > 0 ? images : undefined,
+            images: imageObjectIds.length > 0 ? imageObjectIds : undefined,
             telegramMessageId: userTelegramMessageId
           }).save()
           
@@ -196,7 +212,7 @@ export async function handleUserReply(
     }
   }
 
-  // ===== CONVERSATION ANALYSIS (if enabled) =====
+  // Conversation analysis
   const isAnalysisEnabled = parseInt(process.env.ENABLE_CONVERSATION_ANALYSIS || '0') === 1;
   let assistantType: 'normal' | 'finance' | 'websearch' = 'normal';
   let shouldCreateNewThread = false;
@@ -222,13 +238,15 @@ export async function handleUserReply(
   }
   
   // Save user message
-  await new Message({
+  let message = await new Message({
     thread: thread._id,
     role: 'user',
     content: userReply || " ",
-    images: images.length > 0 ? images : undefined,
+    images: imageObjectIds.length > 0 ? imageObjectIds : undefined,
     telegramMessageId: userTelegramMessageId
   }).save();
+
+  console.log('Message', message)
 
   return { thread, isNew: false };
 }
@@ -262,7 +280,7 @@ export async function handleAssistantReply(thread: IThread, bot: TelegramBot, di
     }).save();
 
   } catch (error) {
-    console.error('Error in handleAssistantReply:', error);
+    // console.error('Error in handleAssistantReply:', error);
     await logApiError('anthropic', error, `Assistant reply failed for thread ${thread._id}`);
     await sendMessage({ text: dict.getString('ASSISTANT_ERROR'), user: thread.owner, bot });
   }
@@ -289,12 +307,15 @@ async function chatWithFunctionCalling(params: { thread: IThread, bot: TelegramB
     
     // Get all messages (handles branched threads automatically)
     const threadMessages = await getThreadMessages(freshThread)
+    console.log('threadMessages:', threadMessages)
     
-    const ownMessages = await Message.find({ thread: thread._id })
-    const isNewThread = ownMessages.length === 1
+    // const ownMessages = await Message.find({ thread: thread._id })
+    // const isNewThread = ownMessages.length === 1
     
     const formattedMessages = await formatMessagesWithImages(threadMessages, user, bot)
+    console.log('formattedMessages:', formattedMessages)
     const messages = [...formattedMessages]
+    console.log('messages', messages)
     const executedFunctions = []
     let usedModel = ''
     
@@ -460,13 +481,13 @@ async function chatWithFunctionCalling(params: { thread: IThread, bot: TelegramB
         messages.push({ role: "user", content: toolResults });
         
       } catch (error) {
-        console.error('Error in chatWithFunctionCalling loop:', error);
+        // console.error('Error in chatWithFunctionCalling loop:', error);
         await logApiError('llm', error, `Chat function calling failed for thread ${thread._id}`);
         throw error;
       }
     }
   } catch (error) {
-    console.error('Error in chatWithFunctionCalling:', error);
+    // console.error('Error in chatWithFunctionCalling:', error);
     throw error;
   }
 }

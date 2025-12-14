@@ -63,10 +63,8 @@ export async function callLLM(request: LLMRequest): Promise<LLMResponse> {
   try {
     const response = await primaryProvider.call({
       ...request,
-      model: primaryModel,
-      // Pass config to provider for API type selection
-      _modelConfig: primaryConfig,
-      // Apply default reasoning from config if not specified in request
+      model: primaryModel, // Pass config to provider for API type selection
+      _modelConfig: primaryConfig, // Apply default reasoning from config if not specified in request
       reasoning_effort: request.reasoning_effort || primaryConfig.reasoning
     });
     return response;

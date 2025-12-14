@@ -62,7 +62,7 @@ export class OpenAIImageProvider implements ImageProvider {
         }
       );
 
-      console.log('response.data.output', response.data.output);
+      // console.log('response.data.output', response.data.output);
 
       const imageData = this.extractImageData(response.data);
       

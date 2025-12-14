@@ -11,7 +11,7 @@ const MessageSchema = new Schema<IMessage>({
   content: { type: String },
   created: { type: Date, default: () => moment().utc() },
   name: { type: String, default: undefined },
-  images: { type: [String], default: undefined },
+  images: { type: [{ type: Schema.Types.ObjectId, ref: 'Image' }], default: undefined },
   mediaGroupId: { type: String, default: undefined },
   telegramMessageId: { type: Number, default: undefined },
   imageId: { type: Schema.Types.ObjectId, ref: 'Image', default: undefined }

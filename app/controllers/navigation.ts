@@ -324,6 +324,7 @@ export default class Navigation {
           
           // For media groups, wait before processing to collect all images
           if (mediaGroupId) {
+            console.log('mediaGroupId:', mediaGroupId)
             const isFirstMessageInGroup = !this.mediaGroups.includes(mediaGroupId);
             
             if (isFirstMessageInGroup) {
