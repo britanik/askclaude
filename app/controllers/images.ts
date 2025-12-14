@@ -5,11 +5,14 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { IUser } from '../interfaces/users';
 import Image from '../models/images';
+import Message from '../models/messages';
 import { withChatAction } from '../helpers/chatAction';
 import { sendMessage } from '../templates/sendMessage';
 import { logLimitHit } from './tokens';
 import { generateImageWithFallback, ImageGenerationResult, ImageTier } from '../services/image';
 import { logApiError } from '../helpers/errorLogger';
+import { IThread } from '../interfaces/threads';
+import { IImage } from '../interfaces/image';
 
 export async function saveImageLocally(imageBuffer: Buffer): Promise<string> {
   // Create images directory if it doesn't exist
@@ -65,15 +68,15 @@ export async function moderateContent(prompt: string): Promise<{flagged: boolean
 
 export interface SendGeneratedImageParams {
   prompt: string;
-  user: IUser;
+  user?: IUser;
   bot: TelegramBot;
   result: ImageGenerationResult;
   tier: ImageTier;
-  threadId?: string;  // Optional: for assistant flow
+  thread?: IThread;  // Optional: for assistant flow
 }
 
-export async function sendGeneratedImage(params: SendGeneratedImageParams): Promise<{ imageDoc: any; sentPhoto: any }> {
-  const { prompt, user, bot, result, tier, threadId } = params;
+export async function sendGeneratedImage(params: SendGeneratedImageParams): Promise<IImage> {
+  const { prompt, user, bot, result, tier, thread } = params;
   const imageResponse = result.response;
 
   // Convert base64 to buffer
@@ -83,15 +86,6 @@ export async function sendGeneratedImage(params: SendGeneratedImageParams): Prom
   const localPath = await saveImageLocally(imageBuffer);
   console.log(`[Image] Saved locally at: ${localPath}`);
 
-  // Debug: log multiTurnData size before saving
-  if (imageResponse.multiTurnData) {
-    const dataSize = JSON.stringify(imageResponse.multiTurnData).length;
-    console.log(`[Image] multiTurnData size: ${(dataSize / 1024).toFixed(1)}KB`);
-    if (dataSize > 10 * 1024 * 1024) {
-      console.warn(`[Image] WARNING: multiTurnData is very large (${(dataSize / 1024 / 1024).toFixed(1)}MB), may exceed MongoDB limit`);
-    }
-  }
-
   // Create "Retry" button (with empty ID initially)
   const buttons: InlineKeyboardButton[][] = [
     [{ text: '🔄 Повторить', callback_data: JSON.stringify({ a: 'imageRetry', id: '' }) }]
@@ -99,7 +93,6 @@ export async function sendGeneratedImage(params: SendGeneratedImageParams): Prom
 
   // Send image to user
   const sentPhoto = await bot.sendPhoto(user.chatId, imageBuffer, {
-    // caption: `🎨 ${prompt.slice(0, 200)}${prompt.length > 200 ? '...' : ''}`,
     reply_markup: { inline_keyboard: buttons }
   });
 
@@ -107,21 +100,27 @@ export async function sendGeneratedImage(params: SendGeneratedImageParams): Prom
   const telegramFileId = sentPhoto.photo[sentPhoto.photo.length - 1].file_id;
 
   // Save to database with tier
-  const imageDoc = await new Image({
-    user: user._id,
+  const savedImage:IImage = await new Image({
     prompt: prompt,
-    imageUrl: imageResponse.originalUrl,
+    user,
     telegramFileId: telegramFileId,
     localPath: localPath,
     provider: imageResponse.provider,
     tier: tier,
     multiTurnData: imageResponse.multiTurnData,
-    ...(threadId && { threadId })  // Only include if provided
+  }).save();
+
+  // Save image as a Message
+  await new Message({
+    thread: thread._id,
+    role: 'assistant',
+    images: [ savedImage ],
+    telegramMessageId: sentPhoto.message_id
   }).save();
 
   // Update button with image ID
   const updatedButtons: InlineKeyboardButton[][] = [
-    [{ text: '🔄 Повторить', callback_data: JSON.stringify({ a: 'imageRetry', id: imageDoc._id }) }]
+    [{ text: '🔄 Повторить', callback_data: JSON.stringify({ a: 'imageRetry', id: savedImage._id }) }]
   ];
 
   await bot.editMessageReplyMarkup(
@@ -129,7 +128,7 @@ export async function sendGeneratedImage(params: SendGeneratedImageParams): Prom
     { chat_id: user.chatId, message_id: sentPhoto.message_id }
   );
 
-  return { imageDoc, sentPhoto };
+  return savedImage;
 }
 
 export async function getStoredImage(imageId: string): Promise<{ buffer?: Buffer, telegramFileId?: string, error?: string }> {
@@ -177,9 +176,9 @@ export async function getStoredImage(imageId: string): Promise<{ buffer?: Buffer
 export async function regenerateImage(imageId: string, user: IUser, bot: TelegramBot): Promise<void> {
   try {
     // Find the image document
-    const imageDoc = await Image.findById(imageId);
+    const image:IImage = await Image.findById(imageId).populate('thread');
     
-    if (!imageDoc) {
+    if (!image) {
       await sendMessage({
         text: 'Не удалось найти изображение для повторной генерации. Пожалуйста, создайте новое изображение.',
         user,
@@ -189,7 +188,7 @@ export async function regenerateImage(imageId: string, user: IUser, bot: Telegra
     }
     
     // Make sure this user owns the image
-    if (imageDoc.user.toString() !== user._id.toString()) {
+    if (image.user.toString() !== user._id.toString()) {
       await sendMessage({
         text: 'У вас нет прав для повторной генерации этого изображения.',
         user,
@@ -210,7 +209,7 @@ export async function regenerateImage(imageId: string, user: IUser, bot: Telegra
     
     const tier = await getCurrentTier(user);
     
-    console.log(`Regenerating image with prompt: "${imageDoc.prompt}" for user ${user.username || user.chatId}, tier: ${tier}`);
+    console.log(`Regenerating image with prompt: "${image.prompt}" for user ${user.username || user.chatId}, tier: ${tier}`);
     
     // Generate new image with fallback support
     const result = await withChatAction(
@@ -218,7 +217,7 @@ export async function regenerateImage(imageId: string, user: IUser, bot: Telegra
       user.chatId,
       'upload_photo',
       async () => {
-        const genResult = await generateImageWithFallback({ prompt: imageDoc.prompt, tier });
+        const genResult = await generateImageWithFallback({ prompt: image.prompt, tier });
         
         if (genResult.usedFallback) {
           await sendMessage({
@@ -236,28 +235,14 @@ export async function regenerateImage(imageId: string, user: IUser, bot: Telegra
     const actualTier = result.actualTier || tier;
 
     // Send image and save to DB (reuse helper)
-    const { imageDoc: newImageDoc, sentPhoto } = await sendGeneratedImage({ 
-      prompt: imageDoc.prompt, 
+    const savedImage = await sendGeneratedImage({ 
+      prompt: image.prompt, 
       user, 
       bot, 
       result,
       tier: actualTier,
-      threadId: imageDoc.threadId?.toString()
+      thread: await getImageThread(image)
     });
-    
-    // Save regenerated image as a Message so Claude knows about it
-    if (newImageDoc.threadId) {
-      const Message = (await import('../models/messages')).default;
-      await new Message({
-        thread: newImageDoc.threadId,
-        role: 'assistant',
-        content: null,
-        imageId: newImageDoc._id,
-        telegramMessageId: sentPhoto.message_id
-      }).save();
-      
-      console.log(`[Regenerate] Saved Message linking image ${newImageDoc._id} to thread ${newImageDoc.threadId}`);
-    }
     
   } catch (error) {
     console.error('Error regenerating image:', error);
@@ -269,8 +254,6 @@ export async function regenerateImage(imageId: string, user: IUser, bot: Telegra
     });
   }
 }
-
-// ===== Tier and Limit Functions =====
 
 export async function getTopTierLimit(): Promise<number> {
   return +(process.env.IMAGE_LIMIT_DAILY_TOP || 5);
@@ -328,4 +311,9 @@ export async function getPeriodImageUsage(user: IUser): Promise<number> {
 export async function getPeriodImageLimit(user: IUser): Promise<number> {
   // Return total daily limit (top + normal)
   return +(process.env.IMAGE_LIMIT_DAILY_TOTAL || 15);
+}
+
+export async function getImageThread(image: IImage): Promise<IThread | null> {
+  const message = await Message.findOne({ images: image._id }).populate('thread');
+  return message?.thread as IThread || null;
 }

@@ -13,7 +13,7 @@ const ImageSchema = new Schema({
   provider: { type: String, enum: ['openai', 'getimg', 'gemini', 'unknown'], default: 'unknown' },
   tier: { type: String, enum: ['top', 'normal'], default: 'top' },
   multiTurnData: { type: Schema.Types.Mixed }, // Provider-specific data for multi-turn editing
-  threadId: { type: Schema.Types.ObjectId, ref: 'Thread' } // Link to conversation thread
+  // threadId: { type: Schema.Types.ObjectId, ref: 'Thread' } // Link to conversation thread
 })
 
 // Add indexes for faster queries

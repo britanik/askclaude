@@ -270,17 +270,13 @@ export default class Navigation {
         let thread: IThread = await startAssistant(startAssistantParams);
         
         // Send welcome message and save with telegram ID
-        const sendResult = await sendMessage({ 
-          text: firstMessage, 
-          user: this.user, 
-          bot: this.bot 
-        });
+        const sent = await sendMessage({ text: firstMessage, user: this.user, bot: this.bot });
         
         await new Message({
           thread: thread._id,
           role: 'assistant',
           content: firstMessage,
-          telegramMessageId: sendResult?.telegramMessageId
+          telegramMessageId: sent?.telegramMessageId
         }).save();
       },
       callback: async () => {
@@ -338,7 +334,15 @@ export default class Navigation {
               // For subsequent messages in the same media group, just add the image and return
               // without sending to Claude yet - this is handled by the first message
               console.log(`Additional message in media group ${mediaGroupId}`);
-              await handleUserReply(this.user, text, this.bot, images, mediaGroupId, replyToMessageId, this.msg.message_id);
+              await handleUserReply({
+                user: this.user,
+                userReply: text,
+                imageIds: images,
+                mediaGroupId: mediaGroupId,
+                replyToTelegramMessageId: replyToMessageId,
+                userTelegramMessageId: this.msg.message_id,
+                bot: this.bot
+              });
               return; // Important: don't process this as a full message
             }
           }
@@ -346,11 +350,15 @@ export default class Navigation {
           // PROCESS MESSAGE
           
           // Analyze, save new Message, start new thread or return existing one
-          let userReply = await handleUserReply(
-            this.user, text, this.bot, images, mediaGroupId,
-            replyToMessageId,
-            this.msg.message_id
-          );
+          let userReply = await handleUserReply({
+            user: this.user,
+            userReply: text,
+            imageIds: images,
+            mediaGroupId: mediaGroupId,
+            replyToTelegramMessageId: replyToMessageId,
+            userTelegramMessageId: this.msg.message_id,
+            bot: this.bot
+          });
           
           // If user replied to an old message we don't have tracked - just notify and stop
           if (userReply.oldMessageNotFound) {
@@ -426,7 +434,6 @@ export default class Navigation {
 
         // Check for NSFW content
         const moderation = await moderateContent(prompt);
-        console.log('moderation', moderation)
         if (moderation.flagged && moderation.scores.sexual > 0.9) {
           // NSFW: Direct generation with GetImg, no threads, no assistant
           try {

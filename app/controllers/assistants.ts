@@ -15,10 +15,11 @@ import { trackExpense, editTransaction, createBudget, getBudgetInfoString, delet
 import { financeTools, searchTool, imageGenerationTool } from "../helpers/tools"
 import { promptsDict } from "../helpers/prompts"
 import { logApiError } from "../helpers/errorLogger"
-import { callLLM, LLMRequest, isToolUse } from "../services/llm"
+import { callLLM, LLMRequest, isToolUse, LLMMessage } from "../services/llm"
 import { generateImageWithFallback, ImageGenerationResult } from '../services/image'
 import Image from '../models/images'
 import { getCurrentTier, getPeriodImageLimit, isImageLimit, sendGeneratedImage } from './images'
+import { IImage } from "../interfaces/image"
 
 export interface IAssistantParams {
   user: IUser
@@ -80,8 +81,8 @@ export async function getThreadMessages(thread: IThread): Promise<IMessage[]> {
   return [...parentMessages, ...ownMessages]
 }
 
-async function processUploadedImages( imageIds: string[], user: IUser, threadId: any, bot: TelegramBot ): Promise<any[]> {
-  const imageObjectIds: any[] = []
+async function processUploadedImages( imageIds: string[], user: IUser, thread: IThread, bot: TelegramBot ): Promise<IImage[]> {
+  const images: IImage[] = []
 
   for (const telegramFileId of imageIds) {
     try {
@@ -92,32 +93,43 @@ async function processUploadedImages( imageIds: string[], user: IUser, threadId:
         user: user._id,
         telegramFileId,
         localPath,
-        threadId,
-        provider: 'unknown'  // User-uploaded, not AI-generated
+        thread,
+        provider: 'unknown'
       }).save()
       
-      imageObjectIds.push(image._id)
+      images.push(image)
     } catch (error) {
       console.error(`Error processing image ${telegramFileId}:`, error)
     }
   }
   
-  return imageObjectIds
+  return images
 }
 
-export async function handleUserReply( user: IUser, userReply: string, bot: TelegramBot, images: string[] = [], mediaGroupId?: string, replyToTelegramMessageId?: number, userTelegramMessageId?: number ): Promise<{ thread: IThread, isNew: boolean, oldMessageNotFound?: boolean }> {
+export interface IHandleUserReplyParams {
+  user: IUser
+  userReply: string
+  imageIds: string[]  // было images: string[]
+  mediaGroupId?: string
+  replyToTelegramMessageId?: number
+  userTelegramMessageId?: number
+  bot: TelegramBot
+}
+
+export async function handleUserReply(params: IHandleUserReplyParams): Promise<{ thread: IThread, isNew: boolean, oldMessageNotFound?: boolean }> {
+
+  // Деструктуризация с переименованием images -> imageIds
+  let { user, userReply, imageIds, mediaGroupId, replyToTelegramMessageId, userTelegramMessageId, bot } = params;
+
   let thread: IThread = await getRecentThread(user);
   let isNew = false;
   
   // Process images: save to disk and create Image documents
-  let imageObjectIds: any[] = []
-  if (images.length > 0) {
-    imageObjectIds = await processUploadedImages(images, user, thread._id, bot)
+  let Images: IImage[] = []
+  if (imageIds.length > 0) {
+    Images = await processUploadedImages(imageIds, user, thread, bot)
   }
   
-  console.log('imageObjectIds:', imageObjectIds)
-
-  // === Handle media group (особый случай, early return) ===
   if (mediaGroupId) {
     console.log('mediaGroupId', mediaGroupId)
     const lastMediaMessage = await Message.findOne({ 
@@ -128,7 +140,7 @@ export async function handleUserReply( user: IUser, userReply: string, bot: Tele
     
     if (lastMediaMessage) {
       lastMediaMessage.images = lastMediaMessage.images || [];
-      lastMediaMessage.images.push(...imageObjectIds);
+      lastMediaMessage.images.push(...Images);
       if (userReply?.trim()) lastMediaMessage.content = userReply;
       await lastMediaMessage.save();
       return { thread, isNew: false };
@@ -138,14 +150,13 @@ export async function handleUserReply( user: IUser, userReply: string, bot: Tele
       thread: thread._id,
       role: 'user',
       content: userReply || " ",
-      images: imageObjectIds.length > 0 ? imageObjectIds : undefined,
+      images: Images.length > 0 ? Images : undefined,
       mediaGroupId,
       telegramMessageId: userTelegramMessageId
     }).save();
     return { thread, isNew: false };
   }
 
-  // === Reply to old message: определяем thread ===
   if (replyToTelegramMessageId) {
     const repliedMessage = await Message.findOne({ telegramMessageId: replyToTelegramMessageId })
     
@@ -164,10 +175,8 @@ export async function handleUserReply( user: IUser, userReply: string, bot: Tele
       const isLastMessage = lastMessage?._id.equals(repliedMessage._id)
       
       if (isLastMessage) {
-        // Continue existing thread
         thread = repliedThread
       } else {
-        // Create branch thread
         thread = await new Thread({
           owner: user,
           assistantType: repliedThread.assistantType,
@@ -181,23 +190,22 @@ export async function handleUserReply( user: IUser, userReply: string, bot: Tele
         isNew = true
         
         // Re-process images for new thread
-        if (images.length > 0) {
-          imageObjectIds = await processUploadedImages(images, user, thread._id, bot)
+        if (imageIds.length > 0) {
+          Images = await processUploadedImages(imageIds, user, thread, bot)
         }
       }
     }
   } else {
-    // === Conversation analysis (только если НЕ reply) ===
-    const isAnalysisEnabled = parseInt(process.env.ENABLE_CONVERSATION_ANALYSIS || '0') === 1;
     let assistantType: 'normal' | 'finance' | 'websearch' = 'normal';
     
-    if (isAnalysisEnabled) {
+    if (+process.env.ENABLE_CONVERSATION_ANALYSIS) {
       const lastMessages = await Message.find({ thread: thread._id }).sort({ created: -1 }).limit(5);
       if (lastMessages.length > 0) {
         const formattedMessages = lastMessages.reverse().map(msg => ({ role: msg.role, content: msg.content || "" }));
         const analysis: IConversationAnalysisResult = await analyzeConversation(formattedMessages, userReply);
+        console.log('[ANALYSIS]', analysis)
+        // set assistant ype
         assistantType = analysis.assistant;
-        
         if (analysis.action === 'new') {
           thread = await startAssistant({ user, assistantType });
           isNew = true;
@@ -205,7 +213,6 @@ export async function handleUserReply( user: IUser, userReply: string, bot: Tele
       }
     }
     
-    // Update assistant type if needed
     if (assistantType === 'finance' && thread.assistantType !== 'finance') {
       thread.assistantType = 'finance';
       await thread.save();
@@ -216,7 +223,7 @@ export async function handleUserReply( user: IUser, userReply: string, bot: Tele
     thread: thread._id,
     role: 'user',
     content: userReply || " ",
-    images: imageObjectIds.length > 0 ? imageObjectIds : undefined,
+    images: Images,
     telegramMessageId: userTelegramMessageId
   }).save();
 
@@ -225,7 +232,7 @@ export async function handleUserReply( user: IUser, userReply: string, bot: Tele
 
 export async function handleAssistantReply(thread: IThread, bot: TelegramBot, dict: Dict): Promise<void> {
   try {
-    const freshThread = await Thread.findById(thread._id).populate('owner')
+    // const freshThread = await Thread.findById(thread._id).populate('owner')
 
     const assistantReply = await withChatAction(
       bot,
@@ -270,7 +277,12 @@ export async function getRecentThread(user: IUser): Promise<IThread> {
   }
 }
 
-async function chatWithFunctionCalling(params: { thread: IThread, bot: TelegramBot }) {
+export interface IChatWithFunctionCalling { 
+  thread: IThread, 
+  bot: TelegramBot 
+}
+
+async function chatWithFunctionCalling(params:IChatWithFunctionCalling) {
   const { thread, bot } = params
   
   try {
@@ -284,23 +296,28 @@ async function chatWithFunctionCalling(params: { thread: IThread, bot: TelegramB
     // const ownMessages = await Message.find({ thread: thread._id })
     // const isNewThread = ownMessages.length === 1
     
-    const formattedMessages = await formatMessagesWithImages(threadMessages, user, bot)
+    const formattedMessages:LLMMessage[] = await formatMessagesWithImages(threadMessages)
+    // console.log('formattedMessages:')
+    // console.dir(formattedMessages, { depth: 3 })
+    
     const messages = [...formattedMessages]
+    console.log('messages:')
+    console.dir(messages, { depth: 4 })
     const executedFunctions = []
     let usedModel = ''
     
-    // Get previous images from messages in this conversation context (respects branch points)
-    const imageIdsFromMessages = threadMessages
-      .filter(msg => msg.imageId)
-      .map(msg => msg.imageId)
+    // // Get previous images from messages in this conversation context (respects branch points)
+    // const imageIdsFromMessages = threadMessages
+    //   .filter(msg => msg.imageId)
+    //   .map(msg => msg.imageId)
     
-    const threadImages = imageIdsFromMessages.length > 0
-      ? await Image.find({ _id: { $in: imageIdsFromMessages } }).sort({ created: -1 })
-      : []
+    // const threadImages = imageIdsFromMessages.length > 0
+    //   ? await Image.find({ _id: { $in: imageIdsFromMessages } }).sort({ created: -1 })
+    //   : []
     
-    const imagesContext = threadImages.length > 0 
-      ? threadImages.map(img => `- ID: ${img._id}, prompt: "${img.prompt.slice(0, 100)}...", created: ${img.created}`).join('\n')
-      : 'No previous images in this conversation.'
+    // const imagesContext = threadImages.length > 0 
+    //   ? threadImages.map(img => `- ID: ${img._id}, prompt: "${img.prompt.slice(0, 100)}...", created: ${img.created}`).join('\n')
+    //   : 'No previous images in this conversation.'
     
     while (true) {
       try {
@@ -324,10 +341,10 @@ async function chatWithFunctionCalling(params: { thread: IThread, bot: TelegramB
           ? promptsDict.finance(transactionsInfo, budgetInfo) 
           : promptsDict.system();
         
-        // Add images context to system prompt
-        systemPrompt += `\n\n# Previous Images in Conversation\n${imagesContext}`
+        // // Add images context to system prompt
+        // systemPrompt += `\n\n# Previous Images in Conversation\n${imagesContext}`
 
-        console.log('systemPrompt:', systemPrompt)
+        // console.log('systemPrompt:', systemPrompt)
 
         const request: LLMRequest = {
           model: process.env.MODEL_NORMAL || process.env.CLAUDE_MODEL,
@@ -464,12 +481,7 @@ async function chatWithFunctionCalling(params: { thread: IThread, bot: TelegramB
   }
 }
 
-async function handleImageGenerationTool(
-  input: Record<string, any>,
-  user: IUser,
-  thread: IThread,
-  bot: TelegramBot
-): Promise<string> {
+async function handleImageGenerationTool( input: Record<string, any>, user: IUser, thread: IThread, bot: TelegramBot ): Promise<string> {
   const { prompt, editImageId } = input as { prompt: string; editImageId?: string };
   
   // Validate prompt exists
@@ -514,27 +526,18 @@ async function handleImageGenerationTool(
     const actualTier = result.actualTier;
     console.log(`[Image Tool] Actual tier used: ${actualTier}`);
 
-    // Send image to user and save to DB
-    const { imageDoc, sentPhoto } = await sendGeneratedImage({
-      prompt,
+    // Send image to user and save Message and Image to DB
+    const savedImage = await sendGeneratedImage({
       user,
-      bot,
+      thread,
+      prompt,
       result,
       tier: actualTier,
-      threadId: thread._id.toString()
+      bot
     });
 
-    // Save image as a Message so reply functionality works
-    await new Message({
-      thread: thread._id,
-      role: 'assistant',
-      content: null,
-      imageId: imageDoc._id,
-      telegramMessageId: sentPhoto.message_id
-    }).save();
-
-    // Return success message with image ID for potential future edits
-    return `Image generated successfully. Image ID: ${imageDoc._id}. The image has been sent to the user.`;
+    // Return success message with image ID for tool reply
+    return `Image generated successfully. Image ID: ${savedImage._id}. The image has been sent to the user.`;
 
   } catch (error: any) {
     console.error('Error in handleImageGenerationTool:', error);
@@ -545,18 +548,6 @@ async function handleImageGenerationTool(
     }
     
     return `Error generating image: ${error.message}. Please inform the user and suggest they try again.`;
-  }
-}
-
-async function executeFunction(functionName: string, input: any, user: IUser): Promise<string> {
-  switch (functionName) {
-    case 'trackExpense': return trackExpense(user, input);
-    case 'editTransaction': return editTransaction(user, input);
-    case 'deleteTransaction': return deleteTransaction(user, input);
-    case 'loadMore': return getTransactionsString(user, { ...input, includeBudgetInfo: true });
-    case 'createBudget': return createBudget(user, input);
-    case 'deleteBudget': return deleteBudget(user, input);
-    default: throw new Error(`Unknown function: ${functionName}`);
   }
 }
 

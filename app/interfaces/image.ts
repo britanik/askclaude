@@ -12,5 +12,4 @@ export interface IImage extends Document {
   localPath?: string
   provider: ImageProvider
   multiTurnData?: any // Provider-specific data for multi-turn editing
-  threadId?: Types.ObjectId // Link to conversation thread
 }

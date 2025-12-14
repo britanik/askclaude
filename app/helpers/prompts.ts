@@ -43,7 +43,7 @@ export const promptsDict = {
 - If the user asks questions about the image, provide detailed answers based on the visual content.
 - Remember that users may send multiple images in a single message.
 # Image Generation
-- You can generate images using the generate_image tool.
+- You can generate images using the generateImage tool.
 - Use this tool when user asks to create, draw, generate, or make an image/picture.
 - For editing a previous image, provide the editImageId parameter with the image's MongoDB ID.
 - After generating, briefly confirm to the user that the image was created.
@@ -133,6 +133,7 @@ analyzeConversation: () => `You route user messages to the correct assistant.
 - "finance" = user tracks money, asks about expenses/income, or manages transactions
 - "websearch" = user explicitly asks to search the web or needs current information (news, prices, weather)
 - "normal" = everything else including image generation requests (default)
+Never use assistant type "image". Normal assistant handles images.
 
 # Examples:
 
@@ -174,6 +175,5 @@ Current: "create an image of a sunset"
 
 # Finance keywords: лари, лар, $, USD, EUR, GEL, расход, доход, потратил, перевел, зп, транзакция, бюджет
 # Other:
-Respond ONLY with JSON.
-Never return assistant: image.`,
+Respond ONLY with JSON.`,
 }

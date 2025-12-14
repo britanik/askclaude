@@ -8,7 +8,7 @@ import { getReadableId } from "../helpers/helpers"
 import { IMessage } from "../interfaces/messages"
 import { logApiError } from "../helpers/errorLogger"
 import { IUser } from "../interfaces/users"
-import { callLLM, RESPONSE_FORMAT_ANALYZE } from "./llm"
+import { callLLM, LLMMessage, RESPONSE_FORMAT_ANALYZE } from "./llm"
 import { IImage } from "../interfaces/image"
 
 export interface IChatCallParams {
@@ -93,7 +93,34 @@ export async function getTranscription(msg, bot: TelegramBot): Promise<string> {
   }
 }
 
-export async function formatMessagesWithImages(messages: IMessage[], user, bot) {
+function getImageMediaType(filePath: string, buffer: Buffer): string {
+  // Check magic bytes first
+  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) {
+    return 'image/png'
+  }
+  if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) {
+    return 'image/jpeg'
+  }
+  if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46) {
+    return 'image/gif'
+  }
+  if (buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46) {
+    return 'image/webp'
+  }
+  
+  // Fallback to extension
+  const ext = filePath.toLowerCase().split('.').pop()
+  const extMap: Record<string, string> = {
+    'png': 'image/png',
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'gif': 'image/gif',
+    'webp': 'image/webp'
+  }
+  return extMap[ext || ''] || 'image/jpeg'
+}
+
+export async function formatMessagesWithImages(messages: IMessage[]) {
   const formattedMessages = []
   
   for (const message of messages) {
@@ -107,49 +134,108 @@ export async function formatMessagesWithImages(messages: IMessage[], user, bot) 
     
     // If message has images, format it for Claude's vision API
     if (message.images && message.images.length > 0) {
-      formattedMessage = {
-        role: message.role,
-        content: []
-      }
       
-      // Add text content if exists
-      if (message.content && message.content.trim() !== '') {
+      // Check if this is a generated image (from provider)
+      const firstImage = message.images[0] as IImage
+      const isGeneratedImage = firstImage.provider && 
+        ['openai', 'gemini', 'getimg'].includes(firstImage.provider)
+      
+      // Generated images from assistant need special handling
+      // Claude API doesn't support images with role: assistant
+      // So we convert them to role: user with text + image format
+      if (message.role === 'assistant' && isGeneratedImage) {
+        formattedMessage = {
+          role: 'user',
+          content: []
+        }
+        
+        // Collect image IDs for the text block
+        const imageIds = message.images
+          .map(img => (img as IImage)._id?.toString())
+          .filter(Boolean)
+        
+        const idLabel = imageIds.length > 1 ? 'Image IDs' : 'Image ID'
+        const textContent = `[Generated ${idLabel}: ${imageIds.join(', ')}]`
+        
         formattedMessage.content.push({
           type: "text",
-          text: message.content
+          text: textContent
         })
-      } else {
-        // Claude requires at least some text content
-        formattedMessage.content.push({
-          type: "text",
-          text: " " // Empty space as minimal content
-        })
-      }
-      
-      // Process images from Image documents
-      for (const imageRef of message.images) {
-        try {
-          // imageRef is populated IImage document
-          const image = imageRef as IImage
-          
-          if (image.localPath && fs.existsSync(image.localPath)) {
-            // Read from local file
-            const imageBuffer = fs.readFileSync(image.localPath)
-            const imageBase64 = imageBuffer.toString('base64')
+        
+        // // Process each image
+        // for (const imageRef of message.images) {
+        //   try {
+        //     const image = imageRef as IImage
             
-            formattedMessage.content.push({
-              type: "image",
-              source: {
-                type: "base64",
-                media_type: "image/jpeg",
-                data: imageBase64
-              }
-            })
-          } else {
-            console.error(`Image file not found: ${image.localPath}`)
+        //     if (image.localPath && fs.existsSync(image.localPath)) {
+        //       const imageBuffer = fs.readFileSync(image.localPath)
+        //       const imageBase64 = imageBuffer.toString('base64')
+        //       const mediaType = getImageMediaType(image.localPath, imageBuffer)
+              
+        //       formattedMessage.content.push({
+        //         type: "image",
+        //         source: {
+        //           type: "base64",
+        //           media_type: mediaType,
+        //           data: imageBase64
+        //         }
+        //       })
+        //     } else {
+        //       console.error(`Image file not found: ${image.localPath}`)
+        //     }
+        //   } catch (error) {
+        //     console.error(`Error processing generated image:`, error)
+        //   }
+        // }
+      } else {
+        // User-uploaded images or unknown provider - keep original logic
+        formattedMessage = {
+          role: message.role,
+          content: []
+        }
+        
+        // Collect image IDs
+        const imageIds = message.images
+          .map(img => (img as IImage)._id?.toString())
+          .filter(Boolean)
+        
+        // Build text with image IDs prefix
+        const idLabel = imageIds.length > 1 ? 'Image IDs' : 'Image ID'
+        const idPrefix = imageIds.length > 0 ? `${idLabel}: ${imageIds.join(', ')}\n` : ''
+        const userText = message.content?.trim() || ''
+        const finalText = idPrefix + userText || ' '
+        
+        formattedMessage.content.push({
+          type: "text",
+          text: finalText
+        })
+        
+        // Process images from Image documents
+        for (const imageRef of message.images) {
+          try {
+            // imageRef is populated IImage document
+            const image = imageRef as IImage
+            
+            if (image.localPath && fs.existsSync(image.localPath)) {
+              // Read from local file
+              const imageBuffer = fs.readFileSync(image.localPath)
+              const imageBase64 = imageBuffer.toString('base64')
+              const mediaType = getImageMediaType(image.localPath, imageBuffer)
+              
+              formattedMessage.content.push({
+                type: "image",
+                source: {
+                  type: "base64",
+                  media_type: mediaType,
+                  data: imageBase64
+                }
+              })
+            } else {
+              console.error(`Image file not found: ${image.localPath}`)
+            }
+          } catch (error) {
+            console.error(`Error processing image:`, error)
           }
-        } catch (error) {
-          console.error(`Error processing image:`, error)
         }
       }
     } else {
@@ -257,7 +343,7 @@ export async function analyzeConversation( lastMessages: Array<{role: string, co
       response_format: RESPONSE_FORMAT_ANALYZE
     });
 
-    console.log('response:', response);
+    // console.log('response:', response);
 
     // Extract text from response
     const textContent = response.content.find(c => c.type === 'text');

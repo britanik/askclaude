@@ -23,7 +23,7 @@ export class OpenAIImageProvider implements ImageProvider {
         tools: [{ 
           type: 'image_generation',
           size: request.size || '1024x1024',
-          quality: request.quality || 'medium'
+          quality: request.quality || 'high'
         }]
       };
 

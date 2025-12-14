@@ -17,7 +17,7 @@ export class AnthropicProvider implements LLMProvider {
 
   async call(request: LLMRequest): Promise<LLMResponse> {
     console.log('Anthropic call')
-    console.log('Request messages:', request.messages[0])
+    // console.log('Request messages:', request.messages)
 
     // Build Claude-specific request
     const claudeRequest: any = {

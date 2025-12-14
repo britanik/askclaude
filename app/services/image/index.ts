@@ -116,7 +116,6 @@ export async function generateImageWithFallback(request: ImageRequest): Promise<
   
   // Step 1: Content moderation
   const moderation = await moderateContent(request.prompt);
-  console.log(moderation, 'moderation');
   
   // Step 2: NSFW content goes to dedicated provider (no multi-turn)
   if (moderation.flagged && moderation.scores.sexual > 0.85) {
