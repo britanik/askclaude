@@ -436,9 +436,18 @@ export default class Navigation {
       },
       callback: async () => {
         console.log('image().callback()')
-        const prompt = this.msg?.text?.trim();
+          // Handle both text and photo+caption
+        let prompt: string | undefined;
         
-        // Validate prompt
+        if (this.msg.photo && this.msg.photo.length > 0) {
+          // Photo message - get caption as prompt
+          prompt = this.msg.caption?.trim();
+        } else {
+          // Text message
+          prompt = this.msg?.text?.trim();
+        }
+        
+        // Validate prompt (rest of code stays the same...)
         if (!prompt) {
           await sendMessage({ text: this.dict.getString('IMAGE_NO_PROMPT'), user: this.user, bot: this.bot });
           return;
