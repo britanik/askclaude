@@ -10,6 +10,7 @@ import { handleAssistantReply, handleUserReply, IAssistantParams, startAssistant
 import { tmplAdmin } from "../templates/tmplAdmin"
 import { getTranscription } from "../services/ai"
 import { isAdmin } from "../helpers/helpers"
+import { generatePaymentToken } from "../helpers/paymentToken"
 
 import { tmplSettings } from '../templates/tmplSettings'
 import { tmplInvite } from "../templates/tmplInvite"
@@ -765,6 +766,37 @@ export default class Navigation {
       },
       callback: async () => {
       },
+    }
+  }
+
+  premium() {
+    return {
+      action: async () => {
+        // Проверяем, есть ли уже премиум
+        if (this.user.premium) {
+          await sendMessage({
+            text: 'У вас уже есть Premium!',
+            user: this.user,
+            bot: this.bot
+          });
+          return;
+        }
+
+        // Генерируем уникальный токен для оплаты
+        const paymentToken = generatePaymentToken(this.user._id);
+
+        // Отправляем сообщение с кнопкой
+        await sendMessage({
+          text: 'Купить Premium',
+          user: this.user,
+          bot: this.bot,
+          buttons: [[{
+            text: 'Купить',
+            url: `https://askclaude.ru/pay?token=${paymentToken}`
+          }]]
+        });
+      },
+      callback: async () => {}
     }
   }
 

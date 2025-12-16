@@ -11,6 +11,7 @@ export interface IUser extends Document {
   created: Date,
   messages: Object,
   data: Object,
+  premium?: boolean,
   prefs: {
     lang: 'eng' | 'rus',
     token_balance?: number,
