@@ -1,4 +1,4 @@
-import { Document, ObjectId, Types } from "mongoose"
+import { Document, Types } from "mongoose"
 import { IUser } from "./users"
 import { IMessage } from "./messages"
 
@@ -8,7 +8,7 @@ export interface IThreadParent {
 }
 
 export interface IThread extends Document {
-  _id: ObjectId
+  _id: Types.ObjectId
   owner: IUser
   assistantType?: 'normal' | 'finance' | 'websearch'
   created?: Date

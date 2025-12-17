@@ -71,9 +71,9 @@ export async function getThreadMessages(thread: IThread): Promise<IMessage[]> {
   }
   
   // Branched thread: get parent messages up to branch point, then own messages
-  const parentMessages = await Message.find({ 
+  const parentMessages = await Message.find({
     thread: fullThread.parent.thread,
-    _id: { $lte: fullThread.parent.point }  // Messages up to and including branch point
+    _id: { $lte: fullThread.parent.point as any }  // Messages up to and including branch point
   }).sort({ created: 1 }).populate('images')
   
   const ownMessages = await Message.find({ thread: thread._id }).sort({ created: 1 }).populate('images')
@@ -165,9 +165,9 @@ export async function handleUserReply(params: IHandleUserReplyParams): Promise<{
       return { thread: null, isNew: false, oldMessageNotFound: true }
     }
     
-    const repliedThread = await Thread.findOne({ 
-      _id: repliedMessage.thread, 
-      owner: user._id 
+    const repliedThread = await Thread.findOne({
+      _id: repliedMessage.thread as any,
+      owner: user._id
     }).populate('owner')
     
     if (repliedThread) {
@@ -269,7 +269,7 @@ export async function getRecentThread(user: IUser): Promise<IThread> {
   try {
     let recentThread = await Thread.findOne({ owner: user }).sort({ created: -1 }).populate('owner')
     if (!recentThread) {
-      recentThread = await createNewThread({ user, messages: [] })
+      recentThread = await createNewThread({ user, messages: [] }) as any
     }
     return recentThread
   } catch(e) {
