@@ -12,7 +12,8 @@ export const menuButtons = [
   { name: '/run_scheduler', method: 'adminRunScheduler' },
   { name: '/admin', method: 'admin' },
   { name: '/pm', method: 'pm' },
-  { name: '/updateUserSchema', method: 'updateUserSchema' }
+  { name: '/updateUserSchema', method: 'updateUserSchema' },
+  { name: '/deletePremium', method: 'deletePremium' }
 ];
 
 export const isMenuClicked = ( msg ):IMenuButton | false => {

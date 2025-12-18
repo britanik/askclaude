@@ -800,4 +800,20 @@ export default class Navigation {
     }
   }
 
+  deletePremium() {
+    return {
+      action: async () => {
+        this.user.premium = false;
+        await this.user.save();
+
+        await sendMessage({
+          text: 'Premium отключен.',
+          user: this.user,
+          bot: this.bot
+        });
+      },
+      callback: async () => {}
+    }
+  }
+
 }
