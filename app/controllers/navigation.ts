@@ -20,6 +20,7 @@ import { sendNotification } from "./notifications"
 import { getCurrentTier, getPeriodImageLimit, isImageLimit, moderateContent, sendGeneratedImage } from "./images"
 import { IThread } from "../interfaces/threads"
 import Message from "../models/messages"
+import Thread from "../models/threads"
 import { generateUserStats } from "./stats"
 import { regenerateImage } from "../controllers/images"
 import { withChatAction } from "../helpers/chatAction"
@@ -281,13 +282,6 @@ export default class Navigation {
         }).save();
       },
       callback: async () => {
-        // Check token limit (both hourly and daily)
-        if( await isTokenLimit(this.user) ){
-          const limitMessage = await getTokenLimitMessage(this.user);
-          await sendMessage({ text: limitMessage, user: this.user, bot: this.bot });
-          return;
-        }
-
         try {
           let text: string = '';
           let images: string[] = [];
@@ -335,7 +329,41 @@ export default class Navigation {
           else {
             text = this.msg.text;
           }
-          
+
+          // Check token limit (both hourly and daily)
+          if( await isTokenLimit(this.user) ){
+            // Save user message (similar to normal flow)
+            const userReply = await handleUserReply({
+              user: this.user,
+              userReply: text,
+              imageIds: images,
+              mediaGroupId: mediaGroupId,
+              replyToTelegramMessageId: replyToMessageId,
+              userTelegramMessageId: this.msg.message_id,
+              bot: this.bot
+            });
+
+            // Save thread ID in user for processing after payment
+            this.user.pendingThread = userReply.thread._id;
+            await this.user.save();
+
+            // Generate payment token
+            const paymentToken = generatePaymentToken(this.user._id);
+
+            // Show limit message with buy button
+            const limitMessage = await getTokenLimitMessage(this.user);
+            await sendMessage({
+              text: limitMessage,
+              user: this.user,
+              bot: this.bot,
+              buttons: [[{
+                text: '💎 Купить безлимит',
+                url: `https://askclaude.ru/pay?token=${paymentToken}`
+              }]]
+            });
+            return;
+          }
+
           // For media groups, wait before processing to collect all images
           if (mediaGroupId) {
             console.log('mediaGroupId:', mediaGroupId)
@@ -797,6 +825,42 @@ export default class Navigation {
         });
       },
       callback: async () => {}
+    }
+  }
+
+  processPending() {
+    return {
+      action: async () => {},
+      callback: async () => {
+        // Get pendingThread
+        const threadId = this.user.pendingThread;
+        if (!threadId) {
+          await sendMessage({
+            text: 'Нет ожидающих запросов.',
+            user: this.user,
+            bot: this.bot
+          });
+          return;
+        }
+
+        // Load thread
+        const thread = await Thread.findById(threadId).populate('owner');
+        if (!thread) {
+          await sendMessage({
+            text: 'Thread не найден.',
+            user: this.user,
+            bot: this.bot
+          });
+          return;
+        }
+
+        // Clear pendingThread
+        this.user.pendingThread = undefined;
+        await this.user.save();
+
+        // Send request to Claude
+        await handleAssistantReply(thread, this.bot, this.dict);
+      }
     }
   }
 
