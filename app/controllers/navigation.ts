@@ -350,16 +350,16 @@ export default class Navigation {
             // Generate payment token
             const paymentToken = generatePaymentToken(this.user._id);
 
-            // Show limit message with buy button
+            // Show limit message with buy button (only for admin)
             const limitMessage = await getTokenLimitMessage(this.user);
             await sendMessage({
               text: limitMessage,
               user: this.user,
               bot: this.bot,
-              buttons: [[{
+              buttons: isAdmin(this.user) ? [[{
                 text: '💎 Купить безлимит',
                 url: `https://askclaude.ru/pay?token=${paymentToken}`
-              }]]
+              }]] : undefined
             });
             return;
           }
