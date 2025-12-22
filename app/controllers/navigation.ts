@@ -918,13 +918,10 @@ export default class Navigation {
       action: async () => {
         // Activate premium
         this.user.premium = true;
+        await this.user.save();
 
         // Get pending thread if exists
         const pendingThread = this.user.pendingThread?.toString();
-
-        // Clear pending thread
-        this.user.pendingThread = undefined;
-        await this.user.save();
 
         // Send message with or without button depending on pending thread
         const buttons = pendingThread ? [[{
