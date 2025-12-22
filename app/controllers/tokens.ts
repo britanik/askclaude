@@ -6,6 +6,7 @@ import User from '../models/users';
 import Usage from '../models/usage';
 import Invite from '../models/invites';
 import Limit from '../models/limits';
+import { isAdmin } from '../helpers/helpers';
 
 // Update user schema to remove token_balance field
 export async function updateUserSchema() {
@@ -138,15 +139,20 @@ export function getMinutesToNextDay() {
 
 // Calculate period token limit including friend bonuses (HOURLY)
 export async function getPeriodTokenLimit(user: IUser): Promise<number> {
-  try {    
-    // Get base limit from env or default to 10000
-    const baseLimit = +(process.env.TOKENS_HOUR_LIMIT || 10000);
+  try {
+    // Get base limit from env - use admin limit if user is admin
+    let baseLimit: number;
+    if (isAdmin(user)) {
+      baseLimit = +(process.env.TOKENS_HOUR_LIMIT_ADMIN || process.env.TOKENS_HOUR_LIMIT || 10000);
+    } else {
+      baseLimit = +(process.env.TOKENS_HOUR_LIMIT || 10000);
+    }
 
     // console.log('Base Hourly Limit:', baseLimit);
-    
+
     // Find user's invite code
     const invite = await Invite.findOne({ owner: user._id });
-    
+
     // Calculate bonus based on referrals
     let referralBonus = 0;
     if (invite) {
@@ -154,7 +160,7 @@ export async function getPeriodTokenLimit(user: IUser): Promise<number> {
       const usedInvitesCount = invite.usedBy.length;
       referralBonus = usedInvitesCount * (+(process.env.TOKENS_PER_REFERRAL) || 10000);
     }
-    
+
     // Return the total limit
     return baseLimit + referralBonus;
   } catch (error) {
@@ -166,13 +172,18 @@ export async function getPeriodTokenLimit(user: IUser): Promise<number> {
 
 // Calculate daily token limit including friend bonuses (NEW)
 export async function getDailyTokenLimit(user: IUser): Promise<number> {
-  try {    
-    // Get base daily limit from env or default to 100000
-    const baseLimit = +(process.env.TOKENS_DAILY_LIMIT || 100000);
-    
+  try {
+    // Get base daily limit from env - use admin limit if user is admin
+    let baseLimit: number;
+    if (isAdmin(user)) {
+      baseLimit = +(process.env.TOKENS_DAILY_LIMIT_ADMIN || process.env.TOKENS_DAILY_LIMIT || 100000);
+    } else {
+      baseLimit = +(process.env.TOKENS_DAILY_LIMIT || 100000);
+    }
+
     // Find user's invite code
     const invite = await Invite.findOne({ owner: user._id });
-    
+
     // Calculate bonus based on referrals
     let referralBonus = 0;
     if (invite) {
@@ -180,7 +191,7 @@ export async function getDailyTokenLimit(user: IUser): Promise<number> {
       const usedInvitesCount = invite.usedBy.length;
       referralBonus = usedInvitesCount * (+(process.env.TOKENS_DAILY_PER_REFERRAL) || 20000);
     }
-    
+
     // Return the total daily limit
     return baseLimit + referralBonus;
   } catch (error) {
