@@ -142,13 +142,7 @@ export async function getPeriodTokenLimit(user: IUser): Promise<number> {
   try {
     // Get base limit from env - use admin limit if user is admin
     let baseLimit: number;
-    if (isAdmin(user)) {
-      baseLimit = +(process.env.TOKENS_HOUR_LIMIT_ADMIN || process.env.TOKENS_HOUR_LIMIT || 10000);
-    } else {
-      baseLimit = +(process.env.TOKENS_HOUR_LIMIT || 10000);
-    }
-
-    // console.log('Base Hourly Limit:', baseLimit);
+    baseLimit = (isAdmin(user)) ? +process.env.TOKENS_HOUR_LIMIT_ADMIN : +process.env.TOKENS_HOUR_LIMIT
 
     // Find user's invite code
     const invite = await Invite.findOne({ owner: user._id });
@@ -158,7 +152,8 @@ export async function getPeriodTokenLimit(user: IUser): Promise<number> {
     if (invite) {
       // Each used invite adds TOKENS_PER_REFERRAL to the limit
       const usedInvitesCount = invite.usedBy.length;
-      referralBonus = usedInvitesCount * (+(process.env.TOKENS_PER_REFERRAL) || 10000);
+      const bonusPerReferral = isAdmin(user) ? +process.env.TOKENS_PER_REFERRAL_ADMIN : +process.env.TOKENS_PER_REFERRAL;
+      referralBonus = usedInvitesCount * bonusPerReferral;
     }
 
     // Return the total limit
@@ -175,11 +170,7 @@ export async function getDailyTokenLimit(user: IUser): Promise<number> {
   try {
     // Get base daily limit from env - use admin limit if user is admin
     let baseLimit: number;
-    if (isAdmin(user)) {
-      baseLimit = +(process.env.TOKENS_DAILY_LIMIT_ADMIN || process.env.TOKENS_DAILY_LIMIT || 100000);
-    } else {
-      baseLimit = +(process.env.TOKENS_DAILY_LIMIT || 100000);
-    }
+    baseLimit = (isAdmin(user)) ? +process.env.TOKENS_DAILY_LIMIT_ADMIN : +process.env.TOKENS_DAILY_LIMIT;
 
     // Find user's invite code
     const invite = await Invite.findOne({ owner: user._id });
@@ -189,7 +180,8 @@ export async function getDailyTokenLimit(user: IUser): Promise<number> {
     if (invite) {
       // Each used invite adds TOKENS_DAILY_PER_REFERRAL to the daily limit
       const usedInvitesCount = invite.usedBy.length;
-      referralBonus = usedInvitesCount * (+(process.env.TOKENS_DAILY_PER_REFERRAL) || 20000);
+      const bonusPerReferral = isAdmin(user) ? +process.env.TOKENS_DAILY_PER_REFERRAL_ADMIN : +process.env.TOKENS_DAILY_PER_REFERRAL
+      referralBonus = usedInvitesCount * bonusPerReferral;
     }
 
     // Return the total daily limit
