@@ -343,9 +343,13 @@ export default class Navigation {
               bot: this.bot
             });
 
+            console.log('Save thread _id to user:', userReply.thread._id)
+
             // Save thread ID in user for processing after payment
             this.user.pendingThread = userReply.thread._id;
             await this.user.save();
+
+            console.log('user.pendingThread', this.user.pendingThread)
 
             // Generate payment token
             const paymentToken = generatePaymentToken(this.user._id);
@@ -832,6 +836,7 @@ export default class Navigation {
     return {
       action: async () => {},
       callback: async () => {
+        console.log('processPending', this.user.pendingThread)
         // Get pendingThread
         const threadId = this.user.pendingThread;
         if (!threadId) {
