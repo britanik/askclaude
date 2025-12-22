@@ -14,7 +14,7 @@ import { generatePaymentToken } from "../helpers/paymentToken"
 
 import { tmplSettings } from '../templates/tmplSettings'
 import { tmplInvite } from "../templates/tmplInvite"
-import { getTokenLimitMessage, isTokenLimit, isWebSearchLimit, updateUserSchema } from "./tokens"
+import { getTokenLimitMessage, isTokenLimit, isWebSearchLimit, updateUserSchema, resetAdminTokens } from "./tokens"
 import { isValidInviteCode, processReferral } from "./invites"
 import { sendNotification } from "./notifications"
 import { getCurrentTier, getPeriodImageLimit, isImageLimit, moderateContent, sendGeneratedImage } from "./images"
@@ -880,6 +880,34 @@ export default class Navigation {
           user: this.user,
           bot: this.bot
         });
+      },
+      callback: async () => {}
+    }
+  }
+
+  resetTokens() {
+    return {
+      action: async () => {
+        if (!isAdmin(this.user)) {
+          await sendMessage({ text: 'Access denied', user: this.user, bot: this.bot });
+          return;
+        }
+
+        const result = await resetAdminTokens(this.user);
+
+        if (result.success) {
+          await sendMessage({
+            text: `✅ Сброшено ${result.deletedCount} записей токенов за сегодня`,
+            user: this.user,
+            bot: this.bot
+          });
+        } else {
+          await sendMessage({
+            text: `❌ Ошибка при сбросе токенов: ${result.error}`,
+            user: this.user,
+            bot: this.bot
+          });
+        }
       },
       callback: async () => {}
     }

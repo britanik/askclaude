@@ -13,7 +13,8 @@ export const menuButtons = [
   { name: '/admin', method: 'admin' },
   { name: '/pm', method: 'pm' },
   { name: '/updateUserSchema', method: 'updateUserSchema' },
-  { name: '/deletePremium', method: 'deletePremium' }
+  { name: '/deletePremium', method: 'deletePremium' },
+  { name: '/resetTokens', method: 'resetTokens' }
 ];
 
 export const isMenuClicked = ( msg ):IMenuButton | false => {
