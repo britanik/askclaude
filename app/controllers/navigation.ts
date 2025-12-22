@@ -913,4 +913,38 @@ export default class Navigation {
     }
   }
 
+  paySuccess() {
+    return {
+      action: async () => {
+        // Activate premium
+        this.user.premium = true;
+
+        // Get pending thread if exists
+        const pendingThread = this.user.pendingThread?.toString();
+
+        // Clear pending thread
+        this.user.pendingThread = undefined;
+        await this.user.save();
+
+        // Send message with or without button depending on pending thread
+        const buttons = pendingThread ? [[{
+          text: '✨ Получить ответ на ваш вопрос',
+          callback_data: JSON.stringify({ a: 'processPending' })
+        }]] : undefined;
+
+        const text = pendingThread
+          ? '🎉 Безлимит активирован!\n\nНажмите кнопку ниже, чтобы получить ответ на ваш вопрос.'
+          : '🎉 Premium активирован!\n\nСпасибо за покупку! Теперь вам доступны все премиум-функции.';
+
+        await sendMessage({
+          text,
+          user: this.user,
+          bot: this.bot,
+          buttons
+        });
+      },
+      callback: async () => {}
+    }
+  }
+
 }

@@ -14,7 +14,8 @@ export const menuButtons = [
   { name: '/pm', method: 'pm' },
   { name: '/updateUserSchema', method: 'updateUserSchema' },
   { name: '/deletePremium', method: 'deletePremium' },
-  { name: '/resetTokens', method: 'resetTokens' }
+  { name: '/resetTokens', method: 'resetTokens' },
+  { name: '/paySuccess', method: 'paySuccess' },
 ];
 
 export const isMenuClicked = ( msg ):IMenuButton | false => {
