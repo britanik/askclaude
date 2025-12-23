@@ -25,7 +25,9 @@ import { regenerateImage } from "../controllers/images"
 import { withChatAction } from "../helpers/chatAction"
 import { generateImageWithFallback } from "../services/image"
 import { tmplLimits } from "../templates/tmplLimits"
-import { tmplPayConfirm, PaymentPlan } from "../templates/tmplPayConfirm"
+import { tmplPayConfirm } from "../templates/tmplPayConfirm"
+import { PaymentPlan, PLANS } from "./payments"
+import Order from "../models/orders"
 
 export interface INavigationParams {
   user?: IUser
@@ -913,9 +915,20 @@ export default class Navigation {
   paySuccess() {
     return {
       action: async () => {
-        // Activate premium
-        this.user.premium = true;
-        await this.user.save();
+        // Эмуляция оплаты - создаём Order на 24 часа
+        const plan: PaymentPlan = '24h';
+        const startDate = new Date();
+        const endDate = new Date(startDate);
+        endDate.setHours(endDate.getHours() + 24);
+
+        await Order.create({
+          user: this.user._id,
+          plan,
+          startDate,
+          endDate,
+          transactionId: Date.now(), // Эмуляция - используем timestamp
+          amount: PLANS[plan].price
+        });
 
         // Get pending thread if exists
         const pendingThread = this.user.pendingThread?.toString();
@@ -927,8 +940,8 @@ export default class Navigation {
         }]] : undefined;
 
         const text = pendingThread
-          ? '🎉 Безлимит активирован!\n\nНажмите кнопку ниже, чтобы получить ответ на ваш вопрос.'
-          : '🎉 Premium активирован!\n\nСпасибо за покупку! Теперь вам доступны все премиум-функции.';
+          ? '🎉 Безлимит на 24 часа активирован!\n\nНажмите кнопку ниже, чтобы получить ответ на ваш вопрос.'
+          : '🎉 Безлимит на 24 часа активирован!\n\nСпасибо!';
 
         await sendMessage({
           text,

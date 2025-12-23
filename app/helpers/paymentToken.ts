@@ -1,7 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { Types } from 'mongoose';
-
-export type PaymentPlan = '24h' | '7d';
+import { PaymentPlan } from '../controllers/payments';
 
 export function generatePaymentToken(userId: Types.ObjectId, plan: PaymentPlan): string {
   return jwt.sign(

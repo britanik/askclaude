@@ -2,18 +2,7 @@ import { IUser } from "../interfaces/users";
 import { sendMessage } from "./sendMessage";
 import TelegramBot from "node-telegram-bot-api";
 import { generatePaymentToken } from "../helpers/paymentToken";
-
-export type PaymentPlan = '24h' | '7d';
-
-interface PlanDetails {
-  duration: string;
-  price: number;
-}
-
-const PLANS: Record<PaymentPlan, PlanDetails> = {
-  '24h': { duration: '24 часа', price: 49 },
-  '7d': { duration: '7 дней', price: 249 }
-};
+import { PaymentPlan, PLANS } from "../controllers/payments";
 
 export async function tmplPayConfirm(user: IUser, bot: TelegramBot, plan: PaymentPlan) {
   const planDetails = PLANS[plan];
