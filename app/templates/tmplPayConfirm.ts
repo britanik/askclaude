@@ -17,7 +17,7 @@ const PLANS: Record<PaymentPlan, PlanDetails> = {
 
 export async function tmplPayConfirm(user: IUser, bot: TelegramBot, plan: PaymentPlan) {
   const planDetails = PLANS[plan];
-  const paymentToken = generatePaymentToken(user._id);
+  const paymentToken = generatePaymentToken(user._id, plan);
 
   const text = `Безлимит на ${planDetails.duration} за ${planDetails.price} рублей.
 
