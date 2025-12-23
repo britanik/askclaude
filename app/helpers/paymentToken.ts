@@ -5,7 +5,7 @@ export function generatePaymentToken(userId: Types.ObjectId): string {
   return jwt.sign(
     { userId: userId.toString() },
     process.env.PAYMENT_SECRET,
-    { expiresIn: '1h' }
+    { expiresIn: '24h' }
   );
 }
 

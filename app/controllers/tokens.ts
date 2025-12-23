@@ -68,16 +68,16 @@ export async function getTokenLimitMessage(user: IUser): Promise<string> {
     
     const hourlyExceeded = hourlyUsage >= hourlyLimit;
     const dailyExceeded = dailyUsage >= dailyLimit;
+
+    let message = ``
     
-    if (hourlyExceeded && dailyExceeded) {
-      return `Достигнуты лимиты токенов в час и в день. Обновится через ${getMinutesToNextHour()} мин. (час) и через ${getTimeToNextDay()} (день).`;
-    } else if (hourlyExceeded) {
-      return `Лимит токенов в час исчерпан. Вы можете продолжить через ${getMinutesToNextHour()} мин.`;
+    if (hourlyExceeded) {
+      message = `Лимит токенов в час исчерпан. Вы можете продолжить через ${getMinutesToNextHour()} мин. или приобрести безлимит всего за 49 рублей на 24 часа.`;
     } else if (dailyExceeded) {
-      return `Лимит токенов в день исчерпан. Вы можете продолжить через ${getTimeToNextDay()}.`;
+      message = `Лимит токенов в день исчерпан. Вы можете продолжить через ${getTimeToNextDay()} или приобрести безлимит всего за 49 рублей на 24 часа.`;
     }
     
-    return 'Лимит токенов исчерпан.'; // Fallback
+    return message;
   } catch (error) {
     console.error('Error getting token limit message:', error);
     return 'Лимит токенов исчерпан.';

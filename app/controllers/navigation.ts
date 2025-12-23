@@ -10,14 +10,13 @@ import { handleAssistantReply, handleUserReply, IAssistantParams, startAssistant
 import { tmplAdmin } from "../templates/tmplAdmin"
 import { getTranscription } from "../services/ai"
 import { isAdmin } from "../helpers/helpers"
-import { generatePaymentToken } from "../helpers/paymentToken"
 
 import { tmplSettings } from '../templates/tmplSettings'
 import { tmplInvite } from "../templates/tmplInvite"
 import { getTokenLimitMessage, isTokenLimit, isWebSearchLimit, updateUserSchema, resetAdminTokens } from "./tokens"
 import { isValidInviteCode, processReferral } from "./invites"
 import { sendNotification } from "./notifications"
-import { getCurrentTier, getPeriodImageLimit, isImageLimit, moderateContent, sendGeneratedImage } from "./images"
+import { getPeriodImageLimit, isImageLimit, moderateContent, sendGeneratedImage } from "./images"
 import { IThread } from "../interfaces/threads"
 import Message from "../models/messages"
 import Thread from "../models/threads"
@@ -25,6 +24,8 @@ import { generateUserStats } from "./stats"
 import { regenerateImage } from "../controllers/images"
 import { withChatAction } from "../helpers/chatAction"
 import { generateImageWithFallback } from "../services/image"
+import { tmplLimits } from "../templates/tmplLimits"
+import { tmplPayConfirm, PaymentPlan } from "../templates/tmplPayConfirm"
 
 export interface INavigationParams {
   user?: IUser
@@ -247,8 +248,7 @@ export default class Navigation {
       action: async () => {
         // Check token limit (both hourly and daily)
         if( await isTokenLimit(this.user) ){
-          const limitMessage = await getTokenLimitMessage(this.user);
-          await sendMessage({ text: limitMessage, user: this.user, bot: this.bot });
+          await tmplLimits(this.user, this.bot, this.dict);
           return;
         }
   
@@ -349,22 +349,7 @@ export default class Navigation {
             this.user.pendingThread = userReply.thread._id;
             await this.user.save();
 
-            console.log('user.pendingThread', this.user.pendingThread)
-
-            // Generate payment token
-            const paymentToken = generatePaymentToken(this.user._id);
-
-            // Show limit message with buy button (only for admin)
-            const limitMessage = await getTokenLimitMessage(this.user);
-            await sendMessage({
-              text: limitMessage,
-              user: this.user,
-              bot: this.bot,
-              buttons: isAdmin(this.user) ? [[{
-                text: '💎 Купить безлимит',
-                url: `https://askclaude.ru/pay?token=${paymentToken}`
-              }]] : undefined
-            });
+            await tmplLimits(this.user, this.bot, this.dict)
             return;
           }
 
@@ -801,34 +786,46 @@ export default class Navigation {
     }
   }
 
-  premium() {
+  // premium() {
+  //   return {
+  //     action: async () => {
+  //       // Проверяем, есть ли уже премиум
+  //       if (this.user.premium) {
+  //         await sendMessage({
+  //           text: 'У вас уже есть Premium!',
+  //           user: this.user,
+  //           bot: this.bot
+  //         });
+  //         return;
+  //       }
+
+  //       // Генерируем уникальный токен для оплаты
+  //       const paymentToken = generatePaymentToken(this.user._id);
+
+  //       // Отправляем сообщение с кнопкой
+  //       await sendMessage({
+  //         text: 'Купить Premium',
+  //         user: this.user,
+  //         bot: this.bot,
+  //         buttons: [[{
+  //           text: 'Купить',
+  //           url: `https://askclaude.ru/pay?token=${paymentToken}`
+  //         }]]
+  //       });
+  //     },
+  //     callback: async () => {}
+  //   }
+  // }
+
+  payConfirm() {
     return {
-      action: async () => {
-        // Проверяем, есть ли уже премиум
-        if (this.user.premium) {
-          await sendMessage({
-            text: 'У вас уже есть Premium!',
-            user: this.user,
-            bot: this.bot
-          });
-          return;
+      action: async () => {},
+      callback: async () => {
+        const plan = this.data.plan as PaymentPlan;
+        if (plan === '24h' || plan === '7d') {
+          await tmplPayConfirm(this.user, this.bot, plan);
         }
-
-        // Генерируем уникальный токен для оплаты
-        const paymentToken = generatePaymentToken(this.user._id);
-
-        // Отправляем сообщение с кнопкой
-        await sendMessage({
-          text: 'Купить Premium',
-          user: this.user,
-          bot: this.bot,
-          buttons: [[{
-            text: 'Купить',
-            url: `https://askclaude.ru/pay?token=${paymentToken}`
-          }]]
-        });
-      },
-      callback: async () => {}
+      }
     }
   }
 

@@ -14,6 +14,7 @@ export function getMessage( user:IUser, name:string ){
 
 export async function updateMessage(user, name: string, messageId: number | number[] | null) {
   user.messages[name] = messageId;
+  user.markModified('messages');
   return await user.save();
 }
 
