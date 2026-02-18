@@ -14,6 +14,10 @@ export const MODEL_CONFIG: Record<string, ModelConfig> = {
     provider: 'anthropic'
   },
 
+  'claude-sonnet-4-6': {
+    provider: 'anthropic'
+  },
+  
   'claude-sonnet-4-20250514': {
     provider: 'anthropic'
   },
