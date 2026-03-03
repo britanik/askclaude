@@ -13,6 +13,7 @@ import Navigation from './app/controllers/navigation'
 import { extractReferralCode, isValidInviteCode, processReferral } from './app/controllers/invites'
 import { sendMessage } from './app/templates/sendMessage'
 import { IInvite } from './app/models/invites'
+import { abortIfSequence } from './app/helpers/messageBuffer'
 
 // Load .env
 if( fs.existsSync(path.join(__dirname, '.env')) ){
@@ -90,6 +91,11 @@ bot.on('message', async ( msg, param ) => {
   try{
     if( msg.photo && msg.photo.length > 0 ){
       // console.log(msg.photo[msg.photo.length-1].file_id,'file_id')
+    }
+
+    // If user sends a new text message while previous is being processed — mark as aborted
+    if (msg.text && !msg.text.startsWith('/')) {
+      abortIfSequence(msg.chat.id)
     }
 
     await startNavigation(msg, null)

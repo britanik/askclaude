@@ -27,6 +27,7 @@ export async function updateUserSchema() {
 export interface ITokenLimitResult {
   exceeded: boolean;
   dailyRemaining: number;
+  hourlyRemaining: number;
 }
 
 // Check if user is at the hourly limit
@@ -43,6 +44,7 @@ export async function isTokenLimit(user: IUser): Promise<ITokenLimitResult> {
     const dailyExceeded = dailyUsage >= dailyLimit;
 
     const dailyRemaining = Math.max(0, dailyLimit - dailyUsage);
+    const hourlyRemaining = Math.max(0, hourlyLimit - hourlyUsage);
 
     if (hourlyExceeded) {
       await logLimitHit(user, 'hourly_token', hourlyUsage, hourlyLimit);
@@ -54,11 +56,12 @@ export async function isTokenLimit(user: IUser): Promise<ITokenLimitResult> {
 
     return {
       exceeded: hourlyExceeded || dailyExceeded,
-      dailyRemaining
+      dailyRemaining,
+      hourlyRemaining
     };
   } catch (error) {
     console.error('Error checking token limit:', error);
-    return { exceeded: false, dailyRemaining: 0 };
+    return { exceeded: false, dailyRemaining: 0, hourlyRemaining: 0 };
   }
 }
 

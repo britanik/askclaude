@@ -230,7 +230,7 @@ export async function handleUserReply(params: IHandleUserReplyParams): Promise<{
   return { thread, isNew };
 }
 
-export async function handleAssistantReply(thread: IThread, bot: TelegramBot, dict: Dict, dailyRemaining?: number): Promise<void> {
+export async function handleAssistantReply(thread: IThread, bot: TelegramBot, dict: Dict, dailyRemaining?: number): Promise<string | null> {
   try {
     const assistantReply = await withChatAction(
       bot,
@@ -241,26 +241,31 @@ export async function handleAssistantReply(thread: IThread, bot: TelegramBot, di
 
     await saveAIResponse(assistantReply, 'response');
 
-    // Send to user and get telegram message ID
-    let telegramMessageId: number | undefined;
-    if (assistantReply) {
-      const result = await sendMessage({ text: assistantReply, user: thread.owner, bot });
-      telegramMessageId = result?.telegramMessageId;
-    }
-
-    // Save assistant message with telegram ID
-    await new Message({
-      thread: thread._id,
-      role: 'assistant',
-      content: assistantReply,
-      telegramMessageId
-    }).save();
+    return assistantReply || null;
 
   } catch (error) {
     // console.error('Error in handleAssistantReply:', error);
     await logApiError('anthropic', error, `Assistant reply failed for thread ${thread._id}`);
     await sendMessage({ text: dict.getString('ASSISTANT_ERROR'), user: thread.owner, bot });
+    return null;
   }
+}
+
+/**
+ * Send assistant reply to user and save to DB.
+ * Separated from handleAssistantReply so caller can decide whether to send (e.g. on abort).
+ */
+export async function sendAndSaveReply(reply: string, thread: IThread, bot: TelegramBot): Promise<void> {
+  let telegramMessageId: number | undefined;
+  const result = await sendMessage({ text: reply, user: thread.owner, bot });
+  telegramMessageId = result?.telegramMessageId;
+
+  await new Message({
+    thread: thread._id,
+    role: 'assistant',
+    content: reply,
+    telegramMessageId
+  }).save();
 }
 
 export async function getRecentThread(user: IUser): Promise<IThread> {
@@ -357,7 +362,7 @@ async function chatWithFunctionCalling(params:IChatWithFunctionCalling) {
           request.tools = tools;
         }
 
-        // Pre-flight: block if estimated prompt tokens exceed remaining daily limit
+        // Pre-flight: block if estimated prompt tokens exceed remaining token limit (min of hourly/daily)
         if (dailyRemaining !== undefined && estimateMessagesTokens(messages) > dailyRemaining) {
           return 'Ваш запрос слишком большой для оставшегося лимита токенов. Попробуйте начать новый диалог или сократить сообщение.';
         }

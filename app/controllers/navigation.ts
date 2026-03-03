@@ -6,7 +6,7 @@ import { IMenuButton } from "../interfaces/menu-button"
 import { isMenuClicked } from "./menu"
 import { sendMessage } from "../templates/sendMessage"
 import { tmplRegisterLang } from "../templates/tmplRegisterLanguage"
-import { handleAssistantReply, handleUserReply, IAssistantParams, startAssistant } from "./assistants"
+import { handleAssistantReply, sendAndSaveReply, handleUserReply, IAssistantParams, startAssistant } from "./assistants"
 import { tmplAdmin } from "../templates/tmplAdmin"
 import { getTranscription } from "../services/ai"
 import { isAdmin } from "../helpers/helpers"
@@ -28,6 +28,7 @@ import { tmplLimits } from "../templates/tmplLimits"
 import { tmplPayConfirm } from "../templates/tmplPayConfirm"
 import { PaymentPlan, PLANS } from "./payments"
 import Order from "../models/orders"
+import { bufferMessage, markProcessing, isAborted, clearBuffer } from "../helpers/messageBuffer"
 
 export interface INavigationParams {
   user?: IUser
@@ -285,6 +286,7 @@ export default class Navigation {
         }).save();
       },
       callback: async () => {
+        let isBufferLeader = false; // true only for the first message in buffer group
         try {
           let text: string = '';
           let images: string[] = [];
@@ -331,6 +333,27 @@ export default class Navigation {
           // Handle regular text messages
           else {
             text = this.msg.text;
+          }
+
+          // Buffer plain text messages (Telegram splits long texts into multiple messages)
+          const isPlainText = !this.msg.voice && !this.msg.photo && !this.msg.document
+                              && text && !text.startsWith('/');
+
+          if (isPlainText) {
+            const bufferResult = bufferMessage(this.user.chatId, text);
+
+            if (bufferResult === null) {
+              // Follower message — the first message handler will process everything
+              console.log(`[Buffer] Follower message from ${this.user.chatId}, skipping`);
+              return;
+            }
+
+            // This callback is the "leader" — it owns the buffer lifecycle
+            isBufferLeader = true;
+
+            // First message — wait for debounce to collect others
+            text = await bufferResult;
+            console.log(`[Buffer] Combined text for ${this.user.chatId}: "${text.substring(0, 100)}..."`);
           }
 
           // Check token limit (both hourly and daily)
@@ -412,12 +435,31 @@ export default class Navigation {
           
           // Only send to Claude if this isn't a media group or it's the first message after waiting
           if (!mediaGroupId || this.mediaGroups.includes(mediaGroupId)) {
-            
+
             const searchLimitReached:boolean = await isWebSearchLimit(this.user) || false;
             if (!searchLimitReached) {
-              // CONTINUE HERE
-              // Send thread to LLM and then it's reply to user
-              await handleAssistantReply(userReply.thread, this.bot, this.dict, tokenLimit.dailyRemaining);
+              // Mark as processing so abortIfSequence knows there's an in-flight request
+              markProcessing(this.user.chatId);
+
+              // Send thread to LLM (pass the stricter of hourly/daily remaining for pre-flight check)
+              const tokensRemaining = Math.min(tokenLimit.hourlyRemaining, tokenLimit.dailyRemaining);
+              const reply = await handleAssistantReply(userReply.thread, this.bot, this.dict, tokensRemaining);
+
+              // Check if this request was aborted while waiting for LLM response
+              if (isAborted(this.user.chatId)) {
+                console.log(`[Buffer] Request aborted for ${this.user.chatId}, discarding reply`);
+                // Usage already logged inside chatWithFunctionCalling, just don't send reply
+                // Save assistant message to DB anyway (for history consistency)
+                if (reply) {
+                  await new Message({
+                    thread: userReply.thread._id,
+                    role: 'assistant',
+                    content: reply,
+                  }).save();
+                }
+              } else if (reply) {
+                await sendAndSaveReply(reply, userReply.thread, this.bot);
+              }
             } else {
               // Exit
               await sendMessage({
@@ -426,7 +468,7 @@ export default class Navigation {
                 bot: this.bot
               })
             }
-            
+
             // Remove from mediaGroups array after processing
             if (mediaGroupId) {
               const index = this.mediaGroups.indexOf(mediaGroupId);
@@ -438,6 +480,12 @@ export default class Navigation {
         } catch (e) {
           console.error('Failed to handle assistant callback', e);
           await sendMessage({ text: this.dict.getString('ASSISTANT_ERROR'), user: this.user, bot: this.bot });
+        } finally {
+          // Only the leader (first message in buffer group) cleans up the buffer.
+          // Follower messages must NOT touch it — otherwise the leader's Promise never resolves.
+          if (isBufferLeader) {
+            clearBuffer(this.user.chatId);
+          }
         }
       }
     }
@@ -865,7 +913,10 @@ export default class Navigation {
         await this.user.save();
 
         // Send request to Claude
-        await handleAssistantReply(thread, this.bot, this.dict);
+        const reply = await handleAssistantReply(thread, this.bot, this.dict);
+        if (reply) {
+          await sendAndSaveReply(reply, thread, this.bot);
+        }
       }
     }
   }
