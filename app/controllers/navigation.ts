@@ -335,12 +335,11 @@ export default class Navigation {
             text = this.msg.text;
           }
 
-          // Buffer plain text messages (Telegram splits long texts into multiple messages)
-          const isPlainText = !this.msg.voice && !this.msg.photo && !this.msg.document
-                              && text && !text.startsWith('/');
+          // Buffer messages (text, photos, voice, documents) to combine e.g. photo + follow-up question
+          const shouldBuffer = !mediaGroupId && (text || images.length > 0) && !(text && text.startsWith('/'));
 
-          if (isPlainText) {
-            const bufferResult = bufferMessage(this.user.chatId, text);
+          if (shouldBuffer) {
+            const bufferResult = bufferMessage(this.user.chatId, text, images);
 
             if (bufferResult === null) {
               // Follower message — the first message handler will process everything
@@ -352,8 +351,10 @@ export default class Navigation {
             isBufferLeader = true;
 
             // First message — wait for debounce to collect others
-            text = await bufferResult;
-            console.log(`[Buffer] Combined text for ${this.user.chatId}: "${text.substring(0, 100)}..."`);
+            const combined = await bufferResult;
+            text = combined.text;
+            images = combined.images;
+            console.log(`[Buffer] Combined for ${this.user.chatId}: text="${text.substring(0, 100)}", images=${images.length}`);
           }
 
           // Check token limit (both hourly and daily)

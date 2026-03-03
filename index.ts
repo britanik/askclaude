@@ -93,8 +93,8 @@ bot.on('message', async ( msg, param ) => {
       // console.log(msg.photo[msg.photo.length-1].file_id,'file_id')
     }
 
-    // If user sends a new text message while previous is being processed — mark as aborted
-    if (msg.text && !msg.text.startsWith('/')) {
+    // If user sends a new message while previous is being processed — mark as aborted
+    if ((msg.text && !msg.text.startsWith('/')) || msg.photo || msg.document || msg.voice) {
       abortIfSequence(msg.chat.id)
     }
 
