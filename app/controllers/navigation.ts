@@ -249,11 +249,12 @@ export default class Navigation {
     return {
       action: async () => {
         // Check token limit (both hourly and daily)
-        if( await isTokenLimit(this.user) ){
+        const limitCheck = await isTokenLimit(this.user);
+        if( limitCheck.exceeded ){
           await tmplLimits(this.user, this.bot, this.dict);
           return;
         }
-  
+
         // Set user step to assistant
         this.user = await userController.addStep(this.user, 'assistant')
         
@@ -333,7 +334,8 @@ export default class Navigation {
           }
 
           // Check token limit (both hourly and daily)
-          if( await isTokenLimit(this.user) ){
+          const tokenLimit = await isTokenLimit(this.user);
+          if( tokenLimit.exceeded ){
             // Save user message (similar to normal flow)
             const userReply = await handleUserReply({
               user: this.user,
@@ -415,7 +417,7 @@ export default class Navigation {
             if (!searchLimitReached) {
               // CONTINUE HERE
               // Send thread to LLM and then it's reply to user
-              await handleAssistantReply(userReply.thread, this.bot, this.dict);
+              await handleAssistantReply(userReply.thread, this.bot, this.dict, tokenLimit.dailyRemaining);
             } else {
               // Exit
               await sendMessage({

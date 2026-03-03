@@ -8,7 +8,7 @@ import { IUser } from "../interfaces/users"
 import { IMessage } from "../interfaces/messages"
 import { sendMessage } from "../templates/sendMessage"
 import { analyzeConversation, formatMessagesWithImages, IConversationAnalysisResult, saveImagePermanently } from "../services/ai"
-import { logTokenUsage, logWebSearchUsage } from "./tokens"
+import { logTokenUsage, logWebSearchUsage, estimateMessagesTokens } from "./tokens"
 import { saveAIResponse } from "../helpers/fileLogger"
 import { withChatAction } from "../helpers/chatAction"
 import { trackExpense, editTransaction, createBudget, getBudgetInfoString, deleteBudget, deleteTransaction, getTransactionsString } from "./expense"
@@ -230,15 +230,13 @@ export async function handleUserReply(params: IHandleUserReplyParams): Promise<{
   return { thread, isNew };
 }
 
-export async function handleAssistantReply(thread: IThread, bot: TelegramBot, dict: Dict): Promise<void> {
+export async function handleAssistantReply(thread: IThread, bot: TelegramBot, dict: Dict, dailyRemaining?: number): Promise<void> {
   try {
-    // const freshThread = await Thread.findById(thread._id).populate('owner')
-
     const assistantReply = await withChatAction(
       bot,
       thread.owner.chatId,
       'typing',
-      () => chatWithFunctionCalling({ thread, bot })
+      () => chatWithFunctionCalling({ thread, bot, dailyRemaining })
     );
 
     await saveAIResponse(assistantReply, 'response');
@@ -277,13 +275,14 @@ export async function getRecentThread(user: IUser): Promise<IThread> {
   }
 }
 
-export interface IChatWithFunctionCalling { 
-  thread: IThread, 
-  bot: TelegramBot 
+export interface IChatWithFunctionCalling {
+  thread: IThread,
+  bot: TelegramBot,
+  dailyRemaining?: number
 }
 
 async function chatWithFunctionCalling(params:IChatWithFunctionCalling) {
-  const { thread, bot } = params
+  const { thread, bot, dailyRemaining } = params
   
   try {
     const freshThread = await Thread.findById(thread._id).populate('owner')
@@ -356,6 +355,11 @@ async function chatWithFunctionCalling(params:IChatWithFunctionCalling) {
         
         if (tools.length > 0) {
           request.tools = tools;
+        }
+
+        // Pre-flight: block if estimated prompt tokens exceed remaining daily limit
+        if (dailyRemaining !== undefined && estimateMessagesTokens(messages) > dailyRemaining) {
+          return 'Ваш запрос слишком большой для оставшегося лимита токенов. Попробуйте начать новый диалог или сократить сообщение.';
         }
 
         const response = await callLLM(request)

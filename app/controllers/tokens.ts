@@ -2,6 +2,7 @@ import moment from 'moment';
 import TelegramBot from 'node-telegram-bot-api';
 import { IUser } from '../interfaces/users';
 import { LimitType } from '../interfaces/limits';
+import { LLMMessage } from '../services/llm/types';
 import User from '../models/users';
 import Usage from '../models/usage';
 import Invite from '../models/invites';
@@ -23,38 +24,41 @@ export async function updateUserSchema() {
   }
 }
 
+export interface ITokenLimitResult {
+  exceeded: boolean;
+  dailyRemaining: number;
+}
+
 // Check if user is at the hourly limit
-export async function isTokenLimit(user: IUser) {
+export async function isTokenLimit(user: IUser): Promise<ITokenLimitResult> {
   try {
     const hourlyUsage: number = await getPeriodTokenUsage(user);
     const hourlyLimit = await getPeriodTokenLimit(user);
-    
+
     // Check daily limit as well
     const dailyUsage: number = await getDailyTokenUsage(user);
     const dailyLimit = await getDailyTokenLimit(user);
-    
+
     const hourlyExceeded = hourlyUsage >= hourlyLimit;
     const dailyExceeded = dailyUsage >= dailyLimit;
 
-    // console.log('hourlyExceeded:', hourlyExceeded)
-    // console.log('dailyExceeded: ', dailyExceeded)
-    
+    const dailyRemaining = Math.max(0, dailyLimit - dailyUsage);
+
     if (hourlyExceeded) {
       await logLimitHit(user, 'hourly_token', hourlyUsage, hourlyLimit);
     }
-    
+
     if (dailyExceeded) {
       await logLimitHit(user, 'daily_token', dailyUsage, dailyLimit);
     }
-        
-    if (hourlyExceeded || dailyExceeded) {
-      return true;
-    }
-    
-    return false;
+
+    return {
+      exceeded: hourlyExceeded || dailyExceeded,
+      dailyRemaining
+    };
   } catch (error) {
     console.error('Error checking token limit:', error);
-    return false;
+    return { exceeded: false, dailyRemaining: 0 };
   }
 }
 
@@ -410,6 +414,22 @@ export async function logLimitHit(user: IUser, type: LimitType, usage: number, l
   } catch (error) {
     console.error('Error logging limit hit:', error);
   }
+}
+
+// Rough token estimate: ~3 chars per token (average for ru/en mix)
+export function estimateMessagesTokens(messages: LLMMessage[]): number {
+  let totalChars = 0;
+  for (const msg of messages) {
+    if (typeof msg.content === 'string') {
+      totalChars += msg.content.length;
+    } else if (Array.isArray(msg.content)) {
+      for (const part of msg.content) {
+        if (part.type === 'text') totalChars += part.text?.length || 0;
+        else if (part.type === 'tool_result') totalChars += part.content?.length || 0;
+      }
+    }
+  }
+  return Math.ceil(totalChars / 3);
 }
 
 export async function resetAdminTokens(user: IUser): Promise<{ success: boolean; deletedCount: number; error?: string }> {
