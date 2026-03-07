@@ -839,36 +839,35 @@ export default class Navigation {
     }
   }
 
-  // premium() {
-  //   return {
-  //     action: async () => {
-  //       // Проверяем, есть ли уже премиум
-  //       if (this.user.premium) {
-  //         await sendMessage({
-  //           text: 'У вас уже есть Premium!',
-  //           user: this.user,
-  //           bot: this.bot
-  //         });
-  //         return;
-  //       }
+  premium() {
+    return {
+      action: async () => {
+        if (this.user.premium) {
+          await sendMessage({
+            text: 'У вас уже есть Premium!',
+            user: this.user,
+            bot: this.bot
+          });
+          return;
+        }
 
-  //       // Генерируем уникальный токен для оплаты
-  //       const paymentToken = generatePaymentToken(this.user._id);
+        await userController.updateMessage(this.user, 'payConfirm', null);
 
-  //       // Отправляем сообщение с кнопкой
-  //       await sendMessage({
-  //         text: 'Купить Premium',
-  //         user: this.user,
-  //         bot: this.bot,
-  //         buttons: [[{
-  //           text: 'Купить',
-  //           url: `https://askclaude.ru/pay?token=${paymentToken}`
-  //         }]]
-  //       });
-  //     },
-  //     callback: async () => {}
-  //   }
-  // }
+        const planButtons = Object.entries(PLANS).map(([plan, config]) => ({
+          text: `${config.duration} - ${config.price} рублей`,
+          callback_data: JSON.stringify({ a: 'payConfirm', plan: plan as PaymentPlan })
+        }));
+
+        await sendMessage({
+          text: 'Выберите тариф безлимита:',
+          user: this.user,
+          bot: this.bot,
+          buttons: [planButtons]
+        });
+      },
+      callback: async () => {}
+    }
+  }
 
   payConfirm() {
     return {
