@@ -9,7 +9,7 @@ import { tmplRegisterLang } from "../templates/tmplRegisterLanguage"
 import { handleAssistantReply, sendAndSaveReply, handleUserReply, IAssistantParams, startAssistant } from "./assistants"
 import { tmplAdmin } from "../templates/tmplAdmin"
 import { getTranscription } from "../services/ai"
-import { isAdmin } from "../helpers/helpers"
+import { isAdmin, canAccessPremium } from "../helpers/helpers"
 
 import { tmplSettings } from '../templates/tmplSettings'
 import { tmplInvite } from "../templates/tmplInvite"
@@ -842,6 +842,15 @@ export default class Navigation {
   premium() {
     return {
       action: async () => {
+        if (!canAccessPremium(this.user)) {
+          await sendMessage({
+            text: 'Premium временно недоступен.',
+            user: this.user,
+            bot: this.bot
+          });
+          return;
+        }
+
         if (this.user.premium) {
           await sendMessage({
             text: 'У вас уже есть Premium!',

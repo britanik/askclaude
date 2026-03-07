@@ -7,7 +7,7 @@ import User from '../models/users';
 import Usage from '../models/usage';
 import Invite from '../models/invites';
 import Limit from '../models/limits';
-import { isAdmin } from '../helpers/helpers';
+import { isAdmin, isPremium } from '../helpers/helpers';
 
 // Update user schema to remove token_balance field
 export async function updateUserSchema() {
@@ -155,9 +155,20 @@ export function getMinutesToNextDay() {
 // Calculate period token limit including friend bonuses (HOURLY)
 export async function getPeriodTokenLimit(user: IUser): Promise<number> {
   try {
-    // Get base limit from env - use admin limit if user is admin
+    // Get base limit from env - use admin limit if user is admin, premium if premium
     let baseLimit: number;
-    baseLimit = (isAdmin(user)) ? +process.env.TOKENS_HOUR_LIMIT_ADMIN : +process.env.TOKENS_HOUR_LIMIT
+    let bonusPerReferral: number;
+
+    if (isAdmin(user)) {
+      baseLimit = +process.env.TOKENS_HOUR_LIMIT_ADMIN;
+      bonusPerReferral = +process.env.TOKENS_PER_REFERRAL_ADMIN;
+    } else if (isPremium(user)) {
+      baseLimit = +process.env.TOKENS_HOUR_LIMIT_PREMIUM || +process.env.TOKENS_HOUR_LIMIT;
+      bonusPerReferral = +process.env.TOKENS_PER_REFERRAL_PREMIUM || +process.env.TOKENS_PER_REFERRAL;
+    } else {
+      baseLimit = +process.env.TOKENS_HOUR_LIMIT;
+      bonusPerReferral = +process.env.TOKENS_PER_REFERRAL;
+    }
 
     // Find user's invite code
     const invite = await Invite.findOne({ owner: user._id });
@@ -165,9 +176,7 @@ export async function getPeriodTokenLimit(user: IUser): Promise<number> {
     // Calculate bonus based on referrals
     let referralBonus = 0;
     if (invite) {
-      // Each used invite adds TOKENS_PER_REFERRAL to the limit
       const usedInvitesCount = invite.usedBy.length;
-      const bonusPerReferral = isAdmin(user) ? +process.env.TOKENS_PER_REFERRAL_ADMIN : +process.env.TOKENS_PER_REFERRAL;
       referralBonus = usedInvitesCount * bonusPerReferral;
     }
 
@@ -183,9 +192,19 @@ export async function getPeriodTokenLimit(user: IUser): Promise<number> {
 // Calculate daily token limit including friend bonuses (NEW)
 export async function getDailyTokenLimit(user: IUser): Promise<number> {
   try {
-    // Get base daily limit from env - use admin limit if user is admin
     let baseLimit: number;
-    baseLimit = (isAdmin(user)) ? +process.env.TOKENS_DAILY_LIMIT_ADMIN : +process.env.TOKENS_DAILY_LIMIT;
+    let bonusPerReferral: number;
+
+    if (isAdmin(user)) {
+      baseLimit = +process.env.TOKENS_DAILY_LIMIT_ADMIN;
+      bonusPerReferral = +process.env.TOKENS_DAILY_PER_REFERRAL_ADMIN;
+    } else if (isPremium(user)) {
+      baseLimit = +process.env.TOKENS_DAILY_LIMIT_PREMIUM || +process.env.TOKENS_DAILY_LIMIT;
+      bonusPerReferral = +process.env.TOKENS_DAILY_PER_REFERRAL_PREMIUM || +process.env.TOKENS_DAILY_PER_REFERRAL;
+    } else {
+      baseLimit = +process.env.TOKENS_DAILY_LIMIT;
+      bonusPerReferral = +process.env.TOKENS_DAILY_PER_REFERRAL;
+    }
 
     // Find user's invite code
     const invite = await Invite.findOne({ owner: user._id });
@@ -193,9 +212,7 @@ export async function getDailyTokenLimit(user: IUser): Promise<number> {
     // Calculate bonus based on referrals
     let referralBonus = 0;
     if (invite) {
-      // Each used invite adds TOKENS_DAILY_PER_REFERRAL to the daily limit
       const usedInvitesCount = invite.usedBy.length;
-      const bonusPerReferral = isAdmin(user) ? +process.env.TOKENS_DAILY_PER_REFERRAL_ADMIN : +process.env.TOKENS_DAILY_PER_REFERRAL
       referralBonus = usedInvitesCount * bonusPerReferral;
     }
 
@@ -211,8 +228,9 @@ export async function getDailyTokenLimit(user: IUser): Promise<number> {
 // Calculate daily web search limit including friend bonuses
 export async function getDailyWebSearchLimit(user: IUser): Promise<number> {
   try {
-    // Get base daily limit from env or default to 50
-    const baseLimit = +(process.env.WEB_SEARCH_DAILY_LIMIT || 50);
+    const baseLimit = isPremium(user)
+      ? +(process.env.WEB_SEARCH_DAILY_LIMIT_PREMIUM || process.env.WEB_SEARCH_DAILY_LIMIT || 50)
+      : +(process.env.WEB_SEARCH_DAILY_LIMIT || 50);
     
     // Find user's invite code
     const invite = await Invite.findOne({ owner: user._id });

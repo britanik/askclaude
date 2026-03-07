@@ -3,7 +3,7 @@ import { sendMessage } from "./sendMessage";
 import TelegramBot from "node-telegram-bot-api";
 import Dict from "../helpers/dict";
 import { getTokenLimitMessage } from "../controllers/tokens";
-import { isAdmin } from "../helpers/helpers";
+import { isPremium, canAccessPremium } from "../helpers/helpers";
 import * as userController from "../controllers/users";
 import { PLANS, PaymentPlan } from "../controllers/payments";
 
@@ -11,8 +11,9 @@ export async function tmplLimits(user: IUser, bot: TelegramBot, dict: Dict) {
 
   await userController.updateMessage(user, 'payConfirm', null);
 
-  // Show limit message with plan selection buttons (only for admin)
   const limitMessage = await getTokenLimitMessage(user);
+
+  const showPremiumButtons = canAccessPremium(user) && !isPremium(user);
 
   const planButtons = Object.entries(PLANS).map(([plan, config]) => ({
     text: `${config.duration} - ${config.price} рублей`,
@@ -23,6 +24,6 @@ export async function tmplLimits(user: IUser, bot: TelegramBot, dict: Dict) {
     text: limitMessage,
     user,
     bot,
-    buttons: isAdmin(user) ? [planButtons] : undefined
+    buttons: showPremiumButtons ? [planButtons] : undefined
   });
 }

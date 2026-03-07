@@ -67,6 +67,19 @@ export function isAdmin( user:IUser ){
   return (user.username == process.env.ADMIN_USERNAME)
 }
 
+export function isPremium( user:IUser ){
+  return !!user.premium
+}
+
+export function isTester( user:IUser ){
+  const testers = (process.env.TESTER_USERNAMES || '').split(',').map(s => s.trim()).filter(Boolean);
+  return testers.includes(user.username);
+}
+
+export function canAccessPremium( user:IUser ){
+  return process.env.PREMIUM_ENABLED === '1' || isAdmin(user) || isTester(user);
+}
+
 export function formatUsername(user: IUser) {
   return user.name
 }
