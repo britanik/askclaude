@@ -50,8 +50,8 @@ export default class Dict {
         eng: () => `Available formats`
       },
       SETTINGS_FORMATS_STRING: {
-        rus: () => `Текст, Фото, Голосовые сообщения, Поиск в интернете`,
-        eng: () => `Text, Photo, Voice messages, Web Search`
+        rus: () => `Текст, Фото, Голосовые сообщения, Поиск в интернете, Генерация картинок`,
+        eng: () => `Text, Photo, Voice messages, Web Search, Image generation`
       },
       SETTINGS_LANGUAGE: {
         rus: () => `Язык`,
@@ -108,6 +108,34 @@ export default class Dict {
       SETTINGS_HOURLY_TOKEN_LIMIT: {
         rus: () => `Почасовой лимит токенов`,
         eng: () => `Hourly token limit`
+      },
+      SETTINGS_TOKEN_LIMITS: {
+        rus: () => `Лимиты токенов`,
+        eng: () => `Token limits`
+      },
+      SETTINGS_PREMIUM_ACTIVE: {
+        rus: () => `🚀 Увеличенные лимиты до {date}`,
+        eng: () => `🚀 Increased limits until {date}`
+      },
+      SETTINGS_PREMIUM_HINT: {
+        rus: () => `С Premium лимиты значительно выше`,
+        eng: () => `Premium users get much higher limits`
+      },
+      SETTINGS_LIMITS_HOURLY: {
+        rus: () => `В час`,
+        eng: () => `Per hour`
+      },
+      SETTINGS_LIMITS_DAILY: {
+        rus: () => `В день`,
+        eng: () => `Per day`
+      },
+      SETTINGS_LIMITS_IMAGES: {
+        rus: () => `Изображений`,
+        eng: () => `Images`
+      },
+      SETTINGS_LIMITS_PER_DAY: {
+        rus: () => `в день`,
+        eng: () => `per day`
       },
       ENTER_CODE: {
         rus: () => `<strong>Введите код</strong> полученный в приглашении (или /new чтобы пропустить):`,
