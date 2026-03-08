@@ -164,7 +164,7 @@ export async function getPeriodTokenLimit(user: IUser): Promise<number> {
       bonusPerReferral = +process.env.TOKENS_PER_REFERRAL_ADMIN;
     } else if (await isPremium(user)) {
       baseLimit = +process.env.TOKENS_HOUR_LIMIT_PREMIUM || +process.env.TOKENS_HOUR_LIMIT;
-      bonusPerReferral = +process.env.TOKENS_PER_REFERRAL_PREMIUM || +process.env.TOKENS_PER_REFERRAL;
+      bonusPerReferral = +process.env.TOKENS_PER_REFERRAL;
     } else {
       baseLimit = +process.env.TOKENS_HOUR_LIMIT;
       bonusPerReferral = +process.env.TOKENS_PER_REFERRAL;
@@ -200,7 +200,7 @@ export async function getDailyTokenLimit(user: IUser): Promise<number> {
       bonusPerReferral = +process.env.TOKENS_DAILY_PER_REFERRAL_ADMIN;
     } else if (await isPremium(user)) {
       baseLimit = +process.env.TOKENS_DAILY_LIMIT_PREMIUM || +process.env.TOKENS_DAILY_LIMIT;
-      bonusPerReferral = +process.env.TOKENS_DAILY_PER_REFERRAL_PREMIUM || +process.env.TOKENS_DAILY_PER_REFERRAL;
+      bonusPerReferral = +process.env.TOKENS_DAILY_PER_REFERRAL;
     } else {
       baseLimit = +process.env.TOKENS_DAILY_LIMIT;
       bonusPerReferral = +process.env.TOKENS_DAILY_PER_REFERRAL;
