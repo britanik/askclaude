@@ -255,8 +255,10 @@ export async function regenerateImage(imageId: string, user: IUser, bot: Telegra
   }
 }
 
-export async function getTopTierLimit(): Promise<number> {
-  return +(process.env.IMAGE_LIMIT_DAILY_TOP || 5);
+export async function getTopTierLimit(user: IUser): Promise<number> {
+  return await isPremium(user)
+    ? +(process.env.IMAGE_LIMIT_DAILY_TOP_PREMIUM || process.env.IMAGE_LIMIT_DAILY_TOP || 5)
+    : +(process.env.IMAGE_LIMIT_DAILY_TOP || 5);
 }
 
 export async function getTopTierUsage(user: IUser): Promise<number> {
@@ -272,7 +274,7 @@ export async function getTopTierUsage(user: IUser): Promise<number> {
 
 export async function getCurrentTier(user: IUser): Promise<ImageTier> {
   const topUsage = await getTopTierUsage(user);
-  const topLimit = await getTopTierLimit();
+  const topLimit = await getTopTierLimit(user);
   
   if (topUsage >= topLimit) {
     return 'normal';
