@@ -13,7 +13,7 @@ import { isAdmin, canAccessPremium, isPremium } from "../helpers/helpers"
 
 import { tmplSettings } from '../templates/tmplSettings'
 import { tmplInvite } from "../templates/tmplInvite"
-import { getTokenLimitMessage, isTokenLimit, isWebSearchLimit, updateUserSchema, resetAdminTokens } from "./tokens"
+import { getTokenLimitMessage, isTokenLimit, updateUserSchema, resetAdminTokens } from "./tokens"
 import { isValidInviteCode, processReferral } from "./invites"
 import { sendNotification } from "./notifications"
 import { getPeriodImageLimit, isImageLimit, moderateContent, sendGeneratedImage } from "./images"
@@ -437,8 +437,6 @@ export default class Navigation {
           // Only send to Claude if this isn't a media group or it's the first message after waiting
           if (!mediaGroupId || this.mediaGroups.includes(mediaGroupId)) {
 
-            const searchLimitReached:boolean = await isWebSearchLimit(this.user) || false;
-            if (!searchLimitReached) {
               // Mark as processing so abortIfSequence knows there's an in-flight request
               markProcessing(this.user.chatId);
 
@@ -461,14 +459,6 @@ export default class Navigation {
               } else if (reply) {
                 await sendAndSaveReply(reply, userReply.thread, this.bot);
               }
-            } else {
-              // Exit
-              await sendMessage({
-                text: 'Достигнут дневной лимит на веб-поиск. Выполняю обычный запрос.',
-                user: this.user,
-                bot: this.bot
-              })
-            }
 
             // Remove from mediaGroups array after processing
             if (mediaGroupId) {

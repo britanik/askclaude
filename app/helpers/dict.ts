@@ -86,14 +86,6 @@ export default class Dict {
         rus: () => `Обновится через {time}.`,
         eng: () => `Resets in {time}.`
       },
-      SETTINGS_WEB_SEARCH_DAILY_LIMIT: {
-        rus: () => `Лимит поиска в интернете`,
-        eng: () => `Daily web search limit`
-      },
-      SETTINGS_WEB_SEARCH_DAILY_LIMIT_RESET: {
-        rus: () => `Обновится завтра.`,
-        eng: () => `Resets tomorrow.`
-      },
       SETTINGS_DAILY_TOKEN_LIMIT_EXCEEDED: {
         rus: () => `Дневной лимит токенов исчерпан. Вы можете продолжить через {time}.`,
         eng: () => `Daily token limit exceeded. You can continue in {time}.`
