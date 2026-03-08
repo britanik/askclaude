@@ -13,7 +13,7 @@ export async function tmplLimits(user: IUser, bot: TelegramBot, dict: Dict) {
 
   const limitMessage = await getTokenLimitMessage(user);
 
-  const showPremiumButtons = canAccessPremium(user) && !isPremium(user);
+  const showPremiumButtons = canAccessPremium(user) && !(await isPremium(user));
 
   const planButtons = Object.entries(PLANS).map(([plan, config]) => ({
     text: `${config.duration} - ${config.price} рублей`,

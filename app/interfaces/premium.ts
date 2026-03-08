@@ -1,6 +1,6 @@
 import { Document, Types } from "mongoose"
 
-export interface IOrder extends Document {
+export interface IPremium extends Document {
   _id: Types.ObjectId
   user: Types.ObjectId
   plan: '24h' | '7d'

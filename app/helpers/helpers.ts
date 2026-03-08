@@ -2,6 +2,7 @@ import moment from 'moment'
 import { EditMessageTextOptions, InlineKeyboardButton, KeyboardButton, SendMessageOptions } from 'node-telegram-bot-api'
 import { IUser } from '../interfaces/users'
 import { IThread } from '../interfaces/threads'
+import Premium from '../models/premium'
 
 export interface IGetOptionsParams {
   buttons?: InlineKeyboardButton[][],
@@ -67,8 +68,13 @@ export function isAdmin( user:IUser ){
   return (user.username == process.env.ADMIN_USERNAME)
 }
 
-export function isPremium( user:IUser ){
-  return !!user.premium
+export async function isPremium( user:IUser ):Promise<boolean> {
+  const now = new Date()
+  const activeOrder = await Premium.findOne({
+    user: user._id,
+    endDate: { $gt: now }
+  })
+  return !!activeOrder
 }
 
 export function isTester( user:IUser ){

@@ -309,7 +309,7 @@ export async function getPeriodImageUsage(user: IUser): Promise<number> {
 }
 
 export async function getPeriodImageLimit(user: IUser): Promise<number> {
-  return isPremium(user)
+  return await isPremium(user)
     ? +(process.env.IMAGE_LIMIT_DAILY_TOTAL_PREMIUM || process.env.IMAGE_LIMIT_DAILY_TOTAL || 15)
     : +(process.env.IMAGE_LIMIT_DAILY_TOTAL || 15);
 }

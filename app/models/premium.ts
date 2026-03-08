@@ -1,10 +1,10 @@
 import * as mongoose from 'mongoose'
 import moment from 'moment'
-import { IOrder } from '../interfaces/orders'
+import { IPremium } from '../interfaces/premium'
 
 const Schema = mongoose.Schema
 
-const OrderSchema = new Schema<IOrder>({
+const PremiumSchema = new Schema<IPremium>({
   user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   plan: { type: String, enum: ['24h', '7d'], required: true },
   startDate: { type: Date, required: true },
@@ -14,4 +14,4 @@ const OrderSchema = new Schema<IOrder>({
   created: { type: Date, default: () => moment().utc() }
 })
 
-export default mongoose.model('Order', OrderSchema)
+export default mongoose.model('Premium', PremiumSchema)

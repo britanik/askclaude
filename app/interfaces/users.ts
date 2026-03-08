@@ -11,7 +11,6 @@ export interface IUser extends Document {
   created: Date,
   messages: Object,
   data: Object,
-  premium?: boolean,
   pendingThread?: Types.ObjectId,
   prefs: {
     lang: 'eng' | 'rus',

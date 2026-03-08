@@ -9,7 +9,7 @@ import { tmplRegisterLang } from "../templates/tmplRegisterLanguage"
 import { handleAssistantReply, sendAndSaveReply, handleUserReply, IAssistantParams, startAssistant } from "./assistants"
 import { tmplAdmin } from "../templates/tmplAdmin"
 import { getTranscription } from "../services/ai"
-import { isAdmin, canAccessPremium } from "../helpers/helpers"
+import { isAdmin, canAccessPremium, isPremium } from "../helpers/helpers"
 
 import { tmplSettings } from '../templates/tmplSettings'
 import { tmplInvite } from "../templates/tmplInvite"
@@ -27,7 +27,7 @@ import { generateImageWithFallback } from "../services/image"
 import { tmplLimits } from "../templates/tmplLimits"
 import { tmplPayConfirm } from "../templates/tmplPayConfirm"
 import { PaymentPlan, PLANS } from "./payments"
-import Order from "../models/orders"
+import Premium from "../models/premium"
 import { bufferMessage, markProcessing, isAborted, clearBuffer } from "../helpers/messageBuffer"
 
 export interface INavigationParams {
@@ -851,7 +851,7 @@ export default class Navigation {
           return;
         }
 
-        if (this.user.premium) {
+        if (await isPremium(this.user)) {
           await sendMessage({
             text: 'У вас уже есть Premium!',
             user: this.user,
@@ -933,8 +933,10 @@ export default class Navigation {
   deletePremium() {
     return {
       action: async () => {
-        this.user.premium = false;
-        await this.user.save();
+        await Premium.updateMany(
+          { user: this.user._id, endDate: { $gt: new Date() } },
+          { $set: { endDate: new Date() } }
+        );
 
         await sendMessage({
           text: 'Premium отключен.',
@@ -977,13 +979,13 @@ export default class Navigation {
   paySuccess() {
     return {
       action: async () => {
-        // Эмуляция оплаты - создаём Order на 24 часа
+        // Эмуляция оплаты - создаём Premium на 24 часа
         const plan: PaymentPlan = '24h';
         const startDate = new Date();
         const endDate = new Date(startDate);
         endDate.setHours(endDate.getHours() + 24);
 
-        await Order.create({
+        await Premium.create({
           user: this.user._id,
           plan,
           startDate,

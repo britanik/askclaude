@@ -162,7 +162,7 @@ export async function getPeriodTokenLimit(user: IUser): Promise<number> {
     if (isAdmin(user)) {
       baseLimit = +process.env.TOKENS_HOUR_LIMIT_ADMIN;
       bonusPerReferral = +process.env.TOKENS_PER_REFERRAL_ADMIN;
-    } else if (isPremium(user)) {
+    } else if (await isPremium(user)) {
       baseLimit = +process.env.TOKENS_HOUR_LIMIT_PREMIUM || +process.env.TOKENS_HOUR_LIMIT;
       bonusPerReferral = +process.env.TOKENS_PER_REFERRAL_PREMIUM || +process.env.TOKENS_PER_REFERRAL;
     } else {
@@ -198,7 +198,7 @@ export async function getDailyTokenLimit(user: IUser): Promise<number> {
     if (isAdmin(user)) {
       baseLimit = +process.env.TOKENS_DAILY_LIMIT_ADMIN;
       bonusPerReferral = +process.env.TOKENS_DAILY_PER_REFERRAL_ADMIN;
-    } else if (isPremium(user)) {
+    } else if (await isPremium(user)) {
       baseLimit = +process.env.TOKENS_DAILY_LIMIT_PREMIUM || +process.env.TOKENS_DAILY_LIMIT;
       bonusPerReferral = +process.env.TOKENS_DAILY_PER_REFERRAL_PREMIUM || +process.env.TOKENS_DAILY_PER_REFERRAL;
     } else {
@@ -228,7 +228,7 @@ export async function getDailyTokenLimit(user: IUser): Promise<number> {
 // Calculate daily web search limit including friend bonuses
 export async function getDailyWebSearchLimit(user: IUser): Promise<number> {
   try {
-    const baseLimit = isPremium(user)
+    const baseLimit = await isPremium(user)
       ? +(process.env.WEB_SEARCH_DAILY_LIMIT_PREMIUM || process.env.WEB_SEARCH_DAILY_LIMIT || 50)
       : +(process.env.WEB_SEARCH_DAILY_LIMIT || 50);
     
