@@ -6,6 +6,7 @@ import { getPeriodTokenLimit, getPeriodTokenUsage, getDailyTokenLimit, getDailyT
 import { getPeriodImageLimit, getPeriodImageUsage } from "../controllers/images";
 import Premium from "../models/premium";
 import moment from "moment";
+import { canAccessPremium } from "../helpers/helpers";
 
 export async function tmplSettings(user: IUser, bot: TelegramBot, dict: Dict) {
   const hourlyTokenUsage:number = await getPeriodTokenUsage(user);
@@ -15,22 +16,23 @@ export async function tmplSettings(user: IUser, bot: TelegramBot, dict: Dict) {
   const imageUsage:number = await getPeriodImageUsage(user);
   const imageLimit:number = await getPeriodImageLimit(user);
 
-  // Check active premium
-  const now = new Date();
-  const activePremium = await Premium.findOne({
-    user: user._id,
-    endDate: { $gt: now }
-  });
+  // Check active premium (only for admins/testers or when PREMIUM_ENABLED=1)
+  let premiumLine = '';
+  if (canAccessPremium(user)) {
+    const now = new Date();
+    const activePremium = await Premium.findOne({
+      user: user._id,
+      endDate: { $gt: now }
+    });
+    premiumLine = activePremium
+      ? dict.getString('SETTINGS_PREMIUM_ACTIVE', { date: moment(activePremium.endDate).format('DD.MM, HH:mm') })
+      : `<i>${dict.getString('SETTINGS_PREMIUM_HINT')}</i>`;
+  }
 
   const formatNumber = (num: number | undefined) => {
     const safeNum = num ?? 0;
     return safeNum.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   };
-
-  // Premium status line
-  const premiumLine = activePremium
-    ? dict.getString('SETTINGS_PREMIUM_ACTIVE', { date: moment(activePremium.endDate).format('DD.MM, HH:mm') })
-    : `💡 <i>${dict.getString('SETTINGS_PREMIUM_HINT')}</i>`;
 
   let text = `<b>${dict.getString('SETTINGS_TITLE')}</b>
 
@@ -41,8 +43,7 @@ ${dict.getString('SETTINGS_FORMATS_STRING')}
 ${user.prefs.lang === 'eng' ? 'English' : 'Русский'}
 
 <b>${dict.getString('SETTINGS_TOKEN_LIMITS')}:</b>
-${premiumLine}
-${dict.getString('SETTINGS_LIMITS_HOURLY')}: ${formatNumber(hourlyTokenUsage)} / ${formatNumber(hourlyTokenLimit)}
+${premiumLine ? premiumLine + '\n' : ''}${dict.getString('SETTINGS_LIMITS_HOURLY')}: ${formatNumber(hourlyTokenUsage)} / ${formatNumber(hourlyTokenLimit)}
 ${dict.getString('SETTINGS_LIMITS_DAILY')}: ${formatNumber(dailyTokenUsage)} / ${formatNumber(dailyTokenLimit)}
 ${dict.getString('SETTINGS_LIMITS_IMAGES')}: ${formatNumber(imageUsage)} / ${formatNumber(imageLimit)} ${dict.getString('SETTINGS_LIMITS_PER_DAY')}
 
