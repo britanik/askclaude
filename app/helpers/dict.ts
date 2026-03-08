@@ -7,6 +7,7 @@ export default class Dict {
 
   constructor(user: IUser){
     this.user = user
+    this.lang = user.prefs?.lang || 'rus'
     this.strings = this.getStrings()
   }
 
