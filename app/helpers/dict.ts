@@ -98,10 +98,6 @@ export default class Dict {
         rus: () => `Обновится завтра.`,
         eng: () => `Resets tomorrow.`
       },
-      SETTINGS_HOURLY_TOKEN_LIMIT: {
-        rus: () => `Почасовой лимит токенов`,
-        eng: () => `Hourly token limit`
-      },
       SETTINGS_TOKEN_LIMITS: {
         rus: () => `Лимиты токенов`,
         eng: () => `Token limits`
@@ -113,10 +109,6 @@ export default class Dict {
       SETTINGS_PREMIUM_HINT: {
         rus: () => `С Premium лимиты значительно выше`,
         eng: () => `Premium users get much higher limits`
-      },
-      SETTINGS_LIMITS_HOURLY: {
-        rus: () => `В час`,
-        eng: () => `Per hour`
       },
       SETTINGS_LIMITS_DAILY: {
         rus: () => `В день`,

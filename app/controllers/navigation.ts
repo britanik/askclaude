@@ -441,7 +441,7 @@ export default class Navigation {
               markProcessing(this.user.chatId);
 
               // Send thread to LLM (pass the stricter of hourly/daily remaining for pre-flight check)
-              const tokensRemaining = Math.min(tokenLimit.hourlyRemaining, tokenLimit.dailyRemaining);
+              const tokensRemaining = tokenLimit.dailyRemaining;
               const reply = await handleAssistantReply(userReply.thread, this.bot, this.dict, tokensRemaining);
 
               // Check if this request was aborted while waiting for LLM response

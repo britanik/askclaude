@@ -9,7 +9,7 @@ const LimitSchema = new Schema<ILimit>({
   type: { 
     type: String, 
     required: true,
-    enum: ['hourly_token', 'daily_token', 'daily_websearch', 'daily_image']
+    enum: ['daily_token', 'daily_websearch', 'daily_image']
   },
   usage: { type: Number, required: true },
   limit: { type: Number, required: true },

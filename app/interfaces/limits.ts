@@ -1,7 +1,7 @@
 import { Document, Types } from "mongoose"
 import { IUser } from "./users"
 
-export type LimitType = 'hourly_token' | 'daily_token' | 'daily_websearch' | 'daily_image'
+export type LimitType = 'daily_token' | 'daily_websearch' | 'daily_image'
 
 export interface ILimit extends Document {
   user: IUser | Types.ObjectId

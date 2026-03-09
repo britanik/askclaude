@@ -2,15 +2,13 @@ import { IUser } from "../interfaces/users"
 import { sendMessage } from "./sendMessage"
 import TelegramBot from "node-telegram-bot-api"
 import Dict from "../helpers/dict"
-import { getPeriodTokenLimit, getPeriodTokenUsage, getDailyTokenLimit, getDailyTokenUsage } from "../controllers/tokens";
+import { getDailyTokenLimit, getDailyTokenUsage } from "../controllers/tokens";
 import { getPeriodImageLimit, getPeriodImageUsage } from "../controllers/images";
 import Package from "../models/packages";
 import moment from "moment";
 import { canAccessPremium } from "../helpers/helpers";
 
 export async function tmplSettings(user: IUser, bot: TelegramBot, dict: Dict) {
-  const hourlyTokenUsage:number = await getPeriodTokenUsage(user);
-  const hourlyTokenLimit:number = await getPeriodTokenLimit(user);
   const dailyTokenUsage:number = await getDailyTokenUsage(user);
   const dailyTokenLimit:number = await getDailyTokenLimit(user);
   const imageUsage:number = await getPeriodImageUsage(user);
@@ -43,8 +41,7 @@ ${dict.getString('SETTINGS_FORMATS_STRING')}
 ${user.prefs.lang === 'eng' ? 'English' : 'Русский'}
 
 <b>${dict.getString('SETTINGS_TOKEN_LIMITS')}:</b>
-${premiumLine ? premiumLine + '\n' : ''}${dict.getString('SETTINGS_LIMITS_HOURLY')}: ${formatNumber(hourlyTokenUsage)} / ${formatNumber(hourlyTokenLimit)}
-${dict.getString('SETTINGS_LIMITS_DAILY')}: ${formatNumber(dailyTokenUsage)} / ${formatNumber(dailyTokenLimit)}
+${premiumLine ? premiumLine + '\n' : ''}${dict.getString('SETTINGS_LIMITS_DAILY')}: ${formatNumber(dailyTokenUsage)} / ${formatNumber(dailyTokenLimit)}
 ${dict.getString('SETTINGS_LIMITS_IMAGES')}: ${formatNumber(imageUsage)} / ${formatNumber(imageLimit)} ${dict.getString('SETTINGS_LIMITS_PER_DAY')}
 
 ℹ️ <i>${dict.getString('SETTINGS_USAGE_ADVICE')}</i>
