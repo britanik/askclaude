@@ -41,7 +41,7 @@ ${dict.getString('SETTINGS_FORMATS_STRING')}
 ${user.prefs.lang === 'eng' ? 'English' : 'Русский'}
 
 <b>${dict.getString('SETTINGS_TOKEN_LIMITS')}:</b>
-${premiumLine ? premiumLine + '\n' : ''}${dict.getString('SETTINGS_LIMITS_DAILY')}: ${formatNumber(dailyTokenUsage)} / ${formatNumber(dailyTokenLimit)}
+${dict.getString('SETTINGS_LIMITS_DAILY')}: ${formatNumber(dailyTokenUsage)} / ${formatNumber(dailyTokenLimit)} (${premiumLine ? premiumLine : ''})
 ${dict.getString('SETTINGS_LIMITS_IMAGES')}: ${formatNumber(imageUsage)} / ${formatNumber(imageLimit)} ${dict.getString('SETTINGS_LIMITS_PER_DAY')}
 
 ℹ️ <i>${dict.getString('SETTINGS_USAGE_ADVICE')}</i>
