@@ -82,6 +82,16 @@ export async function hasActivePackage( user:IUser ):Promise<boolean> {
 // Alias for backward compatibility (images, web search limits)
 export const isPremium = hasActivePackage
 
+export async function getActivePackagesTotalTokens(user: IUser): Promise<number> {
+  const now = new Date()
+  const activePackages = await Package.find({ user: user._id, endDate: { $gt: now } })
+  let total = 0
+  for (const pkg of activePackages) {
+    total += pkg.tokenLimit
+  }
+  return total
+}
+
 export async function getPackageRemainingTokens(user: IUser): Promise<number> {
   const now = new Date()
   const activePackages = await Package.find({ user: user._id, endDate: { $gt: now } })

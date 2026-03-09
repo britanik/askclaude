@@ -7,7 +7,7 @@ import User from '../models/users';
 import Usage from '../models/usage';
 import Invite from '../models/invites';
 import Limit from '../models/limits';
-import { isAdmin, isTester, getPackageRemainingTokens } from '../helpers/helpers';
+import { isAdmin, isTester, getActivePackagesTotalTokens } from '../helpers/helpers';
 
 // Update user schema to remove token_balance field
 export async function updateUserSchema() {
@@ -163,10 +163,10 @@ export async function getPeriodTokenLimit(user: IUser): Promise<number> {
       referralBonus = usedInvitesCount * bonusPerReferral;
     }
 
-    // If user has active packages, hourly limit = daily limit (effectively disabled)
-    const packageBonus = await getPackageRemainingTokens(user);
-    if (packageBonus > 0) {
-      return await getDailyTokenLimit(user);
+    // If user has active packages, hourly limit includes package tokens (effectively = daily)
+    const packageTokens = await getActivePackagesTotalTokens(user);
+    if (packageTokens > 0) {
+      return baseLimit + referralBonus + packageTokens;
     }
 
     // Return the total limit
@@ -205,8 +205,8 @@ export async function getDailyTokenLimit(user: IUser): Promise<number> {
       referralBonus = usedInvitesCount * bonusPerReferral;
     }
 
-    // Add remaining tokens from active packages
-    const packageBonus = await getPackageRemainingTokens(user);
+    // Add total token limit from active packages (not remaining — usage is tracked separately)
+    const packageBonus = await getActivePackagesTotalTokens(user);
 
     // Return the total daily limit
     return baseLimit + referralBonus + packageBonus;
