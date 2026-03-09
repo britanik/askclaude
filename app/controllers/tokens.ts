@@ -7,7 +7,7 @@ import User from '../models/users';
 import Usage from '../models/usage';
 import Invite from '../models/invites';
 import Limit from '../models/limits';
-import { isAdmin, isPremium } from '../helpers/helpers';
+import { isAdmin, getPackageRemainingTokens } from '../helpers/helpers';
 
 // Update user schema to remove token_balance field
 export async function updateUserSchema() {
@@ -145,9 +145,6 @@ export async function getPeriodTokenLimit(user: IUser): Promise<number> {
     if (isAdmin(user)) {
       baseLimit = +process.env.TOKENS_HOUR_LIMIT_ADMIN;
       bonusPerReferral = +process.env.TOKENS_PER_REFERRAL_ADMIN;
-    } else if (await isPremium(user)) {
-      baseLimit = +process.env.TOKENS_HOUR_LIMIT_PREMIUM || +process.env.TOKENS_HOUR_LIMIT;
-      bonusPerReferral = +process.env.TOKENS_PER_REFERRAL;
     } else {
       baseLimit = +process.env.TOKENS_HOUR_LIMIT;
       bonusPerReferral = +process.env.TOKENS_PER_REFERRAL;
@@ -161,6 +158,12 @@ export async function getPeriodTokenLimit(user: IUser): Promise<number> {
     if (invite) {
       const usedInvitesCount = invite.usedBy.length;
       referralBonus = usedInvitesCount * bonusPerReferral;
+    }
+
+    // If user has active packages, hourly limit = daily limit (effectively disabled)
+    const packageBonus = await getPackageRemainingTokens(user);
+    if (packageBonus > 0) {
+      return await getDailyTokenLimit(user);
     }
 
     // Return the total limit
@@ -181,9 +184,6 @@ export async function getDailyTokenLimit(user: IUser): Promise<number> {
     if (isAdmin(user)) {
       baseLimit = +process.env.TOKENS_DAILY_LIMIT_ADMIN;
       bonusPerReferral = +process.env.TOKENS_DAILY_PER_REFERRAL_ADMIN;
-    } else if (await isPremium(user)) {
-      baseLimit = +process.env.TOKENS_DAILY_LIMIT_PREMIUM || +process.env.TOKENS_DAILY_LIMIT;
-      bonusPerReferral = +process.env.TOKENS_DAILY_PER_REFERRAL;
     } else {
       baseLimit = +process.env.TOKENS_DAILY_LIMIT;
       bonusPerReferral = +process.env.TOKENS_DAILY_PER_REFERRAL;
@@ -199,8 +199,11 @@ export async function getDailyTokenLimit(user: IUser): Promise<number> {
       referralBonus = usedInvitesCount * bonusPerReferral;
     }
 
+    // Add remaining tokens from active packages
+    const packageBonus = await getPackageRemainingTokens(user);
+
     // Return the total daily limit
-    return baseLimit + referralBonus;
+    return baseLimit + referralBonus + packageBonus;
   } catch (error) {
     console.error('Error calculating daily token limit:', error);
     // Return default limit in case of error

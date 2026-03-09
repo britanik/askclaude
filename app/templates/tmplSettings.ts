@@ -4,7 +4,7 @@ import TelegramBot from "node-telegram-bot-api"
 import Dict from "../helpers/dict"
 import { getPeriodTokenLimit, getPeriodTokenUsage, getDailyTokenLimit, getDailyTokenUsage } from "../controllers/tokens";
 import { getPeriodImageLimit, getPeriodImageUsage } from "../controllers/images";
-import Premium from "../models/premium";
+import Package from "../models/packages";
 import moment from "moment";
 import { canAccessPremium } from "../helpers/helpers";
 
@@ -20,12 +20,12 @@ export async function tmplSettings(user: IUser, bot: TelegramBot, dict: Dict) {
   let premiumLine = '';
   if (canAccessPremium(user)) {
     const now = new Date();
-    const activePremium = await Premium.findOne({
+    const activePackage = await Package.findOne({
       user: user._id,
       endDate: { $gt: now }
     });
-    premiumLine = activePremium
-      ? dict.getString('SETTINGS_PREMIUM_ACTIVE', { date: moment(activePremium.endDate).format('DD.MM, HH:mm') })
+    premiumLine = activePackage
+      ? dict.getString('SETTINGS_PREMIUM_ACTIVE', { date: moment(activePackage.endDate).format('DD.MM, HH:mm') })
       : `<i>${dict.getString('SETTINGS_PREMIUM_HINT')}</i>`;
   }
 

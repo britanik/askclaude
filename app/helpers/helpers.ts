@@ -2,7 +2,9 @@ import moment from 'moment'
 import { EditMessageTextOptions, InlineKeyboardButton, KeyboardButton, SendMessageOptions } from 'node-telegram-bot-api'
 import { IUser } from '../interfaces/users'
 import { IThread } from '../interfaces/threads'
-import Premium from '../models/premium'
+import Package from '../models/packages'
+import Usage from '../models/usage'
+import { PLANS } from '../controllers/payments'
 
 export interface IGetOptionsParams {
   buttons?: InlineKeyboardButton[][],
@@ -68,13 +70,34 @@ export function isAdmin( user:IUser ){
   return (user.username == process.env.ADMIN_USERNAME)
 }
 
-export async function isPremium( user:IUser ):Promise<boolean> {
+export async function hasActivePackage( user:IUser ):Promise<boolean> {
   const now = new Date()
-  const activeOrder = await Premium.findOne({
+  const activeOrder = await Package.findOne({
     user: user._id,
     endDate: { $gt: now }
   })
   return !!activeOrder
+}
+
+// Alias for backward compatibility (images, web search limits)
+export const isPremium = hasActivePackage
+
+export async function getPackageRemainingTokens(user: IUser): Promise<number> {
+  const now = new Date()
+  const activePackages = await Package.find({ user: user._id, endDate: { $gt: now } })
+
+  if (activePackages.length === 0) return 0
+
+  let totalRemaining = 0
+  for (const pkg of activePackages) {
+    const usageResult = await Usage.aggregate([
+      { $match: { user: user._id, created: { $gte: pkg.created }, type: { $in: ['prompt', 'completion'] } } },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ])
+    const usedTokens = usageResult.length > 0 ? usageResult[0].total : 0
+    totalRemaining += Math.max(0, pkg.tokenLimit - usedTokens)
+  }
+  return totalRemaining
 }
 
 export function isTester( user:IUser ){

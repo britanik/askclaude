@@ -9,7 +9,7 @@ import { tmplRegisterLang } from "../templates/tmplRegisterLanguage"
 import { handleAssistantReply, sendAndSaveReply, handleUserReply, IAssistantParams, startAssistant } from "./assistants"
 import { tmplAdmin } from "../templates/tmplAdmin"
 import { getTranscription } from "../services/ai"
-import { isAdmin, canAccessPremium, isPremium } from "../helpers/helpers"
+import { isAdmin, canAccessPremium } from "../helpers/helpers"
 
 import { tmplSettings } from '../templates/tmplSettings'
 import { tmplInvite } from "../templates/tmplInvite"
@@ -27,7 +27,7 @@ import { generateImageWithFallback } from "../services/image"
 import { tmplLimits } from "../templates/tmplLimits"
 import { tmplPayConfirm } from "../templates/tmplPayConfirm"
 import { PaymentPlan, PLANS } from "./payments"
-import Premium from "../models/premium"
+import Package from "../models/packages"
 import { bufferMessage, markProcessing, isAborted, clearBuffer } from "../helpers/messageBuffer"
 
 export interface INavigationParams {
@@ -829,21 +829,12 @@ export default class Navigation {
     }
   }
 
-  premium() {
+  tokens() {
     return {
       action: async () => {
         if (!canAccessPremium(this.user)) {
           await sendMessage({
-            text: 'Premium временно недоступен.',
-            user: this.user,
-            bot: this.bot
-          });
-          return;
-        }
-
-        if (await isPremium(this.user)) {
-          await sendMessage({
-            text: 'У вас уже есть Premium!',
+            text: 'Пакеты токенов временно недоступны.',
             user: this.user,
             bot: this.bot
           });
@@ -852,13 +843,14 @@ export default class Navigation {
 
         await userController.updateMessage(this.user, 'payConfirm', null);
 
+        const formatNumber = (n: number) => n.toLocaleString('ru-RU');
         const planButtons = Object.entries(PLANS).map(([plan, config]) => ({
-          text: `${config.duration} - ${config.price} рублей`,
+          text: `+${formatNumber(config.tokenLimit)} / ${config.label} — ${config.price}₽`,
           callback_data: JSON.stringify({ a: 'payConfirm', plan: plan as PaymentPlan })
         }));
 
         await sendMessage({
-          text: 'Выберите тариф безлимита:',
+          text: 'Выберите пакет токенов:',
           user: this.user,
           bot: this.bot,
           buttons: [planButtons]
@@ -920,16 +912,16 @@ export default class Navigation {
     }
   }
 
-  deletePremium() {
+  deleteTokens() {
     return {
       action: async () => {
-        await Premium.updateMany(
+        await Package.updateMany(
           { user: this.user._id, endDate: { $gt: new Date() } },
           { $set: { endDate: new Date() } }
         );
 
         await sendMessage({
-          text: 'Premium отключен.',
+          text: 'Пакеты токенов отключены.',
           user: this.user,
           bot: this.bot
         });
@@ -969,23 +961,25 @@ export default class Navigation {
   paySuccess() {
     return {
       action: async () => {
-        // Эмуляция оплаты - создаём Premium на 24 часа
+        // Эмуляция оплаты - создаём Package на 24 часа
         const plan: PaymentPlan = '24h';
-        const startDate = new Date();
-        const endDate = new Date(startDate);
-        endDate.setHours(endDate.getHours() + 24);
+        const planConfig = PLANS[plan];
+        const endDate = new Date();
+        endDate.setHours(endDate.getHours() + planConfig.durationHours);
 
-        await Premium.create({
+        await Package.create({
           user: this.user._id,
           plan,
-          startDate,
           endDate,
-          transactionId: Date.now(), // Эмуляция - используем timestamp
-          amount: PLANS[plan].price
+          tokenLimit: planConfig.tokenLimit,
+          transactionId: Date.now(),
+          amount: planConfig.price
         });
 
         // Get pending thread if exists
         const pendingThread = this.user.pendingThread?.toString();
+
+        const formatNumber = (n: number) => n.toLocaleString('ru-RU');
 
         // Send message with or without button depending on pending thread
         const buttons = pendingThread ? [[{
@@ -994,8 +988,8 @@ export default class Navigation {
         }]] : undefined;
 
         const text = pendingThread
-          ? '🎉 Безлимит на 24 часа активирован!\n\nНажмите кнопку ниже, чтобы получить ответ на ваш вопрос.'
-          : '🎉 Безлимит на 24 часа активирован!\n\nСпасибо!';
+          ? `Пакет активирован! +${formatNumber(planConfig.tokenLimit)} токенов на ${planConfig.label}\n\nНажмите кнопку ниже, чтобы получить ответ на ваш вопрос.`
+          : `Пакет активирован! +${formatNumber(planConfig.tokenLimit)} токенов на ${planConfig.label}\n\nСпасибо!`;
 
         await sendMessage({
           text,

@@ -8,7 +8,8 @@ export async function tmplPayConfirm(user: IUser, bot: TelegramBot, plan: Paymen
   const planDetails = PLANS[plan];
   const paymentToken = generatePaymentToken(user._id, plan);
 
-  const text = `Безлимит на ${planDetails.duration} за ${planDetails.price} рублей.
+  const formatNumber = (n: number) => n.toLocaleString('ru-RU');
+  const text = `Пакет: +${formatNumber(planDetails.tokenLimit)} токенов на ${planDetails.label} за ${planDetails.price} рублей.
 
 Оферта, Политика использования, Реквизиты - /legal
 

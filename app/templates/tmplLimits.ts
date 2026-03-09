@@ -3,7 +3,7 @@ import { sendMessage } from "./sendMessage";
 import TelegramBot from "node-telegram-bot-api";
 import Dict from "../helpers/dict";
 import { getTokenLimitMessage } from "../controllers/tokens";
-import { isPremium, canAccessPremium } from "../helpers/helpers";
+import { canAccessPremium } from "../helpers/helpers";
 import * as userController from "../controllers/users";
 import { PLANS, PaymentPlan } from "../controllers/payments";
 
@@ -13,10 +13,11 @@ export async function tmplLimits(user: IUser, bot: TelegramBot, dict: Dict) {
 
   const limitMessage = await getTokenLimitMessage(user);
 
-  const showPremiumButtons = canAccessPremium(user) && !(await isPremium(user));
+  const showPackageButtons = canAccessPremium(user);
 
+  const formatNumber = (n: number) => n.toLocaleString('ru-RU');
   const planButtons = Object.entries(PLANS).map(([plan, config]) => ({
-    text: `${config.duration} - ${config.price} рублей`,
+    text: `+${formatNumber(config.tokenLimit)} / ${config.label} — ${config.price}₽`,
     callback_data: JSON.stringify({ a: 'payConfirm', plan: plan as PaymentPlan })
   }));
 
@@ -24,6 +25,6 @@ export async function tmplLimits(user: IUser, bot: TelegramBot, dict: Dict) {
     text: limitMessage,
     user,
     bot,
-    buttons: showPremiumButtons ? [planButtons] : undefined
+    buttons: showPackageButtons ? [planButtons] : undefined
   });
 }
