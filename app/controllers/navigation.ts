@@ -915,9 +915,8 @@ export default class Navigation {
   deleteTokens() {
     return {
       action: async () => {
-        await Package.updateMany(
-          { user: this.user._id, endDate: { $gt: new Date() } },
-          { $set: { endDate: new Date() } }
+        await Package.deleteMany(
+          { user: this.user._id, endDate: { $gt: new Date() } }
         );
 
         await sendMessage({
