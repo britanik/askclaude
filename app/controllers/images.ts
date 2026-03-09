@@ -13,7 +13,7 @@ import { generateImageWithFallback, ImageGenerationResult, ImageTier } from '../
 import { logApiError } from '../helpers/errorLogger';
 import { IThread } from '../interfaces/threads';
 import { IImage } from '../interfaces/image';
-import { isPremium } from '../helpers/helpers';
+import { isPremium, isTester } from '../helpers/helpers';
 
 export async function saveImageLocally(imageBuffer: Buffer): Promise<string> {
   // Create images directory if it doesn't exist
@@ -256,6 +256,9 @@ export async function regenerateImage(imageId: string, user: IUser, bot: Telegra
 }
 
 export async function getTopTierLimit(user: IUser): Promise<number> {
+  if (isTester(user)) {
+    return +(process.env.IMAGE_LIMIT_DAILY_TOP_TESTER || process.env.IMAGE_LIMIT_DAILY_TOP || 5);
+  }
   return await isPremium(user)
     ? +(process.env.IMAGE_LIMIT_DAILY_TOP_PREMIUM || process.env.IMAGE_LIMIT_DAILY_TOP || 5)
     : +(process.env.IMAGE_LIMIT_DAILY_TOP || 5);
@@ -311,6 +314,9 @@ export async function getPeriodImageUsage(user: IUser): Promise<number> {
 }
 
 export async function getPeriodImageLimit(user: IUser): Promise<number> {
+  if (isTester(user)) {
+    return +(process.env.IMAGE_LIMIT_DAILY_TOTAL_TESTER || process.env.IMAGE_LIMIT_DAILY_TOTAL || 15);
+  }
   return await isPremium(user)
     ? +(process.env.IMAGE_LIMIT_DAILY_TOTAL_PREMIUM || process.env.IMAGE_LIMIT_DAILY_TOTAL || 15)
     : +(process.env.IMAGE_LIMIT_DAILY_TOTAL || 15);

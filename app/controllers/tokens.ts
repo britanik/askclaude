@@ -7,7 +7,7 @@ import User from '../models/users';
 import Usage from '../models/usage';
 import Invite from '../models/invites';
 import Limit from '../models/limits';
-import { isAdmin, getPackageRemainingTokens } from '../helpers/helpers';
+import { isAdmin, isTester, getPackageRemainingTokens } from '../helpers/helpers';
 
 // Update user schema to remove token_balance field
 export async function updateUserSchema() {
@@ -145,6 +145,9 @@ export async function getPeriodTokenLimit(user: IUser): Promise<number> {
     if (isAdmin(user)) {
       baseLimit = +process.env.TOKENS_HOUR_LIMIT_ADMIN;
       bonusPerReferral = +process.env.TOKENS_PER_REFERRAL_ADMIN;
+    } else if (isTester(user)) {
+      baseLimit = +process.env.TOKENS_HOUR_LIMIT_TESTER || +process.env.TOKENS_HOUR_LIMIT;
+      bonusPerReferral = +process.env.TOKENS_PER_REFERRAL_TESTER || +process.env.TOKENS_PER_REFERRAL;
     } else {
       baseLimit = +process.env.TOKENS_HOUR_LIMIT;
       bonusPerReferral = +process.env.TOKENS_PER_REFERRAL;
@@ -184,6 +187,9 @@ export async function getDailyTokenLimit(user: IUser): Promise<number> {
     if (isAdmin(user)) {
       baseLimit = +process.env.TOKENS_DAILY_LIMIT_ADMIN;
       bonusPerReferral = +process.env.TOKENS_DAILY_PER_REFERRAL_ADMIN;
+    } else if (isTester(user)) {
+      baseLimit = +process.env.TOKENS_DAILY_LIMIT_TESTER || +process.env.TOKENS_DAILY_LIMIT;
+      bonusPerReferral = +process.env.TOKENS_DAILY_PER_REFERRAL_TESTER || +process.env.TOKENS_DAILY_PER_REFERRAL;
     } else {
       baseLimit = +process.env.TOKENS_DAILY_LIMIT;
       bonusPerReferral = +process.env.TOKENS_DAILY_PER_REFERRAL;
