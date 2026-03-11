@@ -103,12 +103,12 @@ export default class Dict {
         eng: () => `Token limits`
       },
       SETTINGS_PREMIUM_ACTIVE: {
-        rus: () => `Увеличенны до {date} 🚀`,
-        eng: () => `Increased until {date} 🚀`
+        rus: () => `(Увеличенны до {date} 🚀)`,
+        eng: () => `(Increased until {date} 🚀)`
       },
       SETTINGS_PREMIUM_HINT: {
-        rus: () => `Увеличить лимиты /tokens 🚀`,
-        eng: () => `Increase limits /tokens 🚀`
+        rus: () => `(Увеличить лимиты /tokens 🚀)`,
+        eng: () => `(Increase limits /tokens 🚀)`
       },
       SETTINGS_LIMITS_DAILY: {
         rus: () => `В день`,
