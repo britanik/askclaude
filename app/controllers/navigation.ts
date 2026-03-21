@@ -9,7 +9,7 @@ import { tmplRegisterLang } from "../templates/tmplRegisterLanguage"
 import { handleAssistantReply, sendAndSaveReply, handleUserReply, IAssistantParams, startAssistant } from "./assistants"
 import { tmplAdmin } from "../templates/tmplAdmin"
 import { getTranscription } from "../services/ai"
-import { isAdmin, canAccessPremium } from "../helpers/helpers"
+import { isAdmin, isTester, canAccessPremium } from "../helpers/helpers"
 
 import { tmplSettings } from '../templates/tmplSettings'
 import { tmplInvite } from "../templates/tmplInvite"
@@ -960,19 +960,22 @@ export default class Navigation {
   paySuccess() {
     return {
       action: async () => {
-        // Эмуляция оплаты - создаём Package на 24 часа
-        const plan: PaymentPlan = '24h';
-        const planConfig = PLANS[plan];
+        // Эмуляция оплаты - только для админа/тестера
+        if (!isAdmin(this.user) && !isTester(this.user)) return;
+
+        // Создаём тестовый Package с лимитами из .env
+        const tokenLimit = +(process.env.TEST_PACKAGE_TOKEN_LIMIT || 1000);
+        const durationMinutes = +(process.env.TEST_PACKAGE_DURATION_MINUTES || 10);
+
         const endDate = new Date();
-        endDate.setHours(endDate.getHours() + planConfig.durationHours);
+        endDate.setMinutes(endDate.getMinutes() + durationMinutes);
 
         await Package.create({
           user: this.user._id,
-          plan,
           endDate,
-          tokenLimit: planConfig.tokenLimit,
+          tokenLimit,
           transactionId: Date.now(),
-          amount: planConfig.price
+          amount: 0
         });
 
         // Get pending thread if exists
@@ -986,9 +989,13 @@ export default class Navigation {
           callback_data: JSON.stringify({ a: 'processPending' })
         }]] : undefined;
 
+        const durationLabel = durationMinutes >= 60
+          ? `${Math.round(durationMinutes / 60)} ч.`
+          : `${durationMinutes} мин.`;
+
         const text = pendingThread
-          ? `Пакет активирован! +${formatNumber(planConfig.tokenLimit)} токенов на ${planConfig.label}\n\nНажмите кнопку ниже, чтобы получить ответ на ваш вопрос.`
-          : `Пакет активирован! +${formatNumber(planConfig.tokenLimit)} токенов на ${planConfig.label}\n\nСпасибо!`;
+          ? `Тестовый пакет активирован! +${formatNumber(tokenLimit)} токенов на ${durationLabel}\n\nНажмите кнопку ниже, чтобы получить ответ на ваш вопрос.`
+          : `Тестовый пакет активирован! +${formatNumber(tokenLimit)} токенов на ${durationLabel}\n\nСпасибо!`;
 
         await sendMessage({
           text,

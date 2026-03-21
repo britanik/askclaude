@@ -6,7 +6,6 @@ const Schema = mongoose.Schema
 
 const PackageSchema = new Schema<IPackage>({
   user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-  plan: { type: String, enum: ['24h', '7d'], required: true },
   endDate: { type: Date, required: true },
   tokenLimit: { type: Number, required: true },
   tokensUsed: { type: Number, default: 0 },
