@@ -912,23 +912,6 @@ export default class Navigation {
     }
   }
 
-  deleteTokens() {
-    return {
-      action: async () => {
-        await Package.deleteMany(
-          { user: this.user._id, endDate: { $gt: new Date() } }
-        );
-
-        await sendMessage({
-          text: 'Пакеты токенов отключены.',
-          user: this.user,
-          bot: this.bot
-        });
-      },
-      callback: async () => {}
-    }
-  }
-
   deletePackages() {
     return {
       action: async () => {
@@ -947,11 +930,6 @@ export default class Navigation {
   resetTokens() {
     return {
       action: async () => {
-        if (!isAdmin(this.user)) {
-          await sendMessage({ text: 'Access denied', user: this.user, bot: this.bot });
-          return;
-        }
-
         const result = await resetAdminTokens(this.user);
 
         if (result.success) {
