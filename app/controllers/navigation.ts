@@ -440,8 +440,8 @@ export default class Navigation {
               // Mark as processing so abortIfSequence knows there's an in-flight request
               markProcessing(this.user.chatId);
 
-              // Send thread to LLM (pass the stricter of hourly/daily remaining for pre-flight check)
-              const tokensRemaining = tokenLimit.dailyRemaining;
+              // Send thread to LLM (pass total remaining: daily + packages for pre-flight check)
+              const tokensRemaining = tokenLimit.totalRemaining;
               const reply = await handleAssistantReply(userReply.thread, this.bot, this.dict, tokensRemaining);
 
               // Check if this request was aborted while waiting for LLM response

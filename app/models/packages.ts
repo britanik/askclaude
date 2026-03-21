@@ -9,6 +9,7 @@ const PackageSchema = new Schema<IPackage>({
   plan: { type: String, enum: ['24h', '7d'], required: true },
   endDate: { type: Date, required: true },
   tokenLimit: { type: Number, required: true },
+  tokensUsed: { type: Number, default: 0 },
   transactionId: { type: Number, required: true },
   amount: { type: Number, required: true },
   created: { type: Date, default: () => moment().utc() }

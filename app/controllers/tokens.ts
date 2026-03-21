@@ -7,7 +7,7 @@ import User from '../models/users';
 import Usage from '../models/usage';
 import Invite from '../models/invites';
 import Limit from '../models/limits';
-import { isAdmin, isTester, getActivePackagesTotalTokens } from '../helpers/helpers';
+import { isAdmin, isTester, getPackageRemainingTokens, attributePackageUsage } from '../helpers/helpers';
 
 
 // Update user schema to remove token_balance field
@@ -28,28 +28,29 @@ export async function updateUserSchema() {
 export interface ITokenLimitResult {
   exceeded: boolean;
   dailyRemaining: number;
+  packageRemaining: number;
+  totalRemaining: number;
 }
 
-// Check if user is at the daily token limit
+// Check if user is at the token limit (daily + packages)
 export async function isTokenLimit(user: IUser): Promise<ITokenLimitResult> {
   try {
     const dailyUsage: number = await getDailyTokenUsage(user);
     const dailyLimit = await getDailyTokenLimit(user);
-
-    const dailyExceeded = dailyUsage >= dailyLimit;
     const dailyRemaining = Math.max(0, dailyLimit - dailyUsage);
 
-    if (dailyExceeded) {
+    const packageRemaining = await getPackageRemainingTokens(user);
+    const totalRemaining = dailyRemaining + packageRemaining;
+    const exceeded = totalRemaining <= 0;
+
+    if (exceeded) {
       await logLimitHit(user, 'daily_token', dailyUsage, dailyLimit);
     }
 
-    return {
-      exceeded: dailyExceeded,
-      dailyRemaining
-    };
+    return { exceeded, dailyRemaining, packageRemaining, totalRemaining };
   } catch (error) {
     console.error('Error checking token limit:', error);
-    return { exceeded: false, dailyRemaining: 0 };
+    return { exceeded: false, dailyRemaining: 0, packageRemaining: 0, totalRemaining: 0 };
   }
 }
 
@@ -58,9 +59,10 @@ export async function getTokenLimitMessage(user: IUser): Promise<string> {
   try {
     const dailyUsage: number = await getDailyTokenUsage(user);
     const dailyLimit = await getDailyTokenLimit(user);
+    const packageRemaining = await getPackageRemainingTokens(user);
 
-    if (dailyUsage >= dailyLimit) {
-      return `Лимит токенов в день исчерпан. Вы можете продолжить через ${getTimeToNextDay()}.`;
+    if (dailyUsage >= dailyLimit && packageRemaining <= 0) {
+      return `Лимит токенов исчерпан. Дневной лимит обновится через ${getTimeToNextDay()}.`;
     }
 
     return '';
@@ -120,11 +122,8 @@ export async function getDailyTokenLimit(user: IUser): Promise<number> {
       referralBonus = usedInvitesCount * bonusPerReferral;
     }
 
-    // Add total token limit from active packages (not remaining — usage is tracked separately)
-    const packageBonus = await getActivePackagesTotalTokens(user);
-
-    // Return the total daily limit
-    return baseLimit + referralBonus + packageBonus;
+    // Return the daily limit (base + referral only, packages are tracked separately)
+    return baseLimit + referralBonus;
   } catch (error) {
     console.error('Error calculating daily token limit:', error);
     // Return default limit in case of error
@@ -224,15 +223,17 @@ export async function logTokenUsage(user: IUser, thread: any, inputTokens: numbe
       }).save();
     }
 
-    // Send notification to user via bot
-    // if( isAdmin(user) ) {
-    //   const message = `Tokens used:\nInput: ${inputTokens}\nOutput: ${outputTokens}\nModel: ${model}`;
-    //   await sendMessage({
-    //     text: message,
-    //     user,
-    //     bot
-    //   })
-    // }
+    // Attribute overflow tokens to packages
+    const totalTokens = inputTokens + outputTokens;
+    const dailyUsageAfter = await getDailyTokenUsage(user);
+    const dailyLimit = await getDailyTokenLimit(user);
+    const dailyUsageBefore = dailyUsageAfter - totalTokens;
+    const dailyRemainingBefore = Math.max(0, dailyLimit - dailyUsageBefore);
+    const overflowThisCall = Math.max(0, totalTokens - dailyRemainingBefore);
+
+    if (overflowThisCall > 0) {
+      await attributePackageUsage(user, overflowThisCall);
+    }
   } catch (error) {
     console.error('Error logging token usage:', error);
   }

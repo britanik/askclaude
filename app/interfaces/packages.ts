@@ -6,6 +6,7 @@ export interface IPackage extends Document {
   plan: '24h' | '7d'
   endDate: Date
   tokenLimit: number
+  tokensUsed: number
   transactionId: number
   amount: number
   created: Date

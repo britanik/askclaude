@@ -2,8 +2,8 @@ import moment from 'moment'
 import { EditMessageTextOptions, InlineKeyboardButton, KeyboardButton, SendMessageOptions } from 'node-telegram-bot-api'
 import { IUser } from '../interfaces/users'
 import { IThread } from '../interfaces/threads'
+import { IPackage } from '../interfaces/packages'
 import Package from '../models/packages'
-import Usage from '../models/usage'
 import { PLANS } from '../controllers/payments'
 
 export interface IGetOptionsParams {
@@ -95,19 +95,43 @@ export async function getActivePackagesTotalTokens(user: IUser): Promise<number>
 export async function getPackageRemainingTokens(user: IUser): Promise<number> {
   const now = new Date()
   const activePackages = await Package.find({ user: user._id, endDate: { $gt: now } })
-
-  if (activePackages.length === 0) return 0
-
-  let totalRemaining = 0
+  let total = 0
   for (const pkg of activePackages) {
-    const usageResult = await Usage.aggregate([
-      { $match: { user: user._id, created: { $gte: pkg.created }, type: { $in: ['prompt', 'completion'] } } },
-      { $group: { _id: null, total: { $sum: '$amount' } } }
-    ])
-    const usedTokens = usageResult.length > 0 ? usageResult[0].total : 0
-    totalRemaining += Math.max(0, pkg.tokenLimit - usedTokens)
+    total += Math.max(0, pkg.tokenLimit - (pkg.tokensUsed || 0))
   }
-  return totalRemaining
+  return total
+}
+
+export async function getActivePackagesSorted(user: IUser): Promise<IPackage[]> {
+  const now = new Date()
+  return Package.find({ user: user._id, endDate: { $gt: now } }).sort({ created: 1 })
+}
+
+export async function getTodayExpiredPackages(user: IUser): Promise<IPackage[]> {
+  const startOfDay = moment().startOf('day').toDate()
+  const now = new Date()
+  return Package.find({
+    user: user._id,
+    endDate: { $gte: startOfDay, $lte: now }
+  }).sort({ endDate: -1 })
+}
+
+// Когда пользователь превысил дневной лимит, эта функция записывает
+// "лишние" токены (overflowTokens) в купленные пакеты.
+// Пакеты расходуются по очереди: сначала самый старый (FIFO).
+export async function attributePackageUsage(user: IUser, overflowTokens: number): Promise<void> {
+  if (overflowTokens <= 0) return
+  const packages = await getActivePackagesSorted(user)
+  let remaining = overflowTokens
+  for (const pkg of packages) {
+    if (remaining <= 0) break
+    const available = pkg.tokenLimit - (pkg.tokensUsed || 0)
+    if (available <= 0) continue
+    const toUse = Math.min(remaining, available)
+    pkg.tokensUsed = (pkg.tokensUsed || 0) + toUse
+    await pkg.save()
+    remaining -= toUse
+  }
 }
 
 export function isTester( user:IUser ){
