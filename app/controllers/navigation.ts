@@ -929,6 +929,21 @@ export default class Navigation {
     }
   }
 
+  deletePackages() {
+    return {
+      action: async () => {
+        const result = await Package.deleteMany({ user: this.user._id });
+
+        await sendMessage({
+          text: `Удалено пакетов: ${result.deletedCount}`,
+          user: this.user,
+          bot: this.bot
+        });
+      },
+      callback: async () => {}
+    }
+  }
+
   resetTokens() {
     return {
       action: async () => {

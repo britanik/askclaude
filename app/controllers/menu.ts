@@ -14,6 +14,7 @@ export const menuButtons = [
   { name: '/pm', method: 'pm' },
   { name: '/updateUserSchema', method: 'updateUserSchema' },
   { name: '/deleteTokens', method: 'deleteTokens' },
+  { name: '/deletePackages', method: 'deletePackages' },
   { name: '/resetTokens', method: 'resetTokens' },
   { name: '/paySuccess', method: 'paySuccess' },
 ];
