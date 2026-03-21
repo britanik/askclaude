@@ -960,12 +960,20 @@ export default class Navigation {
   paySuccess() {
     return {
       action: async () => {
-        // Эмуляция оплаты - только для админа/тестера
-        if (!isAdmin(this.user) && !isTester(this.user)) return;
+        // Эмуляция оплаты:
+        // - админ/тестер: тестовый пакет из .env
+        // - обычный пользователь: реальный пакет PLANS['24h']
+        let tokenLimit: number;
+        let durationMinutes: number;
 
-        // Создаём тестовый Package с лимитами из .env
-        const tokenLimit = +(process.env.TEST_PACKAGE_TOKEN_LIMIT || 1000);
-        const durationMinutes = +(process.env.TEST_PACKAGE_DURATION_MINUTES || 10);
+        if (isAdmin(this.user) || isTester(this.user)) {
+          tokenLimit = +(process.env.TEST_PACKAGE_TOKEN_LIMIT || 1000);
+          durationMinutes = +(process.env.TEST_PACKAGE_DURATION_MINUTES || 10);
+        } else {
+          const planConfig = PLANS['24h'];
+          tokenLimit = planConfig.tokenLimit;
+          durationMinutes = planConfig.durationMinutes;
+        }
 
         const endDate = new Date();
         endDate.setMinutes(endDate.getMinutes() + durationMinutes);
@@ -994,8 +1002,8 @@ export default class Navigation {
           : `${durationMinutes} мин.`;
 
         const text = pendingThread
-          ? `Тестовый пакет активирован! +${formatNumber(tokenLimit)} токенов на ${durationLabel}\n\nНажмите кнопку ниже, чтобы получить ответ на ваш вопрос.`
-          : `Тестовый пакет активирован! +${formatNumber(tokenLimit)} токенов на ${durationLabel}\n\nСпасибо!`;
+          ? `Пакет активирован! +${formatNumber(tokenLimit)} токенов на ${durationLabel}\n\nНажмите кнопку ниже, чтобы получить ответ на ваш вопрос.`
+          : `Пакет активирован! +${formatNumber(tokenLimit)} токенов на ${durationLabel}\n\nСпасибо!`;
 
         await sendMessage({
           text,
