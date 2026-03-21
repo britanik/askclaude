@@ -11,7 +11,7 @@ export async function tmplPayConfirm(user: IUser, bot: TelegramBot, plan: Paymen
   const formatNumber = (n: number) => n.toLocaleString('ru-RU');
   const text = `Пакет: +${formatNumber(planDetails.tokenLimit)} токенов на ${planDetails.label} за ${planDetails.price} рублей.
 
-Оферта, Политика использования, Реквизиты - /legal
+Оферта, Политика использования, Реквизиты - https://askclaude.ru/legal
 
 ℹ️ Безопасная оплата картой или СБП через сервис CloudPayments (принадлежит группе Т-Банк).`;
 
