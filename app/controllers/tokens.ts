@@ -62,7 +62,7 @@ export async function getTokenLimitMessage(user: IUser): Promise<string> {
     const packageRemaining = await getPackageRemainingTokens(user);
 
     if (dailyUsage >= dailyLimit && packageRemaining <= 0) {
-      return `Лимит токенов исчерпан. Дневной лимит обновится через ${getTimeToNextDay()}.`;
+      return `Лимит токенов исчерпан. Дневной лимит обновится через ${getTimeToNextDay()}`;
     }
 
     return '';
