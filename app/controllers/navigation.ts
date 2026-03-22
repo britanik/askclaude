@@ -249,15 +249,15 @@ export default class Navigation {
   assistant() {
     return {
       action: async () => {
+        // Set user step to assistant (before token check so /new always exits other modes)
+        this.user = await userController.addStep(this.user, 'assistant')
+
         // Check token limit (both hourly and daily)
         const limitCheck = await isTokenLimit(this.user);
         if( limitCheck.exceeded ){
           await tmplLimits(this.user, this.bot, this.dict);
           return;
         }
-
-        // Set user step to assistant
-        this.user = await userController.addStep(this.user, 'assistant')
         
         // Get random welcome message instead of making API call
         const firstMessage = this.dict.getRandomWelcomeMessage();
