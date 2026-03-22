@@ -15,6 +15,7 @@ export const menuButtons = [
   { name: '/updateUserSchema', method: 'updateUserSchema' },
   { name: '/deletePackages', method: 'deletePackages' },
   { name: '/resetTokens', method: 'resetTokens' },
+  { name: '/resetImages', method: 'resetImages' },
   { name: '/paySuccess', method: 'paySuccess' },
 ];
 

@@ -297,26 +297,3 @@ export function estimateMessagesTokens(messages: LLMMessage[]): number {
   return Math.ceil(totalChars / 3);
 }
 
-export async function resetAdminTokens(user: IUser): Promise<{ success: boolean; deletedCount: number; error?: string }> {
-  try {
-    const startOfDay = moment().startOf('day').toDate();
-
-    const result = await Usage.deleteMany({
-      user: user._id,
-      created: { $gte: startOfDay },
-      type: { $in: ['prompt', 'completion'] }
-    });
-
-    return {
-      success: true,
-      deletedCount: result.deletedCount || 0
-    };
-  } catch (error) {
-    console.error('Error resetting admin tokens:', error);
-    return {
-      success: false,
-      deletedCount: 0,
-      error: error.message || 'Unknown error'
-    };
-  }
-}

@@ -4,6 +4,8 @@ import { IUser } from '../interfaces/users'
 import { IThread } from '../interfaces/threads'
 import { IPackage } from '../interfaces/packages'
 import Package from '../models/packages'
+import Usage from '../models/usage'
+import Image from '../models/images'
 import { PLANS } from '../controllers/payments'
 
 export interface IGetOptionsParams {
@@ -150,4 +152,52 @@ export function formatUsername(user: IUser) {
 export function getReplyFooter(assistantType: string, isNewThread: boolean, model: string): string {
   let icon = (isNewThread) ? "🆕" : "➡️";
   return `\n\n${icon} ${assistantType} | ${model}`
+}
+
+export async function resetAdminTokens(user: IUser): Promise<{ success: boolean; deletedCount: number; error?: string }> {
+  try {
+    const startOfDay = moment().startOf('day').toDate();
+
+    const result = await Usage.deleteMany({
+      user: user._id,
+      created: { $gte: startOfDay },
+      type: { $in: ['prompt', 'completion'] }
+    });
+
+    return {
+      success: true,
+      deletedCount: result.deletedCount || 0
+    };
+  } catch (error) {
+    console.error('Error resetting admin tokens:', error);
+    return {
+      success: false,
+      deletedCount: 0,
+      error: error.message || 'Unknown error'
+    };
+  }
+}
+
+export async function resetAdminImages(user: IUser): Promise<{ success: boolean; deletedCount: number; error?: string }> {
+  try {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const result = await Image.deleteMany({
+      user: user._id,
+      created: { $gte: startOfDay }
+    });
+
+    return {
+      success: true,
+      deletedCount: result.deletedCount || 0
+    };
+  } catch (error) {
+    console.error('Error resetting admin images:', error);
+    return {
+      success: false,
+      deletedCount: 0,
+      error: error.message || 'Unknown error'
+    };
+  }
 }

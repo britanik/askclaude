@@ -9,11 +9,11 @@ import { tmplRegisterLang } from "../templates/tmplRegisterLanguage"
 import { handleAssistantReply, sendAndSaveReply, handleUserReply, IAssistantParams, startAssistant } from "./assistants"
 import { tmplAdmin } from "../templates/tmplAdmin"
 import { getTranscription } from "../services/ai"
-import { isAdmin, isTester, canAccessPremium } from "../helpers/helpers"
+import { isAdmin, isTester, canAccessPremium, resetAdminTokens, resetAdminImages } from "../helpers/helpers"
 
 import { tmplSettings } from '../templates/tmplSettings'
 import { tmplInvite } from "../templates/tmplInvite"
-import { getTokenLimitMessage, isTokenLimit, updateUserSchema, resetAdminTokens } from "./tokens"
+import { getTokenLimitMessage, isTokenLimit, updateUserSchema } from "./tokens"
 import { isValidInviteCode, processReferral } from "./invites"
 import { sendNotification } from "./notifications"
 import { getPeriodImageLimit, isImageLimit, moderateContent, sendGeneratedImage } from "./images"
@@ -941,6 +941,29 @@ export default class Navigation {
         } else {
           await sendMessage({
             text: `❌ Ошибка при сбросе токенов: ${result.error}`,
+            user: this.user,
+            bot: this.bot
+          });
+        }
+      },
+      callback: async () => {}
+    }
+  }
+
+  resetImages() {
+    return {
+      action: async () => {
+        const result = await resetAdminImages(this.user);
+
+        if (result.success) {
+          await sendMessage({
+            text: `✅ Сброшено ${result.deletedCount} изображений за сегодня`,
+            user: this.user,
+            bot: this.bot
+          });
+        } else {
+          await sendMessage({
+            text: `❌ Ошибка при сбросе изображений: ${result.error}`,
             user: this.user,
             bot: this.bot
           });
