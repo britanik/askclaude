@@ -23,6 +23,8 @@ import { generateUserStats } from "./stats"
 import { regenerateImage } from "../controllers/images"
 import { withChatAction } from "../helpers/chatAction"
 import { generateImageWithFallback } from "../services/image"
+import User from "../models/users"
+import SupportMessage from "../models/supportMessages"
 
 export interface INavigationParams {
   user?: IUser
@@ -69,6 +71,18 @@ export default class Navigation {
   }
 
   async build() {
+    // Support reply-to intercept — before normal routing
+    if (this.msg && this.msg.reply_to_message) {
+      const supportMsg = await SupportMessage.findOne({
+        messageId: this.msg.reply_to_message.message_id,
+        chatId: this.msg.chat.id,
+      })
+      if (supportMsg) {
+        await this.handleSupportReply(supportMsg)
+        return
+      }
+    }
+
     const method = this.determineMethod()
     const actionType = this.determineActionType(method)
 
@@ -528,6 +542,126 @@ export default class Navigation {
         }
       },
     };
+  }
+
+  support() {
+    return {
+      action: async () => {
+        this.user = await userController.addStep(this.user, 'support')
+        await sendMessage({
+          text: this.dict.getString('SUPPORT_PROMPT'),
+          user: this.user,
+          bot: this.bot,
+        })
+      },
+      callback: async () => {
+        const adminUser = await User.findOne({ username: process.env.ADMIN_USERNAME })
+        if (!adminUser) {
+          await sendMessage({ text: this.dict.getString('SUPPORT_ADMIN_ERROR'), user: this.user, bot: this.bot })
+          return
+        }
+
+        const text = this.msg.text || this.msg.caption || ''
+        const username = this.user.username ? `@${this.user.username}` : 'без username'
+        const replyHint = 'Используйте Reply to, чтобы ответить'
+
+        // Forward non-text messages, send text as formatted message
+        if (!this.msg.text && (this.msg.photo || this.msg.voice || this.msg.document)) {
+          const forwarded = await this.bot.forwardMessage(adminUser.chatId, this.user.chatId, this.msg.message_id)
+          await this.bot.sendMessage(
+            adminUser.chatId,
+            `📩 Поддержка от ${this.user.name} (${username})\n\n${replyHint}`
+          )
+          await new SupportMessage({
+            messageId: forwarded.message_id,
+            chatId: adminUser.chatId,
+            userChatId: this.user.chatId,
+          }).save()
+        } else if (text) {
+          const sent = await this.bot.sendMessage(
+            adminUser.chatId,
+            `📩 Поддержка от ${this.user.name} (${username}):\n\n${text}\n\n${replyHint}`
+          )
+          await new SupportMessage({
+            messageId: sent.message_id,
+            chatId: adminUser.chatId,
+            userChatId: this.user.chatId,
+          }).save()
+        }
+
+        await sendMessage({
+          text: this.dict.getString('SUPPORT_RECEIVED'),
+          user: this.user,
+          bot: this.bot,
+        })
+
+        this.user = await userController.addStep(this.user, 'assistant')
+      },
+    }
+  }
+
+  private async handleSupportReply(supportMsg) {
+    if (isAdmin(this.user)) {
+      // Admin replying → send to user
+      const text = this.msg.text || ''
+      const replyHint = this.dict.getString('SUPPORT_REPLY_HINT')
+
+      if (text) {
+        const sent = await this.bot.sendMessage(
+          supportMsg.userChatId,
+          `${text}\n\n${replyHint}`
+        )
+        await new SupportMessage({
+          messageId: sent.message_id,
+          chatId: supportMsg.userChatId,
+          userChatId: supportMsg.userChatId,
+        }).save()
+      }
+
+      // Forward non-text content (photo, voice, document)
+      if (this.msg.photo || this.msg.voice || this.msg.document) {
+        const forwarded = await this.bot.forwardMessage(
+          supportMsg.userChatId,
+          this.user.chatId,
+          this.msg.message_id
+        )
+        await new SupportMessage({
+          messageId: forwarded.message_id,
+          chatId: supportMsg.userChatId,
+          userChatId: supportMsg.userChatId,
+        }).save()
+      }
+
+      await sendMessage({ text: '✅ Ответ отправлен', user: this.user, bot: this.bot })
+    } else {
+      // User replying → forward to admin
+      const adminUser = await User.findOne({ username: process.env.ADMIN_USERNAME })
+      if (!adminUser) return
+
+      const forwarded = await this.bot.forwardMessage(
+        adminUser.chatId,
+        this.user.chatId,
+        this.msg.message_id
+      )
+
+      const username = this.user.username ? `@${this.user.username}` : 'без username'
+      await this.bot.sendMessage(
+        adminUser.chatId,
+        `📩 Ответ от ${this.user.name} (${username})\nИспользуйте Reply to, чтобы ответить`
+      )
+
+      await new SupportMessage({
+        messageId: forwarded.message_id,
+        chatId: adminUser.chatId,
+        userChatId: this.user.chatId,
+      }).save()
+
+      await sendMessage({
+        text: this.dict.getString('SUPPORT_SENT'),
+        user: this.user,
+        bot: this.bot,
+      })
+    }
   }
 
   admin() {

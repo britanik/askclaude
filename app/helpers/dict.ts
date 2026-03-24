@@ -233,6 +233,26 @@ export default class Dict {
           `Hello! 🎪 I'm like a genie in a lamp, except the lamp is a server and three wishes are your token limits. But unlike fairy tale genies, I don't try to outsmart you - just help! What shall we wish for?`
         ]
       },
+      SUPPORT_PROMPT: {
+        rus: () => `Напишите сообщение в поддержку и мы скоро ответим (или отменить - /new)`,
+        eng: () => `Write a message to support and we will reply soon (or cancel - /new)`
+      },
+      SUPPORT_RECEIVED: {
+        rus: () => `Спасибо, сообщение получено`,
+        eng: () => `Thank you, your message has been received`
+      },
+      SUPPORT_SENT: {
+        rus: () => `Сообщение отправлено в поддержку`,
+        eng: () => `Message sent to support`
+      },
+      SUPPORT_REPLY_HINT: {
+        rus: () => `Используйте Reply to, чтобы ответить`,
+        eng: () => `Use Reply to to respond`
+      },
+      SUPPORT_ADMIN_ERROR: {
+        rus: () => `Ошибка: администратор не найден.`,
+        eng: () => `Error: administrator not found.`
+      },
       NOTION_SETUP_TITLE: {
         rus: () => `🔑 Настройка Notion`,
         eng: () => `🔑 Notion Setup`
