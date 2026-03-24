@@ -17,6 +17,7 @@ const UserSchema = new Schema<IUser>({
   created: { type: Date, default: () => moment().utc() },
   messages: { type: Object, default: {} },
   data: { type: Object, default: {} },
+  pendingThread: { type: Schema.Types.ObjectId, ref: 'Thread' },
   prefs: {
     lang: { type: String },
     token_balance: { type: Number }

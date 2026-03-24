@@ -12,8 +12,8 @@ export async function tmplAdmin(user: IUser, bot: TelegramBot) {
   if (!isAdmin(user)) return
 
   const usersTotal = await User.find()
-  const usersTodayTotal = await User.find({ created: { $gte: moment().startOf('day') } })
-  const yesterdayTotal = await User.find({ created: { $gte: moment().subtract(1, 'days').startOf('day'), $lte: moment().subtract(1, 'days').endOf('day') } })
+  const usersTodayTotal = await User.find({ created: { $gte: moment().startOf('day').toDate() } })
+  const yesterdayTotal = await User.find({ created: { $gte: moment().subtract(1, 'days').startOf('day').toDate(), $lte: moment().subtract(1, 'days').endOf('day').toDate() } })
 
   // Calculate DAU for today
   const startOfToday = moment().startOf('day').toDate()

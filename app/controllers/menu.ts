@@ -7,11 +7,16 @@ export const menuButtons = [
   { name: '/settings', method: 'settings' },
   { name: '/invite', method: 'invite' },
   { name: '/image', method: 'image' },
+  { name: '/tokens', method: 'tokens' },
   { name: '/stat', method: 'stat' },
   { name: '/run_scheduler', method: 'adminRunScheduler' },
   { name: '/admin', method: 'admin' },
   { name: '/pm', method: 'pm' },
   { name: '/updateUserSchema', method: 'updateUserSchema' },
+  { name: '/deletePackages', method: 'deletePackages' },
+  { name: '/resetTokens', method: 'resetTokens' },
+  { name: '/resetImages', method: 'resetImages' },
+  { name: '/paySuccess', method: 'paySuccess' },
   { name: '/support', method: 'support' },
 ];
 

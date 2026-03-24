@@ -8,7 +8,7 @@ import { IUser } from "../interfaces/users"
 import { IMessage } from "../interfaces/messages"
 import { sendMessage } from "../templates/sendMessage"
 import { analyzeConversation, formatMessagesWithImages, IConversationAnalysisResult, saveImagePermanently } from "../services/ai"
-import { logTokenUsage, logWebSearchUsage } from "./tokens"
+import { logTokenUsage, logWebSearchUsage, estimateMessagesTokens } from "./tokens"
 import { saveAIResponse } from "../helpers/fileLogger"
 import { withChatAction } from "../helpers/chatAction"
 import { trackExpense, editTransaction, createBudget, getBudgetInfoString, deleteBudget, deleteTransaction, getTransactionsString } from "./expense"
@@ -71,9 +71,9 @@ export async function getThreadMessages(thread: IThread): Promise<IMessage[]> {
   }
   
   // Branched thread: get parent messages up to branch point, then own messages
-  const parentMessages = await Message.find({ 
+  const parentMessages = await Message.find({
     thread: fullThread.parent.thread,
-    _id: { $lte: fullThread.parent.point }  // Messages up to and including branch point
+    _id: { $lte: fullThread.parent.point as any }  // Messages up to and including branch point
   }).sort({ created: 1 }).populate('images')
   
   const ownMessages = await Message.find({ thread: thread._id }).sort({ created: 1 }).populate('images')
@@ -165,9 +165,9 @@ export async function handleUserReply(params: IHandleUserReplyParams): Promise<{
       return { thread: null, isNew: false, oldMessageNotFound: true }
     }
     
-    const repliedThread = await Thread.findOne({ 
-      _id: repliedMessage.thread, 
-      owner: user._id 
+    const repliedThread = await Thread.findOne({
+      _id: repliedMessage.thread as any,
+      owner: user._id
     }).populate('owner')
     
     if (repliedThread) {
@@ -230,46 +230,49 @@ export async function handleUserReply(params: IHandleUserReplyParams): Promise<{
   return { thread, isNew };
 }
 
-export async function handleAssistantReply(thread: IThread, bot: TelegramBot, dict: Dict): Promise<void> {
+export async function handleAssistantReply(thread: IThread, bot: TelegramBot, dict: Dict, dailyRemaining?: number): Promise<string | null> {
   try {
-    // const freshThread = await Thread.findById(thread._id).populate('owner')
-
     const assistantReply = await withChatAction(
       bot,
       thread.owner.chatId,
       'typing',
-      () => chatWithFunctionCalling({ thread, bot })
+      () => chatWithFunctionCalling({ thread, bot, dailyRemaining })
     );
 
     await saveAIResponse(assistantReply, 'response');
 
-    // Send to user and get telegram message ID
-    let telegramMessageId: number | undefined;
-    if (assistantReply) {
-      const result = await sendMessage({ text: assistantReply, user: thread.owner, bot });
-      telegramMessageId = result?.telegramMessageId;
-    }
-
-    // Save assistant message with telegram ID
-    await new Message({
-      thread: thread._id,
-      role: 'assistant',
-      content: assistantReply,
-      telegramMessageId
-    }).save();
+    return assistantReply || null;
 
   } catch (error) {
     // console.error('Error in handleAssistantReply:', error);
     await logApiError('anthropic', error, `Assistant reply failed for thread ${thread._id}`);
     await sendMessage({ text: dict.getString('ASSISTANT_ERROR'), user: thread.owner, bot });
+    return null;
   }
+}
+
+/**
+ * Send assistant reply to user and save to DB.
+ * Separated from handleAssistantReply so caller can decide whether to send (e.g. on abort).
+ */
+export async function sendAndSaveReply(reply: string, thread: IThread, bot: TelegramBot): Promise<void> {
+  let telegramMessageId: number | undefined;
+  const result = await sendMessage({ text: reply, user: thread.owner, bot });
+  telegramMessageId = result?.telegramMessageId;
+
+  await new Message({
+    thread: thread._id,
+    role: 'assistant',
+    content: reply,
+    telegramMessageId
+  }).save();
 }
 
 export async function getRecentThread(user: IUser): Promise<IThread> {
   try {
     let recentThread = await Thread.findOne({ owner: user }).sort({ created: -1 }).populate('owner')
     if (!recentThread) {
-      recentThread = await createNewThread({ user, messages: [] })
+      recentThread = await createNewThread({ user, messages: [] }) as any
     }
     return recentThread
   } catch(e) {
@@ -277,13 +280,14 @@ export async function getRecentThread(user: IUser): Promise<IThread> {
   }
 }
 
-export interface IChatWithFunctionCalling { 
-  thread: IThread, 
-  bot: TelegramBot 
+export interface IChatWithFunctionCalling {
+  thread: IThread,
+  bot: TelegramBot,
+  dailyRemaining?: number
 }
 
 async function chatWithFunctionCalling(params:IChatWithFunctionCalling) {
-  const { thread, bot } = params
+  const { thread, bot, dailyRemaining } = params
   
   try {
     const freshThread = await Thread.findById(thread._id).populate('owner')
@@ -356,6 +360,11 @@ async function chatWithFunctionCalling(params:IChatWithFunctionCalling) {
         
         if (tools.length > 0) {
           request.tools = tools;
+        }
+
+        // Pre-flight: block if estimated prompt tokens exceed remaining token limit (min of hourly/daily)
+        if (dailyRemaining !== undefined && estimateMessagesTokens(messages) > dailyRemaining) {
+          return 'Ваш запрос слишком большой для оставшегося лимита токенов. Попробуйте начать новый диалог или сократить сообщение.';
         }
 
         const response = await callLLM(request)

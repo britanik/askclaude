@@ -11,6 +11,7 @@ export interface IUser extends Document {
   created: Date,
   messages: Object,
   data: Object,
+  pendingThread?: Types.ObjectId,
   prefs: {
     lang: 'eng' | 'rus',
     token_balance?: number,

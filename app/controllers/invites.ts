@@ -54,7 +54,7 @@ export async function processReferral(newUser: IUser, invite: IInvite): Promise<
     }
     
     // Check if this user has already used a code
-    const existingInviteUse = await Invite.findOne({ usedBy: newUser._id });
+    const existingInviteUse = await Invite.findOne({ usedBy: newUser._id as any });
     if (existingInviteUse) {
       return false;
     }

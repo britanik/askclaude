@@ -7,6 +7,7 @@ export default class Dict {
 
   constructor(user: IUser){
     this.user = user
+    this.lang = user.prefs?.lang || 'rus'
     this.strings = this.getStrings()
   }
 
@@ -50,8 +51,8 @@ export default class Dict {
         eng: () => `Available formats`
       },
       SETTINGS_FORMATS_STRING: {
-        rus: () => `Текст, Фото, Голосовые сообщения, Поиск в интернете`,
-        eng: () => `Text, Photo, Voice messages, Web Search`
+        rus: () => `Текст, Фото, Голосовые сообщения, Поиск в интернете, Генерация картинок`,
+        eng: () => `Text, Photo, Voice messages, Web Search, Image generation`
       },
       SETTINGS_LANGUAGE: {
         rus: () => `Язык`,
@@ -85,14 +86,6 @@ export default class Dict {
         rus: () => `Обновится через {time}.`,
         eng: () => `Resets in {time}.`
       },
-      SETTINGS_WEB_SEARCH_DAILY_LIMIT: {
-        rus: () => `Лимит поиска в интернете`,
-        eng: () => `Daily web search limit`
-      },
-      SETTINGS_WEB_SEARCH_DAILY_LIMIT_RESET: {
-        rus: () => `Обновится завтра.`,
-        eng: () => `Resets tomorrow.`
-      },
       SETTINGS_DAILY_TOKEN_LIMIT_EXCEEDED: {
         rus: () => `Дневной лимит токенов исчерпан. Вы можете продолжить через {time}.`,
         eng: () => `Daily token limit exceeded. You can continue in {time}.`
@@ -105,9 +98,29 @@ export default class Dict {
         rus: () => `Обновится завтра.`,
         eng: () => `Resets tomorrow.`
       },
-      SETTINGS_HOURLY_TOKEN_LIMIT: {
-        rus: () => `Почасовой лимит токенов`,
-        eng: () => `Hourly token limit`
+      SETTINGS_TOKEN_LIMITS: {
+        rus: () => `Лимиты токенов`,
+        eng: () => `Token limits`
+      },
+      SETTINGS_PREMIUM_ACTIVE: {
+        rus: () => `(Увеличенны до {date} 🚀)`,
+        eng: () => `(Increased until {date} 🚀)`
+      },
+      SETTINGS_PREMIUM_HINT: {
+        rus: () => `(Увеличить лимиты /tokens 🚀)`,
+        eng: () => `(Increase limits /tokens 🚀)`
+      },
+      SETTINGS_LIMITS_DAILY: {
+        rus: () => `В день`,
+        eng: () => `Per day`
+      },
+      SETTINGS_LIMITS_IMAGES: {
+        rus: () => `Изображений`,
+        eng: () => `Images`
+      },
+      SETTINGS_LIMITS_PER_DAY: {
+        rus: () => `в день`,
+        eng: () => `per day`
       },
       ENTER_CODE: {
         rus: () => `<strong>Введите код</strong> полученный в приглашении (или /new чтобы пропустить):`,

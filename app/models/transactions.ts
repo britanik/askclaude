@@ -6,7 +6,7 @@ import { createAutoIncrementMiddleware } from '../helpers/autoIncrement'
 const Schema = mongoose.Schema
 
 const TransactionSchema = new Schema<ITransaction>({
-  ID: { type: Number, unique: true },
+  ID: { type: Number },
   user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   type: { 
     type: String, 

@@ -13,6 +13,7 @@ import Navigation from './app/controllers/navigation'
 import { extractReferralCode, isValidInviteCode, processReferral } from './app/controllers/invites'
 import { sendMessage } from './app/templates/sendMessage'
 import { IInvite } from './app/models/invites'
+import { abortIfSequence } from './app/helpers/messageBuffer'
 
 // Load .env
 if( fs.existsSync(path.join(__dirname, '.env')) ){
@@ -62,8 +63,8 @@ const startNavigation = async (msg = null, callbackQuery = null) => {
       const isValid:IInvite = await isValidInviteCode(code);
       if( isValid ){
         await processReferral(user, isValid);
-        await sendMessage({ text: `✅ Спасибо! Вы активировали код приглашения и получили +${+process.env.TOKENS_PER_REFERRAL} токенов в час`, user, bot });
-        await sendMessage({ text: `✅ Ваш друг активировал код и Вы оба получили +${+process.env.TOKENS_PER_REFERRAL} к лимитам.`, user: isValid.owner, bot })
+        await sendMessage({ text: `✅ Спасибо! Вы активировали код приглашения и получили +${+process.env.TOKENS_DAILY_PER_REFERRAL} токенов в день`, user, bot });
+        await sendMessage({ text: `✅ Ваш друг активировал код и Вы оба получили +${+process.env.TOKENS_DAILY_PER_REFERRAL} к лимитам.`, user: isValid.owner, bot })
       }
     }
 
@@ -90,6 +91,11 @@ bot.on('message', async ( msg, param ) => {
   try{
     if( msg.photo && msg.photo.length > 0 ){
       // console.log(msg.photo[msg.photo.length-1].file_id,'file_id')
+    }
+
+    // If user sends a new message while previous is being processed — mark as aborted
+    if ((msg.text && !msg.text.startsWith('/')) || msg.photo || msg.document || msg.voice) {
+      abortIfSequence(msg.chat.id)
     }
 
     await startNavigation(msg, null)

@@ -6,23 +6,29 @@ import { IMenuButton } from "../interfaces/menu-button"
 import { isMenuClicked } from "./menu"
 import { sendMessage } from "../templates/sendMessage"
 import { tmplRegisterLang } from "../templates/tmplRegisterLanguage"
-import { handleAssistantReply, handleUserReply, IAssistantParams, startAssistant } from "./assistants"
+import { handleAssistantReply, sendAndSaveReply, handleUserReply, IAssistantParams, startAssistant } from "./assistants"
 import { tmplAdmin } from "../templates/tmplAdmin"
 import { getTranscription } from "../services/ai"
-import { isAdmin } from "../helpers/helpers"
+import { isAdmin, isTester, canAccessPremium, resetAdminTokens, resetAdminImages } from "../helpers/helpers"
 
 import { tmplSettings } from '../templates/tmplSettings'
 import { tmplInvite } from "../templates/tmplInvite"
-import { getTokenLimitMessage, isTokenLimit, isWebSearchLimit, updateUserSchema } from "./tokens"
+import { getTokenLimitMessage, isTokenLimit, updateUserSchema } from "./tokens"
 import { isValidInviteCode, processReferral } from "./invites"
 import { sendNotification } from "./notifications"
-import { getCurrentTier, getPeriodImageLimit, isImageLimit, moderateContent, sendGeneratedImage } from "./images"
+import { getPeriodImageLimit, isImageLimit, moderateContent, sendGeneratedImage } from "./images"
 import { IThread } from "../interfaces/threads"
 import Message from "../models/messages"
+import Thread from "../models/threads"
 import { generateUserStats } from "./stats"
 import { regenerateImage } from "../controllers/images"
 import { withChatAction } from "../helpers/chatAction"
 import { generateImageWithFallback } from "../services/image"
+import { tmplLimits } from "../templates/tmplLimits"
+import { tmplPayConfirm } from "../templates/tmplPayConfirm"
+import { PaymentPlan, PLANS } from "./payments"
+import Package from "../models/packages"
+import { bufferMessage, markProcessing, isAborted, clearBuffer } from "../helpers/messageBuffer"
 import User from "../models/users"
 import SupportMessage from "../models/supportMessages"
 
@@ -257,15 +263,15 @@ export default class Navigation {
   assistant() {
     return {
       action: async () => {
+        // Set user step to assistant (before token check so /new always exits other modes)
+        this.user = await userController.addStep(this.user, 'assistant')
+
         // Check token limit (both hourly and daily)
-        if( await isTokenLimit(this.user) ){
-          const limitMessage = await getTokenLimitMessage(this.user);
-          await sendMessage({ text: limitMessage, user: this.user, bot: this.bot });
+        const limitCheck = await isTokenLimit(this.user);
+        if( limitCheck.exceeded ){
+          await tmplLimits(this.user, this.bot, this.dict);
           return;
         }
-  
-        // Set user step to assistant
-        this.user = await userController.addStep(this.user, 'assistant')
         
         // Get random welcome message instead of making API call
         const firstMessage = this.dict.getRandomWelcomeMessage();
@@ -294,13 +300,7 @@ export default class Navigation {
         }).save();
       },
       callback: async () => {
-        // Check token limit (both hourly and daily)
-        if( await isTokenLimit(this.user) ){
-          const limitMessage = await getTokenLimitMessage(this.user);
-          await sendMessage({ text: limitMessage, user: this.user, bot: this.bot });
-          return;
-        }
-
+        let isBufferLeader = false; // true only for the first message in buffer group
         try {
           let text: string = '';
           let images: string[] = [];
@@ -348,7 +348,53 @@ export default class Navigation {
           else {
             text = this.msg.text;
           }
-          
+
+          // Buffer messages (text, photos, voice, documents) to combine e.g. photo + follow-up question
+          const shouldBuffer = !mediaGroupId && (text || images.length > 0) && !(text && text.startsWith('/'));
+
+          if (shouldBuffer) {
+            const bufferResult = bufferMessage(this.user.chatId, text, images);
+
+            if (bufferResult === null) {
+              // Follower message — the first message handler will process everything
+              console.log(`[Buffer] Follower message from ${this.user.chatId}, skipping`);
+              return;
+            }
+
+            // This callback is the "leader" — it owns the buffer lifecycle
+            isBufferLeader = true;
+
+            // First message — wait for debounce to collect others
+            const combined = await bufferResult;
+            text = combined.text;
+            images = combined.images;
+            console.log(`[Buffer] Combined for ${this.user.chatId}: text="${text.substring(0, 100)}", images=${images.length}`);
+          }
+
+          // Check token limit (both hourly and daily)
+          const tokenLimit = await isTokenLimit(this.user);
+          if( tokenLimit.exceeded ){
+            // Save user message (similar to normal flow)
+            const userReply = await handleUserReply({
+              user: this.user,
+              userReply: text,
+              imageIds: images,
+              mediaGroupId: mediaGroupId,
+              replyToTelegramMessageId: replyToMessageId,
+              userTelegramMessageId: this.msg.message_id,
+              bot: this.bot
+            });
+
+            console.log('Save thread _id to user:', userReply.thread._id)
+
+            // Save thread ID in user for processing after payment
+            this.user.pendingThread = userReply.thread._id;
+            await this.user.save();
+
+            await tmplLimits(this.user, this.bot, this.dict)
+            return;
+          }
+
           // For media groups, wait before processing to collect all images
           if (mediaGroupId) {
             console.log('mediaGroupId:', mediaGroupId)
@@ -404,21 +450,30 @@ export default class Navigation {
           
           // Only send to Claude if this isn't a media group or it's the first message after waiting
           if (!mediaGroupId || this.mediaGroups.includes(mediaGroupId)) {
-            
-            const searchLimitReached:boolean = await isWebSearchLimit(this.user) || false;
-            if (!searchLimitReached) {
-              // CONTINUE HERE
-              // Send thread to LLM and then it's reply to user
-              await handleAssistantReply(userReply.thread, this.bot, this.dict);
-            } else {
-              // Exit
-              await sendMessage({
-                text: 'Достигнут дневной лимит на веб-поиск. Выполняю обычный запрос.',
-                user: this.user,
-                bot: this.bot
-              })
-            }
-            
+
+              // Mark as processing so abortIfSequence knows there's an in-flight request
+              markProcessing(this.user.chatId);
+
+              // Send thread to LLM (pass total remaining: daily + packages for pre-flight check)
+              const tokensRemaining = tokenLimit.totalRemaining;
+              const reply = await handleAssistantReply(userReply.thread, this.bot, this.dict, tokensRemaining);
+
+              // Check if this request was aborted while waiting for LLM response
+              if (isAborted(this.user.chatId)) {
+                console.log(`[Buffer] Request aborted for ${this.user.chatId}, discarding reply`);
+                // Usage already logged inside chatWithFunctionCalling, just don't send reply
+                // Save assistant message to DB anyway (for history consistency)
+                if (reply) {
+                  await new Message({
+                    thread: userReply.thread._id,
+                    role: 'assistant',
+                    content: reply,
+                  }).save();
+                }
+              } else if (reply) {
+                await sendAndSaveReply(reply, userReply.thread, this.bot);
+              }
+
             // Remove from mediaGroups array after processing
             if (mediaGroupId) {
               const index = this.mediaGroups.indexOf(mediaGroupId);
@@ -430,6 +485,12 @@ export default class Navigation {
         } catch (e) {
           console.error('Failed to handle assistant callback', e);
           await sendMessage({ text: this.dict.getString('ASSISTANT_ERROR'), user: this.user, bot: this.bot });
+        } finally {
+          // Only the leader (first message in buffer group) cleans up the buffer.
+          // Follower messages must NOT touch it — otherwise the leader's Promise never resolves.
+          if (isBufferLeader) {
+            clearBuffer(this.user.chatId);
+          }
         }
       }
     }
@@ -899,6 +960,209 @@ export default class Navigation {
       },
       callback: async () => {
       },
+    }
+  }
+
+  tokens() {
+    return {
+      action: async () => {
+        if (!canAccessPremium(this.user)) {
+          await sendMessage({
+            text: 'Пакеты токенов временно недоступны.',
+            user: this.user,
+            bot: this.bot
+          });
+          return;
+        }
+
+        await userController.updateMessage(this.user, 'payConfirm', null);
+
+        const formatNumber = (n: number) => n.toLocaleString('ru-RU');
+        const planButtons = Object.entries(PLANS).map(([plan, config]) => ({
+          text: `+${formatNumber(config.tokenLimit)} / ${config.label} — ${config.price}₽`,
+          callback_data: JSON.stringify({ a: 'payConfirm', plan: plan as PaymentPlan })
+        }));
+
+        await sendMessage({
+          text: 'Выберите пакет токенов:',
+          user: this.user,
+          bot: this.bot,
+          buttons: [planButtons]
+        });
+      },
+      callback: async () => {}
+    }
+  }
+
+  payConfirm() {
+    return {
+      action: async () => {},
+      callback: async () => {
+        const plan = this.data.plan as PaymentPlan;
+        if (plan === '24h' || plan === '7d') {
+          await tmplPayConfirm(this.user, this.bot, plan);
+        }
+      }
+    }
+  }
+
+  processPending() {
+    return {
+      action: async () => {},
+      callback: async () => {
+        console.log('processPending', this.user.pendingThread)
+        // Get pendingThread
+        const threadId = this.user.pendingThread;
+        if (!threadId) {
+          await sendMessage({
+            text: 'Нет ожидающих запросов.',
+            user: this.user,
+            bot: this.bot
+          });
+          return;
+        }
+
+        // Load thread
+        const thread = await Thread.findById(threadId).populate('owner');
+        if (!thread) {
+          await sendMessage({
+            text: 'Thread не найден.',
+            user: this.user,
+            bot: this.bot
+          });
+          return;
+        }
+
+        // Clear pendingThread
+        this.user.pendingThread = undefined;
+        await this.user.save();
+
+        // Send request to Claude
+        const reply = await handleAssistantReply(thread, this.bot, this.dict);
+        if (reply) {
+          await sendAndSaveReply(reply, thread, this.bot);
+        }
+      }
+    }
+  }
+
+  deletePackages() {
+    return {
+      action: async () => {
+        const result = await Package.deleteMany({ user: this.user._id });
+
+        await sendMessage({
+          text: `Удалено пакетов: ${result.deletedCount}`,
+          user: this.user,
+          bot: this.bot
+        });
+      },
+      callback: async () => {}
+    }
+  }
+
+  resetTokens() {
+    return {
+      action: async () => {
+        const result = await resetAdminTokens(this.user);
+
+        if (result.success) {
+          await sendMessage({
+            text: `✅ Сброшено ${result.deletedCount} записей токенов за сегодня`,
+            user: this.user,
+            bot: this.bot
+          });
+        } else {
+          await sendMessage({
+            text: `❌ Ошибка при сбросе токенов: ${result.error}`,
+            user: this.user,
+            bot: this.bot
+          });
+        }
+      },
+      callback: async () => {}
+    }
+  }
+
+  resetImages() {
+    return {
+      action: async () => {
+        const result = await resetAdminImages(this.user);
+
+        if (result.success) {
+          await sendMessage({
+            text: `✅ Сброшено ${result.deletedCount} изображений за сегодня`,
+            user: this.user,
+            bot: this.bot
+          });
+        } else {
+          await sendMessage({
+            text: `❌ Ошибка при сбросе изображений: ${result.error}`,
+            user: this.user,
+            bot: this.bot
+          });
+        }
+      },
+      callback: async () => {}
+    }
+  }
+
+  paySuccess() {
+    return {
+      action: async () => {
+        // Эмуляция оплаты:
+        // - админ/тестер: тестовый пакет из .env
+        // - обычный пользователь: реальный пакет PLANS['24h']
+        let tokenLimit: number;
+        let durationMinutes: number;
+
+        if (isAdmin(this.user) || isTester(this.user)) {
+          tokenLimit = +(process.env.TEST_PACKAGE_TOKEN_LIMIT || 1000);
+          durationMinutes = +(process.env.TEST_PACKAGE_DURATION_MINUTES || 10);
+        } else {
+          const planConfig = PLANS['24h'];
+          tokenLimit = planConfig.tokenLimit;
+          durationMinutes = planConfig.durationMinutes;
+        }
+
+        const endDate = new Date();
+        endDate.setMinutes(endDate.getMinutes() + durationMinutes);
+
+        await Package.create({
+          user: this.user._id,
+          endDate,
+          tokenLimit,
+          transactionId: Date.now(),
+          amount: 0
+        });
+
+        // Get pending thread if exists
+        const pendingThread = this.user.pendingThread?.toString();
+
+        const formatNumber = (n: number) => n.toLocaleString('ru-RU');
+
+        // Send message with or without button depending on pending thread
+        const buttons = pendingThread ? [[{
+          text: '✨ Получить ответ на ваш вопрос',
+          callback_data: JSON.stringify({ a: 'processPending' })
+        }]] : undefined;
+
+        const durationLabel = durationMinutes >= 60
+          ? `${Math.round(durationMinutes / 60)} ч.`
+          : `${durationMinutes} мин.`;
+
+        const text = pendingThread
+          ? `Пакет активирован! +${formatNumber(tokenLimit)} токенов на ${durationLabel}\n\nНажмите кнопку ниже, чтобы получить ответ на ваш вопрос.`
+          : `Пакет активирован! +${formatNumber(tokenLimit)} токенов на ${durationLabel}\n\nСпасибо!`;
+
+        await sendMessage({
+          text,
+          user: this.user,
+          bot: this.bot,
+          buttons
+        });
+      },
+      callback: async () => {}
     }
   }
 

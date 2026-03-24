@@ -3,7 +3,7 @@ import { IBudget } from '../interfaces/budgets'
 import { createAutoIncrementMiddleware } from '../helpers/autoIncrement'
 
 const BudgetSchema = new Schema<IBudget>({
-  ID: { type: Number, unique: true },
+  ID: { type: Number },
   user: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   days: { type: Number, required: true, min: 0 },
   totalAmount: { type: Number, required: true, min: 0 },
