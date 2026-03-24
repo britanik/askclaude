@@ -623,15 +623,16 @@ export default class Navigation {
         }
 
         const text = this.msg.text || this.msg.caption || ''
-        const username = this.user.username ? `@${this.user.username}` : 'без username'
-        const replyHint = 'Используйте Reply to, чтобы ответить'
+        const username = this.user.username ? `@${this.user.username}` : this.dict.getString('SUPPORT_NO_USERNAME')
+        const replyHint = this.dict.getString('SUPPORT_REPLY_HINT')
+        const header = this.dict.getString('SUPPORT_NEW_MESSAGE', { name: this.user.name, username })
 
         // Forward non-text messages, send text as formatted message
         if (!this.msg.text && (this.msg.photo || this.msg.voice || this.msg.document)) {
           const forwarded = await this.bot.forwardMessage(adminUser.chatId, this.user.chatId, this.msg.message_id)
           await this.bot.sendMessage(
             adminUser.chatId,
-            `📩 Поддержка от ${this.user.name} (${username})\n\n${replyHint}`
+            `${header}\n\n${replyHint}`
           )
           await new SupportMessage({
             messageId: forwarded.message_id,
@@ -641,7 +642,7 @@ export default class Navigation {
         } else if (text) {
           const sent = await this.bot.sendMessage(
             adminUser.chatId,
-            `📩 Поддержка от ${this.user.name} (${username}):\n\n${text}\n\n${replyHint}`
+            `${header}:\n\n${text}\n\n${replyHint}`
           )
           await new SupportMessage({
             messageId: sent.message_id,
@@ -666,11 +667,12 @@ export default class Navigation {
       // Admin replying → send to user
       const text = this.msg.text || ''
       const replyHint = this.dict.getString('SUPPORT_REPLY_HINT')
+      const header = this.dict.getString('SUPPORT_ADMIN_REPLY')
 
       if (text) {
         const sent = await this.bot.sendMessage(
           supportMsg.userChatId,
-          `${text}\n\n${replyHint}`
+          `${header}:\n\n${text}\n\n${replyHint}`
         )
         await new SupportMessage({
           messageId: sent.message_id,
@@ -693,29 +695,41 @@ export default class Navigation {
         }).save()
       }
 
-      await sendMessage({ text: '✅ Ответ отправлен', user: this.user, bot: this.bot })
+      await sendMessage({ text: this.dict.getString('SUPPORT_REPLY_CONFIRMED'), user: this.user, bot: this.bot })
     } else {
-      // User replying → forward to admin
+      // User replying → send to admin
       const adminUser = await User.findOne({ username: process.env.ADMIN_USERNAME })
       if (!adminUser) return
 
-      const forwarded = await this.bot.forwardMessage(
-        adminUser.chatId,
-        this.user.chatId,
-        this.msg.message_id
-      )
+      const text = this.msg.text || this.msg.caption || ''
+      const username = this.user.username ? `@${this.user.username}` : this.dict.getString('SUPPORT_NO_USERNAME')
+      const replyHint = this.dict.getString('SUPPORT_REPLY_HINT')
+      const header = this.dict.getString('SUPPORT_USER_REPLY', { name: this.user.name, username })
 
-      const username = this.user.username ? `@${this.user.username}` : 'без username'
-      await this.bot.sendMessage(
-        adminUser.chatId,
-        `📩 Ответ от ${this.user.name} (${username})\nИспользуйте Reply to, чтобы ответить`
-      )
-
-      await new SupportMessage({
-        messageId: forwarded.message_id,
-        chatId: adminUser.chatId,
-        userChatId: this.user.chatId,
-      }).save()
+      if (!this.msg.text && (this.msg.photo || this.msg.voice || this.msg.document)) {
+        // Non-text: forward + info message
+        const forwarded = await this.bot.forwardMessage(adminUser.chatId, this.user.chatId, this.msg.message_id)
+        await this.bot.sendMessage(
+          adminUser.chatId,
+          `${header}\n\n${replyHint}`
+        )
+        await new SupportMessage({
+          messageId: forwarded.message_id,
+          chatId: adminUser.chatId,
+          userChatId: this.user.chatId,
+        }).save()
+      } else if (text) {
+        // Text: single combined message (no forward)
+        const sent = await this.bot.sendMessage(
+          adminUser.chatId,
+          `${header}:\n\n${text}\n\n${replyHint}`
+        )
+        await new SupportMessage({
+          messageId: sent.message_id,
+          chatId: adminUser.chatId,
+          userChatId: this.user.chatId,
+        }).save()
+      }
 
       await sendMessage({
         text: this.dict.getString('SUPPORT_SENT'),

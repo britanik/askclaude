@@ -259,8 +259,28 @@ export default class Dict {
         eng: () => `Message sent to support`
       },
       SUPPORT_REPLY_HINT: {
-        rus: () => `Используйте Reply to, чтобы ответить`,
-        eng: () => `Use Reply to to respond`
+        rus: () => `Используйте «Ответить» на это сообщение, чтобы ответить`,
+        eng: () => `Use "Reply" to this message to respond`
+      },
+      SUPPORT_NO_USERNAME: {
+        rus: () => `без username`,
+        eng: () => `no username`
+      },
+      SUPPORT_NEW_MESSAGE: {
+        rus: () => `📩 Поддержка от {name} ({username})`,
+        eng: () => `📩 Support from {name} ({username})`
+      },
+      SUPPORT_USER_REPLY: {
+        rus: () => `📩 Ответ от {name} ({username})`,
+        eng: () => `📩 Reply from {name} ({username})`
+      },
+      SUPPORT_ADMIN_REPLY: {
+        rus: () => `📩 Ответ от поддержки`,
+        eng: () => `📩 Reply from support`
+      },
+      SUPPORT_REPLY_CONFIRMED: {
+        rus: () => `✅ Ответ отправлен`,
+        eng: () => `✅ Reply sent`
       },
       SUPPORT_ADMIN_ERROR: {
         rus: () => `Ошибка: администратор не найден.`,
