@@ -27,8 +27,8 @@ export default class Dict {
         eng: () => `Hey!`
       },
       ASSISTANT_ERROR: {
-        rus: () => `Приносим извинения за временные неудобства, но произошла какая-то ошибка. Попробуйте позже или сообщите в нашу поддержку: @owner_bvptmx`,
-        eng: () => `We apologize for the inconvenience, but an error has occurred. Please try again later or contact our support: @owner_bvptmx`
+        rus: () => `Приносим извинения за временные неудобства, но произошла какая-то ошибка. Попробуйте позже или сообщите в /support или @owner_bvptmx`,
+        eng: () => `We apologize for the inconvenience, but an error has occurred. Please try again later or contact our /support or @owner_bvptmx`
       },
       SETTINGS_TITLE: {
         rus: () => `⚙️ Настройки`,
@@ -259,8 +259,8 @@ export default class Dict {
         eng: () => `Message sent to support`
       },
       SUPPORT_REPLY_HINT: {
-        rus: () => `Используйте «Ответить» на это сообщение, чтобы ответить`,
-        eng: () => `Use "Reply" to this message to respond`
+        rus: () => `ℹ️ Используйте «Ответить» на это сообщение, чтобы ответить`,
+        eng: () => `ℹ️ Use "Reply" to this message to respond`
       },
       SUPPORT_NO_USERNAME: {
         rus: () => `без username`,
