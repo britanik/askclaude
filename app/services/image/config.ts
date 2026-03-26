@@ -7,7 +7,12 @@ export interface ImageModelConfig {
 }
 
 export const IMAGE_MODEL_CONFIG: Record<string, ImageModelConfig> = {
-  // Gemini models
+  // Nano Banana 2
+  'gemini-3.1-flash-image-preview': {
+    provider: 'gemini'
+  },
+
+  // Nano Banana Pro
   'gemini-3-pro-image-preview': {
     provider: 'gemini'
   },
@@ -21,6 +26,7 @@ export const IMAGE_MODEL_CONFIG: Record<string, ImageModelConfig> = {
     provider: 'openai',
     model: 'gpt-5'
   },
+
   // GetImg models
   'getimg-essential': {
     provider: 'getimg',
