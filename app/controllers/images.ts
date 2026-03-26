@@ -271,7 +271,8 @@ export async function getTopTierUsage(user: IUser): Promise<number> {
   return await Image.countDocuments({
     user: user._id,
     tier: 'top',
-    created: { $gte: startOfDay }
+    created: { $gte: startOfDay },
+    provider: { $ne: 'unknown' }
   });
 }
 
@@ -309,7 +310,8 @@ export async function getPeriodImageUsage(user: IUser): Promise<number> {
   
   return await Image.countDocuments({
     user: user._id,
-    created: { $gte: startOfDay }
+    created: { $gte: startOfDay },
+    provider: { $ne: 'unknown' }
   });
 }
 
