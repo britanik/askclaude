@@ -87,12 +87,32 @@ export default class Dict {
         eng: () => `Resets in {time}.`
       },
       SETTINGS_DAILY_TOKEN_LIMIT_EXCEEDED: {
-        rus: () => `Дневной лимит токенов исчерпан. Вы можете продолжить через {time}`,
-        eng: () => `Daily token limit exceeded. You can continue in {time}`
+        rus: () => `Ответы на сегодня закончились 🙂 Продолжим через {time}.`,
+        eng: () => `You've run out of answers for today 🙂 We'll continue in {time}.`
       },
       SETTINGS_DAILY_TOKEN_LIMIT_INFO: {
-        rus: () => `Вы можете продолжить диалог прямо сейчас всего за 49 руб.`,
-        eng: () => `You can continue the conversation right now for just 49 rub.`
+        rus: () => `Этот бот — мой инди-проект. Количество пользователей растет и бесплатный лимит это максимум, который я могу себе позволить (каждый ответ стоит реальных денег). Если бот вам полезен — поддержите проект и продолжите общение прямо сейчас за стоимость половинки сырка "Б.Ю. Александров" :)`,
+        eng: () => `This bot is my indie project. Every response costs real money. The number of users is growing and the free limit is the most I can afford. If the bot is useful to you — support the project and continue chatting right now :)`
+      },
+      PAY_CONFIRM_HEADER: {
+        rus: () => `Пакет +{tokens} токенов на {label} за {price} рублей.`,
+        eng: () => `Package +{tokens} tokens for {label} for {price} rubles.`
+      },
+      PAY_CONFIRM_INFO: {
+        rus: () => `Вы получите {tokens} токенов — хватит на десяток развёрнутых диалогов с ИИ. После оплаты бот мгновенно ответит на ваш последний вопрос. Спасибо, что поддерживаете проект.`,
+        eng: () => `You will receive {tokens} tokens — enough for a dozen detailed AI conversations. After payment, the bot will instantly answer your last question. Thank you for supporting the project.`
+      },
+      PAY_CONFIRM_SECURITY: {
+        rus: () => `🔒 Безопасная оплата картой или СБП через CloudPayments (Т-Банк).\nОферта, политика, реквизиты — https://askclaude.ru/legal`,
+        eng: () => `🔒 Secure payment by card or SBP via CloudPayments (T-Bank).\nTerms, policy, details — https://askclaude.ru/legal`
+      },
+      PAY_CONFIRM_BUTTON: {
+        rus: () => `Перейти к оплате`,
+        eng: () => `Proceed to payment`
+      },
+      PAY_CONTINUE_BUTTON: {
+        rus: () => `Продолжить на {label} — {price} ₽`,
+        eng: () => `Continue for {label} — {price} ₽`
       },
       SETTINGS_DAILY_TOKEN_LIMIT: {
         rus: () => `Дневной лимит токенов`,
