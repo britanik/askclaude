@@ -11,7 +11,9 @@ export async function tmplLimits(user: IUser, bot: TelegramBot, dict: Dict) {
 
   await userController.updateMessage(user, 'payConfirm', null);
 
-  const limitMessage = await getTokenLimitMessage(user);
+  let limitMessage = `${await getTokenLimitMessage(user, dict)}\n
+ℹ️ ${dict.getString('SETTINGS_DAILY_TOKEN_LIMIT_INFO')}`
+  
 
   const showPackageButtons = canAccessPremium(user);
 
@@ -21,10 +23,12 @@ export async function tmplLimits(user: IUser, bot: TelegramBot, dict: Dict) {
     callback_data: JSON.stringify({ a: 'payConfirm', plan: plan as PaymentPlan })
   }));
 
+  const buttonRows = planButtons.map(btn => [btn]);
+
   await sendMessage({
     text: limitMessage,
     user,
     bot,
-    buttons: showPackageButtons ? [planButtons] : undefined
+    buttons: showPackageButtons ? buttonRows : undefined
   });
 }

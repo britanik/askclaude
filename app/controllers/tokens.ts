@@ -55,20 +55,20 @@ export async function isTokenLimit(user: IUser): Promise<ITokenLimitResult> {
 }
 
 // Check which limit was reached and return appropriate message
-export async function getTokenLimitMessage(user: IUser): Promise<string> {
+export async function getTokenLimitMessage(user: IUser, dict: any): Promise<string> {
   try {
     const dailyUsage: number = await getDailyTokenUsage(user);
     const dailyLimit = await getDailyTokenLimit(user);
     const packageRemaining = await getPackageRemainingTokens(user);
 
     if (dailyUsage >= dailyLimit && packageRemaining <= 0) {
-      return `Лимит токенов исчерпан. Дневной лимит обновится через ${getTimeToNextDay()}`;
+      return dict.getString('SETTINGS_DAILY_TOKEN_LIMIT_EXCEEDED', { time: getTimeToNextDay() });
     }
 
     return '';
   } catch (error) {
     console.error('Error getting token limit message:', error);
-    return 'Лимит токенов исчерпан.';
+    return dict.getString('SETTINGS_DAILY_TOKEN_LIMIT_EXCEEDED', { time: '' });
   }
 }
 

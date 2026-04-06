@@ -87,8 +87,12 @@ export default class Dict {
         eng: () => `Resets in {time}.`
       },
       SETTINGS_DAILY_TOKEN_LIMIT_EXCEEDED: {
-        rus: () => `Дневной лимит токенов исчерпан. Вы можете продолжить через {time}.`,
-        eng: () => `Daily token limit exceeded. You can continue in {time}.`
+        rus: () => `Дневной лимит токенов исчерпан. Вы можете продолжить через {time}`,
+        eng: () => `Daily token limit exceeded. You can continue in {time}`
+      },
+      SETTINGS_DAILY_TOKEN_LIMIT_INFO: {
+        rus: () => `Вы можете продолжить диалог прямо сейчас всего за 49 руб.`,
+        eng: () => `You can continue the conversation right now for just 49 rub.`
       },
       SETTINGS_DAILY_TOKEN_LIMIT: {
         rus: () => `Дневной лимит токенов`,
