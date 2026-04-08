@@ -104,13 +104,13 @@ export async function getDailyTokenLimit(user: IUser): Promise<number> {
 
     if (isAdmin(user)) {
       baseLimit = +process.env.TOKENS_DAILY_LIMIT_ADMIN;
-      bonusPerReferral = +process.env.TOKENS_DAILY_PER_REFERRAL_ADMIN;
+      bonusPerReferral = +process.env.TOKENS_BONUS_REFERRAL_ADMIN;
     } else if (isTester(user)) {
       baseLimit = +process.env.TOKENS_DAILY_LIMIT_TESTER || +process.env.TOKENS_DAILY_LIMIT;
-      bonusPerReferral = +process.env.TOKENS_DAILY_PER_REFERRAL_TESTER || +process.env.TOKENS_DAILY_PER_REFERRAL;
+      bonusPerReferral = +process.env.TOKENS_BONUS_REFERRAL_TESTER || +process.env.TOKENS_BONUS_REFERRAL;
     } else {
       baseLimit = +process.env.TOKENS_DAILY_LIMIT;
-      bonusPerReferral = +process.env.TOKENS_DAILY_PER_REFERRAL;
+      bonusPerReferral = +process.env.TOKENS_BONUS_REFERRAL;
     }
 
     // Find user's invite code

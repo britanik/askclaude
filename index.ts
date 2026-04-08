@@ -64,8 +64,8 @@ const startNavigation = async (msg = null, callbackQuery = null) => {
       const isValid:IInvite = await isValidInviteCode(code);
       if( isValid ){
         await processReferral(user, isValid);
-        await sendMessage({ text: `✅ Спасибо! Вы активировали код приглашения и получили +${+process.env.TOKENS_DAILY_PER_REFERRAL} токенов в день`, user, bot });
-        await sendMessage({ text: `✅ Ваш друг активировал код и Вы оба получили +${+process.env.TOKENS_DAILY_PER_REFERRAL} к лимитам.`, user: isValid.owner, bot })
+        await sendMessage({ text: `✅ Спасибо! Вы активировали код приглашения и получили +${+process.env.TOKENS_BONUS_REFERRAL} токенов в день`, user, bot });
+        await sendMessage({ text: `✅ Ваш друг активировал код и Вы оба получили +${+process.env.TOKENS_BONUS_REFERRAL} к лимитам.`, user: isValid.owner, bot })
       }
     }
 
