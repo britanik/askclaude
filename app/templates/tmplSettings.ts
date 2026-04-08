@@ -3,6 +3,7 @@ import { sendMessage } from "./sendMessage"
 import TelegramBot from "node-telegram-bot-api"
 import Dict from "../helpers/dict"
 import { getDailyTokenLimit, getDailyTokenUsage } from "../controllers/tokens";
+import { getUserBonusTotal } from "../controllers/bonus";
 import { getPeriodImageLimit, getPeriodImageUsage } from "../controllers/images";
 import moment from "moment";
 import { canAccessPremium, getActivePackagesSorted, getTodayExpiredPackages } from "../helpers/helpers";
@@ -10,6 +11,7 @@ import { canAccessPremium, getActivePackagesSorted, getTodayExpiredPackages } fr
 export async function tmplSettings(user: IUser, bot: TelegramBot, dict: Dict) {
   const dailyTokenUsage:number = await getDailyTokenUsage(user);
   const dailyTokenLimit:number = await getDailyTokenLimit(user);
+  const bonusTotal:number = await getUserBonusTotal(user);
   const imageUsage:number = await getPeriodImageUsage(user);
   const imageLimit:number = await getPeriodImageLimit(user);
 
@@ -66,7 +68,7 @@ ${dict.getString('SETTINGS_FORMATS_STRING')}
 ${user.prefs.lang === 'eng' ? 'English' : 'Русский'}
 
 <b>${dict.getString('SETTINGS_TOKEN_LIMITS')}:</b>
-☀️ ${dict.getString('SETTINGS_LIMITS_DAILY')}: ${formatNumber(dailyTokenUsage)} / ${formatNumber(dailyTokenLimit)}${packageLines}
+☀️ ${dict.getString('SETTINGS_LIMITS_DAILY')}: ${formatNumber(dailyTokenUsage)} / ${formatNumber(dailyTokenLimit)}${packageLines}${bonusTotal > 0 ? `\n🎁 ${isRus ? 'Бонусы' : 'Bonuses'}: +${formatNumber(bonusTotal)} ${isRus ? 'токенов/день' : 'tokens/day'}` : ''}
 🏞️ ${dict.getString('SETTINGS_LIMITS_IMAGES')}: ${formatNumber(imageUsage)} / ${formatNumber(imageLimit)} ${dict.getString('SETTINGS_LIMITS_PER_DAY')}
 
 ℹ️ <i>${dict.getString('SETTINGS_USAGE_ADVICE')}</i>

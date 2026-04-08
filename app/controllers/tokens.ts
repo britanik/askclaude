@@ -8,6 +8,7 @@ import Usage from '../models/usage';
 import Invite from '../models/invites';
 import Limit from '../models/limits';
 import { isAdmin, isTester, getPackageRemainingTokens, attributePackageUsage } from '../helpers/helpers';
+import { getUserBonusTotal } from './bonus';
 
 
 // Update user schema to remove token_balance field
@@ -122,8 +123,10 @@ export async function getDailyTokenLimit(user: IUser): Promise<number> {
       referralBonus = usedInvitesCount * bonusPerReferral;
     }
 
-    // Return the daily limit (base + referral only, packages are tracked separately)
-    return baseLimit + referralBonus;
+    const bonusTotal = await getUserBonusTotal(user);
+
+    // Return the daily limit (base + referral + bonuses, packages are tracked separately)
+    return baseLimit + referralBonus + bonusTotal;
   } catch (error) {
     console.error('Error calculating daily token limit:', error);
     // Return default limit in case of error

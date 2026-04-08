@@ -337,6 +337,10 @@ export default class Dict {
       NOTION_SEARCH_ERROR: {
         rus: () => `⚠️ Ошибка при поиске в Notion. Проверьте настройки API ключа. Выполняю обычный запрос.`,
         eng: () => `⚠️ Error searching Notion. Check your API key settings. Performing regular request.`
+      },
+      BONUS_STORY_THANKS: {
+        rus: () => `🎉 Спасибо за упоминание в сторис! +{amount} токенов к дневному лимиту`,
+        eng: () => `🎉 Thanks for the story mention! +{amount} tokens added to daily limit`
       }
     }
   }
