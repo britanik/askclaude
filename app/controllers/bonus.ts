@@ -4,6 +4,7 @@ import { IUser } from '../interfaces/users';
 import Bonus from '../models/bonus';
 import Dict from '../helpers/dict';
 import { sendMessage } from '../templates/sendMessage';
+import { isAdmin, isTester } from '../helpers/helpers';
 
 export async function createBonus(user: IUser, type: 'story' | 'promo', amount: number, source: string, description?: string): Promise<boolean> {
   try {
@@ -36,7 +37,14 @@ export async function getUserBonusTotal(user: IUser): Promise<number> {
 }
 
 export async function processStory(user: IUser, bot: TelegramBot): Promise<void> {
-  const bonusAmount = +(process.env.TOKENS_BONUS_STORY || 10000);
+  let bonusAmount: number;
+  if (isAdmin(user)) {
+    bonusAmount = +process.env.TOKENS_BONUS_STORY_ADMIN;
+  } else if (isTester(user)) {
+    bonusAmount = +process.env.TOKENS_BONUS_STORY_TESTER || +(process.env.TOKENS_BONUS_STORY || 10000);
+  } else {
+    bonusAmount = +(process.env.TOKENS_BONUS_STORY || 10000);
+  }
   const today = moment().format('YYYY-MM-DD');
   const source = `story_${today}`;
   const created = await createBonus(user, 'story', bonusAmount, source);
