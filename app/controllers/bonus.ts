@@ -2,6 +2,7 @@ import moment from 'moment';
 import TelegramBot from 'node-telegram-bot-api';
 import { IUser } from '../interfaces/users';
 import Bonus from '../models/bonus';
+import User from '../models/users';
 import Dict from '../helpers/dict';
 import { sendMessage } from '../templates/sendMessage';
 import { isAdmin, isTester } from '../helpers/helpers';
@@ -52,5 +53,13 @@ export async function processStory(user: IUser, bot: TelegramBot): Promise<void>
     const dict = new Dict(user);
     const text = dict.getString('BONUS_STORY_THANKS', { amount: bonusAmount.toLocaleString('ru-RU') });
     await sendMessage({ text, user, bot });
+
+    if (process.env.NOTIFY_ADMIN_STORY_PUBLISHED === '1') {
+      const adminUser = await User.findOne({ username: process.env.ADMIN_USERNAME });
+      if (adminUser) {
+        const who = user.username ? `@${user.username}` : user.name;
+        await bot.sendMessage(adminUser.chatId, `📱 Story опубликована: ${who}, +${bonusAmount.toLocaleString('ru-RU')} токенов`);
+      }
+    }
   }
 }
