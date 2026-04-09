@@ -13,9 +13,9 @@ export async function tmplInvite(user: IUser, bot: TelegramBot, dict: Dict) {
 
   const appUrl = `https://askclaude.ru/app?code=${inviteCode}`;
   const buttons = [[
-    { text: '📲 Пригласить в сторис', web_app: { url: appUrl } } as any
+    { text: '🎁 Пригласить в сторис', web_app: { url: appUrl } } as any
   ]];
 
-  await sendMessage({ text: 'Перешли следующее сообщение:', user, bot });
+  await sendMessage({ text: 'ℹ️ <b>Увеличение лимита токенов (в день):</b>\nСторис +6000 (20%) в день\nРегистрация +20000 (60%) в день', user, bot });
   await sendMessage({ text, user, bot, buttons });
 }

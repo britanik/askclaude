@@ -131,8 +131,8 @@ export default class Dict {
         eng: () => `(Increased until {date} 🚀)`
       },
       SETTINGS_PREMIUM_HINT: {
-        rus: () => `(Увеличить лимиты /tokens 🚀)`,
-        eng: () => `(Increase limits /tokens 🚀)`
+        rus: () => `(Пакеты токенов /tokens 🚀)`,
+        eng: () => `(Extra token packages /tokens 🚀)`
       },
       SETTINGS_LIMITS_DAILY: {
         rus: () => `В день`,
@@ -183,8 +183,8 @@ export default class Dict {
         eng: () => `🤑 Enter code`
       },
       BUTTON_INVITE_FRIEND: {
-        rus: () => `🎁 Пригласить`,
-        eng: () => `🎁 Invite`
+        rus: () => `🎁 Бонусы`,
+        eng: () => `🎁 Bonuses`
       },
       BUTTON_PDF_MANUAL: {
         rus: () => `🆘 Инструкция`,

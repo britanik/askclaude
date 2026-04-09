@@ -7,8 +7,10 @@ import { getUserBonusTotal } from "../controllers/bonus";
 import { getPeriodImageLimit, getPeriodImageUsage } from "../controllers/images";
 import moment from "moment";
 import { canAccessPremium, getActivePackagesSorted, getTodayExpiredPackages } from "../helpers/helpers";
+import { generateInviteCode } from "../controllers/invites";
 
 export async function tmplSettings(user: IUser, bot: TelegramBot, dict: Dict) {
+  const inviteCode = await generateInviteCode(user);
   const dailyTokenUsage:number = await getDailyTokenUsage(user);
   const dailyTokenLimit:number = await getDailyTokenLimit(user);
   const bonusTotal:number = await getUserBonusTotal(user);
@@ -22,6 +24,7 @@ export async function tmplSettings(user: IUser, bot: TelegramBot, dict: Dict) {
 
   // Build package lines
   let packageLines = '';
+  let upgradeHint = '';
   const isRus = dict.lang === 'rus';
 
   if (canAccessPremium(user)) {
@@ -55,7 +58,7 @@ export async function tmplSettings(user: IUser, bot: TelegramBot, dict: Dict) {
     }
 
     if (activePackages.length === 0 && expiredTodayPackages.length === 0) {
-      packageLines = ` <i>${dict.getString('SETTINGS_PREMIUM_HINT')}</i>`;
+      upgradeHint = `\n<i>${dict.getString('SETTINGS_PREMIUM_HINT')}</i>`;
     }
   }
 
@@ -69,7 +72,7 @@ ${user.prefs.lang === 'eng' ? 'English' : 'Русский'}
 
 <b>${dict.getString('SETTINGS_TOKEN_LIMITS')}:</b>
 ☀️ ${dict.getString('SETTINGS_LIMITS_DAILY')}: ${formatNumber(dailyTokenUsage)} / ${formatNumber(dailyTokenLimit)}${packageLines}${bonusTotal > 0 ? `\n🎁 ${isRus ? 'Бонусы' : 'Bonuses'}: +${formatNumber(bonusTotal)} ${isRus ? 'токенов/день' : 'tokens/day'}` : ''}
-🏞️ ${dict.getString('SETTINGS_LIMITS_IMAGES')}: ${formatNumber(imageUsage)} / ${formatNumber(imageLimit)} ${dict.getString('SETTINGS_LIMITS_PER_DAY')}
+🏞️ ${dict.getString('SETTINGS_LIMITS_IMAGES')}: ${formatNumber(imageUsage)} / ${formatNumber(imageLimit)} ${dict.getString('SETTINGS_LIMITS_PER_DAY')}${upgradeHint}
 
 ℹ️ <i>${dict.getString('SETTINGS_USAGE_ADVICE')}</i>
 
@@ -81,7 +84,7 @@ ${user.prefs.lang === 'eng' ? 'English' : 'Русский'}
       { text: dict.getString('BUTTON_PDF_MANUAL'), callback_data: '{"a":"settings","v":"manual"}' },
     ],
     [
-      { text: dict.getString('BUTTON_INVITE_FRIEND'), callback_data: '{"a":"settings","v":"invite"}' },
+      { text: dict.getString('BUTTON_INVITE_FRIEND'), web_app: { url: `https://askclaude.ru/app?code=${inviteCode}` } } as any,
       { text: dict.getString('BUTTON_CODE'), callback_data: '{"a":"settings","v":"code"}' },
     ]
   ];
