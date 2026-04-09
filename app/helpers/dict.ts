@@ -271,8 +271,8 @@ export default class Dict {
         ]
       },
       SUPPORT_PROMPT: {
-        rus: () => `Напишите сообщение в поддержку и мы скоро ответим (отменить /new)`,
-        eng: () => `Write a message to support and we will reply soon (cancel /new)`
+        rus: () => `Мы обожаем получать сообщения — вопросы, пожелания, жалобы, признания в любви, рецепты борща, мысли в 3 ночи... Пишите:\n\nℹ️ Отменить /new`,
+        eng: () => `We love getting messages — questions, wishes, complaints, love letters, cookie recipes, 3am thoughts... Write away:\n\nℹ️ Cancel /new`
       },
       SUPPORT_RECEIVED: {
         rus: () => `Спасибо, сообщение получено`,
