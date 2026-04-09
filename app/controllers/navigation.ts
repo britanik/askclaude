@@ -1022,7 +1022,7 @@ export default class Navigation {
       callback: async () => {
         const plan = this.data.plan as PaymentPlan;
         if (plan === '24h' || plan === '7d') {
-          await tmplPayConfirm(this.user, this.bot, plan);
+          await tmplPayConfirm(this.user, this.bot, plan, this.dict);
         }
       }
     }

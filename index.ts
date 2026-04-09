@@ -11,6 +11,7 @@ import { getReadableId } from './app/helpers/helpers'
 import Dict from './app/helpers/dict'
 import Navigation from './app/controllers/navigation'
 import { extractReferralCode, isValidInviteCode, processReferral } from './app/controllers/invites'
+import { processStory } from './app/controllers/bonus'
 import { sendMessage } from './app/templates/sendMessage'
 import { IInvite } from './app/models/invites'
 import { abortIfSequence } from './app/helpers/messageBuffer'
@@ -63,8 +64,8 @@ const startNavigation = async (msg = null, callbackQuery = null) => {
       const isValid:IInvite = await isValidInviteCode(code);
       if( isValid ){
         await processReferral(user, isValid);
-        await sendMessage({ text: `✅ Спасибо! Вы активировали код приглашения и получили +${+process.env.TOKENS_DAILY_PER_REFERRAL} токенов в день`, user, bot });
-        await sendMessage({ text: `✅ Ваш друг активировал код и Вы оба получили +${+process.env.TOKENS_DAILY_PER_REFERRAL} к лимитам.`, user: isValid.owner, bot })
+        await sendMessage({ text: `✅ Спасибо! Вы активировали код приглашения и получили +${+process.env.TOKENS_BONUS_REFERRAL} токенов в день`, user, bot });
+        await sendMessage({ text: `✅ Ваш друг активировал код и Вы оба получили +${+process.env.TOKENS_BONUS_REFERRAL} к лимитам.`, user: isValid.owner, bot })
       }
     }
 
@@ -91,6 +92,14 @@ bot.on('message', async ( msg, param ) => {
   try{
     if( msg.photo && msg.photo.length > 0 ){
       // console.log(msg.photo[msg.photo.length-1].file_id,'file_id')
+    }
+
+    if ((msg as any).story) {
+      const user = await User.findOne({ chatId: msg.chat.id });
+      if (user) {
+        await processStory(user, bot);
+      }
+      return;
     }
 
     // If user sends a new message while previous is being processed — mark as aborted

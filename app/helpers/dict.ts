@@ -87,8 +87,32 @@ export default class Dict {
         eng: () => `Resets in {time}.`
       },
       SETTINGS_DAILY_TOKEN_LIMIT_EXCEEDED: {
-        rus: () => `Дневной лимит токенов исчерпан. Вы можете продолжить через {time}.`,
-        eng: () => `Daily token limit exceeded. You can continue in {time}.`
+        rus: () => `Ответы на сегодня закончились 🙂 Продолжим через {time}.`,
+        eng: () => `You've run out of answers for today 🙂 We'll continue in {time}.`
+      },
+      SETTINGS_DAILY_TOKEN_LIMIT_INFO: {
+        rus: () => `Этот бот — мой инди-проект. Количество пользователей растет и бесплатный лимит это максимум, который я могу себе позволить (каждый ответ стоит реальных денег). Если бот вам полезен — поддержите проект и продолжите общение прямо сейчас за стоимость половинки сырка "Б.Ю. Александров" :)`,
+        eng: () => `This bot is my indie project. Every response costs real money. The number of users is growing and the free limit is the most I can afford. If the bot is useful to you — support the project and continue chatting right now :)`
+      },
+      PAY_CONFIRM_HEADER: {
+        rus: () => `Пакет +{tokens} токенов на {label} за {price} рублей.`,
+        eng: () => `Package +{tokens} tokens for {label} for {price} rubles.`
+      },
+      PAY_CONFIRM_INFO: {
+        rus: () => `Вы получите {tokens} токенов — хватит на десяток развёрнутых диалогов с ИИ. После оплаты бот мгновенно ответит на ваш последний вопрос. Спасибо, что поддерживаете проект.`,
+        eng: () => `You will receive {tokens} tokens — enough for a dozen detailed AI conversations. After payment, the bot will instantly answer your last question. Thank you for supporting the project.`
+      },
+      PAY_CONFIRM_SECURITY: {
+        rus: () => `🔒 Безопасная оплата картой или СБП через CloudPayments (Т-Банк).\nОферта, политика, реквизиты — https://askclaude.ru/legal`,
+        eng: () => `🔒 Secure payment by card or SBP via CloudPayments (T-Bank).\nTerms, policy, details — https://askclaude.ru/legal`
+      },
+      PAY_CONFIRM_BUTTON: {
+        rus: () => `Перейти к оплате`,
+        eng: () => `Proceed to payment`
+      },
+      PAY_CONTINUE_BUTTON: {
+        rus: () => `Продолжить на {label} — {price} ₽`,
+        eng: () => `Continue for {label} — {price} ₽`
       },
       SETTINGS_DAILY_TOKEN_LIMIT: {
         rus: () => `Дневной лимит токенов`,
@@ -107,8 +131,8 @@ export default class Dict {
         eng: () => `(Increased until {date} 🚀)`
       },
       SETTINGS_PREMIUM_HINT: {
-        rus: () => `(Увеличить лимиты /tokens 🚀)`,
-        eng: () => `(Increase limits /tokens 🚀)`
+        rus: () => `(Пакеты токенов /tokens 🚀)`,
+        eng: () => `(Extra token packages /tokens 🚀)`
       },
       SETTINGS_LIMITS_DAILY: {
         rus: () => `В день`,
@@ -159,8 +183,8 @@ export default class Dict {
         eng: () => `🤑 Enter code`
       },
       BUTTON_INVITE_FRIEND: {
-        rus: () => `🎁 Пригласить`,
-        eng: () => `🎁 Invite`
+        rus: () => `🎁 Бонусы`,
+        eng: () => `🎁 Bonuses`
       },
       BUTTON_PDF_MANUAL: {
         rus: () => `🆘 Инструкция`,
@@ -247,8 +271,8 @@ export default class Dict {
         ]
       },
       SUPPORT_PROMPT: {
-        rus: () => `Напишите сообщение в поддержку и мы скоро ответим (или отменить - /new)`,
-        eng: () => `Write a message to support and we will reply soon (or cancel - /new)`
+        rus: () => `Мы обожаем получать сообщения — вопросы, пожелания, жалобы, признания в любви, рецепты борща, мысли в 3 ночи... Пишите:\n\nℹ️ Отменить /new`,
+        eng: () => `We love getting messages — questions, wishes, complaints, love letters, cookie recipes, 3am thoughts... Write away:\n\nℹ️ Cancel /new`
       },
       SUPPORT_RECEIVED: {
         rus: () => `Спасибо, сообщение получено`,
@@ -313,6 +337,10 @@ export default class Dict {
       NOTION_SEARCH_ERROR: {
         rus: () => `⚠️ Ошибка при поиске в Notion. Проверьте настройки API ключа. Выполняю обычный запрос.`,
         eng: () => `⚠️ Error searching Notion. Check your API key settings. Performing regular request.`
+      },
+      BONUS_STORY_THANKS: {
+        rus: () => `🎉 Спасибо за упоминание в сторис! +{amount} токенов к дневному лимиту`,
+        eng: () => `🎉 Thanks for the story mention! +{amount} tokens added to daily limit`
       }
     }
   }
