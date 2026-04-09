@@ -174,9 +174,17 @@ export default class Navigation {
       callback: async () => {
         this.user = await userController.updatePref(this.user, 'lang', this.data.v)
         this.dict.setLang(this.data.v)
-        
+
         // After setting language, show settings page first
-        await tmplSettings(this.user, this.bot, this.dict);        
+        await tmplSettings(this.user, this.bot, this.dict);
+
+        // Auto-start new chat 2 seconds after language selection
+        // (skip if user already clicked the button themselves)
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        const freshUser = await User.findById(this.user._id);
+        if (freshUser?.step !== 'assistant') {
+          await this.assistant().action();
+        }
       },
     }
   }
