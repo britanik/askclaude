@@ -271,8 +271,8 @@ export default class Dict {
         ]
       },
       SUPPORT_PROMPT: {
-        rus: () => `Напишите сообщение в поддержку и мы скоро ответим (или отменить - /new)`,
-        eng: () => `Write a message to support and we will reply soon (or cancel - /new)`
+        rus: () => `Напишите сообщение в поддержку и мы скоро ответим (отменить /new)`,
+        eng: () => `Write a message to support and we will reply soon (cancel /new)`
       },
       SUPPORT_RECEIVED: {
         rus: () => `Спасибо, сообщение получено`,
