@@ -7,13 +7,14 @@ import { canAccessPremium } from "../helpers/helpers";
 import * as userController from "../controllers/users";
 import { PLANS, PaymentPlan } from "../controllers/payments";
 
-export async function tmplLimits(user: IUser, bot: TelegramBot, dict: Dict) {
-
+export async function tmplLimits(user: IUser, bot: TelegramBot, dict: Dict, showLimitMessage: boolean = true) {
   await userController.updateMessage(user, 'payConfirm', null);
 
   const time = getTimeToNextDay();
-  const limitMessage = `${dict.getString('SETTINGS_DAILY_TOKEN_LIMIT_EXCEEDED', { time })}\n
-<i>ℹ️ ${dict.getString('SETTINGS_DAILY_TOKEN_LIMIT_INFO')}</i>`;
+  const exceededLine = showLimitMessage
+    ? `${dict.getString('SETTINGS_DAILY_TOKEN_LIMIT_EXCEEDED', { time })}\n\n`
+    : '';
+  const limitMessage = `${exceededLine}<i>ℹ️ ${dict.getString('SETTINGS_DAILY_TOKEN_LIMIT_INFO')}</i>`;
 
   const showPackageButtons = canAccessPremium(user);
 

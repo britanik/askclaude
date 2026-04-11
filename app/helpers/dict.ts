@@ -95,12 +95,16 @@ export default class Dict {
         eng: () => `This bot is my indie project. Every response costs real money. The number of users is growing and the free limit is the most I can afford. If the bot is useful to you — support the project and continue chatting right now :)`
       },
       PAY_CONFIRM_HEADER: {
-        rus: () => `Пакет +{tokens} токенов на {label} за {price} рублей.`,
-        eng: () => `Package +{tokens} tokens for {label} for {price} rubles.`
+        rus: () => `Пакет +{tokens} токенов на {label} всего за {price} рублей.`,
+        eng: () => `Package +{tokens} tokens for {label} for only {price} rubles.`
       },
       PAY_CONFIRM_INFO: {
         rus: () => `Вы получите {tokens} токенов — хватит на десяток развёрнутых диалогов с ИИ. После оплаты бот мгновенно ответит на ваш последний вопрос. Спасибо, что поддерживаете проект.`,
         eng: () => `You will receive {tokens} tokens — enough for a dozen detailed AI conversations. After payment, the bot will instantly answer your last question. Thank you for supporting the project.`
+      },
+      PAY_CONFIRM_INFO_7D: {
+        rus: () => `Целая неделя с ИИ без перерывов — {tokens} токенов хватит на большой проект, подготовку к экзамену или сотню живых диалогов. После оплаты бот мгновенно продолжит с вашего последнего вопроса. Спасибо, что поддерживаете проект!`,
+        eng: () => `A whole week of non-stop AI — {tokens} tokens are enough for a big project, exam prep, or a hundred lively conversations. After payment, the bot will instantly continue from your last question. Thank you for supporting the project!`
       },
       PAY_CONFIRM_SECURITY: {
         rus: () => `🔒 Безопасная оплата картой или СБП через CloudPayments (Т-Банк).\nОферта, политика, реквизиты — https://askclaude.ru/legal`,

@@ -997,20 +997,7 @@ export default class Navigation {
           return;
         }
 
-        await userController.updateMessage(this.user, 'payConfirm', null);
-
-        const formatNumber = (n: number) => n.toLocaleString('ru-RU');
-        const planButtons = Object.entries(PLANS).map(([plan, config]) => ({
-          text: `+${formatNumber(config.tokenLimit)} / ${config.label} — ${config.price}₽`,
-          callback_data: JSON.stringify({ a: 'payConfirm', plan: plan as PaymentPlan })
-        }));
-
-        await sendMessage({
-          text: 'Выберите пакет токенов:',
-          user: this.user,
-          bot: this.bot,
-          buttons: [planButtons]
-        });
+        await tmplLimits(this.user, this.bot, this.dict, false);
       },
       callback: async () => {}
     }

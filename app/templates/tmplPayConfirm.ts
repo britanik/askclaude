@@ -11,9 +11,9 @@ export async function tmplPayConfirm(user: IUser, bot: TelegramBot, plan: Paymen
 
   const formatNumber = (n: number) => n.toLocaleString('ru-RU');
   const tokens = formatNumber(planDetails.tokenLimit);
-  const text = `${dict.getString('PAY_CONFIRM_HEADER', { tokens, label: planDetails.label, price: String(planDetails.price) })}
+  const text = `🚀 <b>${dict.getString('PAY_CONFIRM_HEADER', { tokens, label: planDetails.label, price: String(planDetails.price) })}</b>
 
-<i>ℹ️ ${dict.getString('PAY_CONFIRM_INFO', { tokens })}</i>
+<i>ℹ️ ${dict.getString(plan === '7d' ? 'PAY_CONFIRM_INFO_7D' : 'PAY_CONFIRM_INFO', { tokens })}</i>
 
 <i>${dict.getString('PAY_CONFIRM_SECURITY')}</i>`;
 
