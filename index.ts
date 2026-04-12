@@ -15,6 +15,8 @@ import { processStory } from './app/controllers/bonus'
 import { sendMessage } from './app/templates/sendMessage'
 import { IInvite } from './app/models/invites'
 import { abortIfSequence } from './app/helpers/messageBuffer'
+import { logEvent } from './app/controllers/log'
+import { isMenuClicked } from './app/controllers/menu'
 
 // Load .env
 if( fs.existsSync(path.join(__dirname, '.env')) ){
@@ -75,6 +77,24 @@ const startNavigation = async (msg = null, callbackQuery = null) => {
     await user.save()
 
   }
+
+  // Log command or button
+  try {
+    if (msg) {
+      const menuItem = isMenuClicked(msg)
+      if (menuItem) {
+        logEvent({ user, category: 'command', method: menuItem.method, text: msg.text })
+      }
+    }
+    if (callbackQuery?.data) {
+      const cbData = JSON.parse(callbackQuery.data)
+      const buttonText = callbackQuery.message?.reply_markup?.inline_keyboard
+        ?.flat()?.find(b => {
+          try { return JSON.parse(b.callback_data)?.a === cbData.a } catch { return false }
+        })?.text
+      logEvent({ user, category: 'button', method: cbData.a, text: buttonText || cbData.a, data: cbData })
+    }
+  } catch {}
 
   let navigation = new Navigation({
     user,

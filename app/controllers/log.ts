@@ -61,6 +61,22 @@ export async function addLog(params: IAddEventParams) {
   }
 }
 
+export async function logEvent(params: {
+  user: IUser,
+  category: 'command' | 'button' | 'template' | 'webapp',
+  method?: string,
+  template?: string,
+  text?: string,
+  data?: any,
+}) {
+  try {
+    if (params.user && isAdmin(params.user)) return
+    await new Log(params).save()
+  } catch (error) {
+    console.error('logEvent error:', error)
+  }
+}
+
 export function getLogName(log:ILog){
   const { user, data, method, template, msg } = log
   const methodName = () => {

@@ -20,4 +20,7 @@ const LogSchema = new Schema<ILog>({
   response: { type: String },
 })
 
+LogSchema.index({ user: 1, created: -1 })
+LogSchema.index({ category: 1, created: -1 })
+
 export default mongoose.model('Log', LogSchema);

@@ -31,6 +31,7 @@ import Package from "../models/packages"
 import { bufferMessage, markProcessing, isAborted, clearBuffer } from "../helpers/messageBuffer"
 import User from "../models/users"
 import SupportMessage from "../models/supportMessages"
+import { logEvent } from "./log"
 
 export interface INavigationParams {
   user?: IUser
@@ -170,6 +171,7 @@ export default class Navigation {
     return {
       action: async () => {
         await tmplRegisterLang(this.user, this.dict, this.bot)
+        logEvent({ user: this.user, category: 'template', template: 'tmplRegisterLang' })
       },
       callback: async () => {
         this.user = await userController.updatePref(this.user, 'lang', this.data.v)
@@ -177,6 +179,7 @@ export default class Navigation {
 
         // After setting language, show settings page first
         await tmplSettings(this.user, this.bot, this.dict);
+        logEvent({ user: this.user, category: 'template', template: 'tmplSettings' })
 
         // Auto-start new chat 2 seconds after language selection
         // (skip if user already clicked the button themselves)
@@ -194,6 +197,7 @@ export default class Navigation {
       action: async () => {
         const { tmplSettings } = require('../templates/tmplSettings');
         await tmplSettings(this.user, this.bot, this.dict);
+        logEvent({ user: this.user, category: 'template', template: 'tmplSettings' })
       },
       callback: async () => {
         if (this.data.v === 'code') {
@@ -222,6 +226,7 @@ export default class Navigation {
           user: this.user,
           bot: this.bot,
         })
+        logEvent({ user: this.user, category: 'template', template: 'enterCodePrompt' })
       },
       callback: async () => {
         // Process the entered code
@@ -233,24 +238,27 @@ export default class Navigation {
           const success = await processReferral(this.user, isValid);
           
           if (success) {
-            await sendMessage({ 
-              text: "✅ Спасибо! Вы активировали код приглашения и получили 100,000 токенов!", 
-              user: this.user, 
-              bot: this.bot 
+            await sendMessage({
+              text: "✅ Спасибо! Вы активировали код приглашения и получили 100,000 токенов!",
+              user: this.user,
+              bot: this.bot
             });
+            logEvent({ user: this.user, category: 'template', template: 'enterCodeSuccess' })
           } else {
-            await sendMessage({ 
-              text: "🚫 Не удалось активировать код. Возможно, вы уже использовали код приглашения или пытаетесь использовать свой собственный код.", 
-              user: this.user, 
-              bot: this.bot 
+            await sendMessage({
+              text: "🚫 Не удалось активировать код. Возможно, вы уже использовали код приглашения или пытаетесь использовать свой собственный код.",
+              user: this.user,
+              bot: this.bot
             });
+            logEvent({ user: this.user, category: 'template', template: 'enterCodeError' })
           }
         } else {
-          await sendMessage({ 
-            text: "🚫 Неверный код приглашения. Пожалуйста, проверьте код и попробуйте снова.", 
-            user: this.user, 
-            bot: this.bot 
+          await sendMessage({
+            text: "🚫 Неверный код приглашения. Пожалуйста, проверьте код и попробуйте снова.",
+            user: this.user,
+            bot: this.bot
           });
+          logEvent({ user: this.user, category: 'template', template: 'enterCodeError' })
           // Keep in enterCodeStep to allow retry
           return;
         }
@@ -262,6 +270,7 @@ export default class Navigation {
     return {
       action: async () => {
         await tmplInvite(this.user, this.bot, this.dict);
+        logEvent({ user: this.user, category: 'template', template: 'tmplInvite' })
       },
       callback: async () => {
       },
@@ -278,6 +287,7 @@ export default class Navigation {
         const limitCheck = await isTokenLimit(this.user);
         if( limitCheck.exceeded ){
           await tmplLimits(this.user, this.bot, this.dict);
+          logEvent({ user: this.user, category: 'template', template: 'tmplLimits' })
           return;
         }
         
@@ -400,6 +410,7 @@ export default class Navigation {
             await this.user.save();
 
             await tmplLimits(this.user, this.bot, this.dict)
+            logEvent({ user: this.user, category: 'template', template: 'tmplLimits' })
             return;
           }
 
@@ -509,6 +520,7 @@ export default class Navigation {
       action: async () => {
         if (await isImageLimit(this.user)) {
           await sendMessage({ text: this.dict.getString('SETTINGS_IMAGE_LIMIT_EXCEEDED', { limit: await getPeriodImageLimit(this.user) }), user: this.user, bot: this.bot });
+          logEvent({ user: this.user, category: 'template', template: 'imageLimitExceeded' })
           return;
         }
 
@@ -516,6 +528,7 @@ export default class Navigation {
 
         // Send prompt asking user to describe the image they want
         await sendMessage({ text: this.dict.getString('IMAGE_ASK_PROMPT'), user: this.user, bot: this.bot });
+        logEvent({ user: this.user, category: 'template', template: 'imagePrompt' })
       },
       callback: async () => {
         console.log('image().callback()')
@@ -539,6 +552,7 @@ export default class Navigation {
         // Check image limit
         if (await isImageLimit(this.user)) {
           await sendMessage({ text: this.dict.getString('SETTINGS_IMAGE_LIMIT_EXCEEDED', { limit: await getPeriodImageLimit(this.user) }), user: this.user, bot: this.bot });
+          logEvent({ user: this.user, category: 'template', template: 'imageLimitExceeded' })
           return;
         }
 
@@ -582,9 +596,10 @@ export default class Navigation {
       callback: async () => {
         if( await isImageLimit(this.user) ){
           await sendMessage({ text: this.dict.getString('SETTINGS_IMAGE_LIMIT_EXCEEDED', { limit: await getPeriodImageLimit(this.user) } ), user: this.user, bot: this.bot });
+          logEvent({ user: this.user, category: 'template', template: 'imageLimitExceeded' })
           return;
         }
-  
+
         try {
           const imageId = this.data.id;
           
@@ -622,6 +637,7 @@ export default class Navigation {
           user: this.user,
           bot: this.bot,
         })
+        logEvent({ user: this.user, category: 'template', template: 'supportPrompt' })
       },
       callback: async () => {
         const adminUser = await User.findOne({ username: process.env.ADMIN_USERNAME })
@@ -664,6 +680,7 @@ export default class Navigation {
           user: this.user,
           bot: this.bot,
         })
+        logEvent({ user: this.user, category: 'template', template: 'supportReceived' })
 
         this.user = await userController.addStep(this.user, 'assistant')
       },
@@ -768,9 +785,11 @@ export default class Navigation {
     return {
       action: async () => {
         await sendMessage({ text: this.dict.getString('NOT_FOUND'), user: this.user, bot: this.bot })
+        logEvent({ user: this.user, category: 'template', template: 'notFound' })
       },
       callback: async () => {
         await sendMessage({ text: this.dict.getString('NOT_FOUND'), user: this.user, bot: this.bot })
+        logEvent({ user: this.user, category: 'template', template: 'notFound' })
       },
     }
   }
@@ -998,6 +1017,7 @@ export default class Navigation {
         }
 
         await tmplLimits(this.user, this.bot, this.dict, false);
+        logEvent({ user: this.user, category: 'template', template: 'tmplLimits' })
       },
       callback: async () => {}
     }
@@ -1010,6 +1030,7 @@ export default class Navigation {
         const plan = this.data.plan as PaymentPlan;
         if (plan === '24h' || plan === '7d') {
           await tmplPayConfirm(this.user, this.bot, plan, this.dict);
+          logEvent({ user: this.user, category: 'template', template: 'tmplPayConfirm' })
         }
       }
     }
