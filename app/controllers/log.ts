@@ -1,6 +1,5 @@
-import { formatUsername, isAdmin } from "../helpers/helpers"
+import { formatUsername } from "../helpers/helpers"
 import { IUser } from '../interfaces/users'
-import * as userController from '../controllers/users'
 import { sendMessage, sendPhoto } from '../templates/sendMessage'
 import TelegramBot from 'node-telegram-bot-api'
 import { ILog } from "../interfaces/log"
@@ -24,9 +23,6 @@ export interface IAddEventParams {
 export async function addLog(params: IAddEventParams) {
   try {
     const { user, data, msg, photoId, method, template, bot } = params
-
-    // Do not log admin
-    if( user && isAdmin(user) ) return
 
     let log: ILog = new Log({
       user,
@@ -70,7 +66,6 @@ export async function logEvent(params: {
   data?: any,
 }) {
   try {
-    if (params.user && isAdmin(params.user)) return
     await new Log(params).save()
   } catch (error) {
     console.error('logEvent error:', error)
