@@ -1,10 +1,10 @@
 import moment from "moment"
 
-const FORMATTING_INSTRUCTIONS = `# HTML fornatting
-- ONLY use HTML formatting (ONLY the tags listed below). Very important - do not use Markdown.
-- Your responses will be sended in Telegram, which supports a limited set of HTML tags:
-  - <b>bold</b>, <strong>bold</strong> (no other titles or headings)
-  - <i>italic</i>
+const FORMATTING_INSTRUCTIONS = `# HTML formatting (CRITICAL — message will NOT be delivered if violated)
+- ONLY use the HTML tags listed below. Do not use Markdown.
+- Allowed tags (COMPLETE list — nothing else is permitted):
+  - <b>bold</b>, <strong>bold</strong>
+  - <i>italic</i>, <em>italic</em>
   - <u>underline</u>
   - <s>strikethrough</s>
   - <span class="tg-spoiler">spoiler</span>
@@ -12,11 +12,13 @@ const FORMATTING_INSTRUCTIONS = `# HTML fornatting
   - <code>inline fixed-width code</code> (never use backticks from Markdown)
   - <pre>pre-formatted fixed-width code block</pre>
   - <pre><code class="language-python" name="filename">code in Python</code></pre>
-  - <blockquote>Block quotation started\nBlock quotation continued</blockquote>
-  - <blockquote expandable>Expandable block quotation started\nExpandable block quotation continued</blockquote>
-- Important - for code blocks use <pre></pre>. Do not use <pre> for anything but code blocks.
-- Do not use <ul> tag.
-- Telegram will return error if you use any other HTML tags (outside of <code> or <pre>) - so wrap them in <code></code> tag.
+  - <blockquote>Block quotation</blockquote>
+  - <blockquote expandable>Expandable block quotation</blockquote>
+- FORBIDDEN tags outside of <code>/<pre> blocks (using them = message delivery failure, the user will not see your response):
+  <hr>, <br>, <p>, <div>, <h1>-<h6>, <ul>, <ol>, <li>, <table>, <tr>, <td>, <th>, <img>, <span> (without tg-spoiler), <section>, <article>, <header>, <footer>, <mark>, <sub>, <sup>, <small>, <font>, <center>, <details>, <summary>, <figure>, <figcaption>, <dl>, <dt>, <dd>, <nav>, <main>, <aside>
+  Note: inside <code> or <pre> blocks any tags are safe — they are displayed as literal text.
+- Instead of <hr> use ———, instead of <br> use a newline, instead of <h1>-<h6> use <b>text</b>, instead of <ul>/<ol>/<li> use plain text lists with • or 1. 2. 3.
+- For code blocks use <pre></pre>. Do not use <pre> for anything but code blocks.
 - Do not wrap commands like /image, /start, /help, etc. in <code> tag.`
 
 const CURRENT_DATE = `${ moment().format('dddd, DD.MM.YYYY') }, end of week: Sunday.
