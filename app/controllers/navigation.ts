@@ -1196,4 +1196,60 @@ export default class Navigation {
     }
   }
 
+  resendMessage() {
+    return {
+      action: async () => {
+        if (!isAdmin(this.user)) return
+
+        const params = this.msg.text.split(' ')
+        if (params.length < 2) {
+          await sendMessage({
+            text: 'Use: /resendMessage [messageId]',
+            user: this.user,
+            bot: this.bot
+          })
+          return
+        }
+
+        const messageId = params[1]
+
+        try {
+          const originalMessage = await Message.findById(messageId).populate({
+            path: 'thread',
+            populate: { path: 'owner' }
+          })
+
+          if (!originalMessage) {
+            await sendMessage({ text: 'Message not found', user: this.user, bot: this.bot })
+            return
+          }
+
+          const thread = originalMessage.thread as any
+          const targetUser = thread.owner as IUser
+
+          if (!targetUser) {
+            await sendMessage({ text: 'User not found', user: this.user, bot: this.bot })
+            return
+          }
+
+          // Resend as part of the original thread
+          await sendAndSaveReply(originalMessage.content, thread, this.bot)
+
+          await sendMessage({
+            text: `Message resent to ${targetUser.name} (${targetUser.chatId})`,
+            user: this.user,
+            bot: this.bot
+          })
+        } catch (error) {
+          await sendMessage({
+            text: `Error: ${error.message}`,
+            user: this.user,
+            bot: this.bot
+          })
+        }
+      },
+      callback: async () => {}
+    }
+  }
+
 }

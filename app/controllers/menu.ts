@@ -18,6 +18,7 @@ export const menuButtons = [
   { name: '/resetImages', method: 'resetImages' },
   { name: '/paySuccess', method: 'paySuccess' },
   { name: '/support', method: 'support' },
+  { name: '/resendMessage', method: 'resendMessage' },
 ];
 
 export const isMenuClicked = ( msg ):IMenuButton | false => {
