@@ -230,7 +230,7 @@ export async function handleUserReply(params: IHandleUserReplyParams): Promise<{
   return { thread, isNew };
 }
 
-export async function handleAssistantReply(thread: IThread, bot: TelegramBot, dict: Dict, dailyRemaining?: number): Promise<string | null> {
+export async function handleAssistantReply(thread: IThread, bot: TelegramBot, dict: Dict, dailyRemaining?: number): Promise<string | { thinking: string; text: string } | null> {
   try {
     const assistantReply = await withChatAction(
       bot,
@@ -239,7 +239,8 @@ export async function handleAssistantReply(thread: IThread, bot: TelegramBot, di
       () => chatWithFunctionCalling({ thread, bot, dailyRemaining })
     );
 
-    await saveAIResponse(assistantReply, 'response');
+    const replyForLog = typeof assistantReply === 'string' ? assistantReply : assistantReply?.text;
+    await saveAIResponse(replyForLog, 'response');
 
     return assistantReply || null;
 
@@ -286,7 +287,7 @@ export interface IChatWithFunctionCalling {
   dailyRemaining?: number
 }
 
-async function chatWithFunctionCalling(params:IChatWithFunctionCalling) {
+async function chatWithFunctionCalling(params:IChatWithFunctionCalling): Promise<string | { thinking: string; text: string }> {
   const { thread, bot, dailyRemaining } = params
   
   try {
@@ -350,12 +351,25 @@ async function chatWithFunctionCalling(params:IChatWithFunctionCalling) {
 
         // console.log('systemPrompt:', systemPrompt)
 
+        const useOpus = !!user.prefs['useOpus'];
+        const model = useOpus
+          ? 'claude-opus-4-6'
+          : (process.env.MODEL_NORMAL || process.env.CLAUDE_MODEL);
+
         const request: LLMRequest = {
-          model: process.env.MODEL_NORMAL || process.env.CLAUDE_MODEL,
+          model,
           system: systemPrompt,
           messages: messages,
           max_tokens: +(process.env.CLAUDE_MAX_OUTPUT || 4096),
           temperature: 1,
+        }
+
+        if (useOpus) {
+          request.extended_thinking = {
+            type: 'enabled',
+            budget_tokens: +(process.env.OPUS_THINKING_BUDGET || 10000)
+          };
+          delete (request as any).temperature;
         }
         
         if (tools.length > 0) {
@@ -371,10 +385,18 @@ async function chatWithFunctionCalling(params:IChatWithFunctionCalling) {
         usedModel = response.model || request.model
         
         if (response.usage) {
+          let inputTokens = response.usage.input_tokens || 0;
+          let outputTokens = response.usage.output_tokens || 0;
+
+          if (useOpus) {
+            inputTokens = Math.ceil(inputTokens * 1.5);
+            outputTokens = Math.ceil(outputTokens * 1.5);
+          }
+
           await logTokenUsage(
-            user, freshThread, 
-            response.usage.input_tokens || 0,
-            response.usage.output_tokens || 0,
+            user, freshThread,
+            inputTokens,
+            outputTokens,
             usedModel, bot
           )
           
@@ -390,11 +412,14 @@ async function chatWithFunctionCalling(params:IChatWithFunctionCalling) {
 
         if (toolUses.length === 0) {
           let responseText = '';
+          let thinkingText = '';
           let searchResults = [];
-          
+
           for (const item of response.content || []) {
             if (item.type === 'text') {
               responseText += item.text;
+            } else if (item.type === 'thinking') {
+              thinkingText += (item as any).thinking;
             } else if (item.type === 'web_search_tool_result' && item.content) {
               for (const result of item.content) {
                 if (result.type === 'web_search_result') {
@@ -403,7 +428,7 @@ async function chatWithFunctionCalling(params:IChatWithFunctionCalling) {
               }
             }
           }
-          
+
           let finalResponse = '';
           if (searchResults.length > 0) {
             finalResponse += '<b>🔍 Источники:</b>\n';
@@ -412,7 +437,7 @@ async function chatWithFunctionCalling(params:IChatWithFunctionCalling) {
             });
             finalResponse += '\n';
           }
-          
+
           if (executedFunctions.length > 1 && freshThread.assistantType === 'finance') {
             const trackCalls = executedFunctions.filter(f => f.name === 'trackExpense');
             if (trackCalls.length > 1) {
@@ -423,8 +448,12 @@ async function chatWithFunctionCalling(params:IChatWithFunctionCalling) {
               finalResponse += '\n';
             }
           }
-          
+
           finalResponse += responseText;
+
+          if (thinkingText && useOpus) {
+            return { thinking: thinkingText, text: finalResponse };
+          }
           return finalResponse;
         }
 

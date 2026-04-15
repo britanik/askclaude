@@ -17,6 +17,7 @@ export const menuButtons = [
   { name: '/resetTokens', method: 'resetTokens' },
   { name: '/resetImages', method: 'resetImages' },
   { name: '/paySuccess', method: 'paySuccess' },
+  { name: '/opus', method: 'opus' },
   { name: '/support', method: 'support' },
   { name: '/resendMessage', method: 'resendMessage' },
 ];

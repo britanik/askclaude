@@ -482,15 +482,31 @@ export default class Navigation {
                 console.log(`[Buffer] Request aborted for ${this.user.chatId}, discarding reply`);
                 // Usage already logged inside chatWithFunctionCalling, just don't send reply
                 // Save assistant message to DB anyway (for history consistency)
-                if (reply) {
+                const replyText = typeof reply === 'string' ? reply : reply?.text;
+                if (replyText) {
                   await new Message({
                     thread: userReply.thread._id,
                     role: 'assistant',
-                    content: reply,
+                    content: replyText,
                   }).save();
                 }
               } else if (reply) {
-                await sendAndSaveReply(reply, userReply.thread, this.bot);
+                console.log('[Opus] Reply type:', typeof reply, 'has thinking:', typeof reply === 'object' ? !!reply.thinking : false);
+                if (typeof reply === 'object' && reply.thinking) {
+                  console.log('[Opus] Sending thinking message, length:', reply.thinking.length);
+                  const thinkingText = reply.thinking.length > 4000
+                    ? reply.thinking.substring(0, 4000) + '...'
+                    : reply.thinking;
+                  await sendMessage({
+                    text: `<blockquote expandable>🥸 ${thinkingText}</blockquote>`,
+                    user: this.user,
+                    bot: this.bot
+                  });
+                  console.log('[Opus] Sending main reply, length:', reply.text.length);
+                  await sendAndSaveReply(reply.text, userReply.thread, this.bot);
+                } else {
+                  await sendAndSaveReply(reply as string, userReply.thread, this.bot);
+                }
               }
 
             // Remove from mediaGroups array after processing
@@ -512,6 +528,21 @@ export default class Navigation {
           }
         }
       }
+    }
+  }
+
+  opus() {
+    return {
+      action: async () => {
+        const newValue = !this.user.prefs['useOpus'];
+        this.user = await userController.updatePref(this.user, 'useOpus', newValue);
+        const text = newValue
+          ? '🥸 Режим Opus Thinking <b>включён</b>.\n\nТокены x1.5'
+          : '🥸 Режим Opus Thinking <b>выключен</b>.';
+        await sendMessage({ text, user: this.user, bot: this.bot });
+        logEvent({ user: this.user, category: 'command', method: 'opus', text: newValue ? 'on' : 'off' });
+      },
+      callback: async () => {},
     }
   }
 
@@ -1070,7 +1101,19 @@ export default class Navigation {
         // Send request to Claude
         const reply = await handleAssistantReply(thread, this.bot, this.dict);
         if (reply) {
-          await sendAndSaveReply(reply, thread, this.bot);
+          if (typeof reply === 'object' && reply.thinking) {
+            const thinkingText = reply.thinking.length > 4000
+              ? reply.thinking.substring(0, 4000) + '...'
+              : reply.thinking;
+            await sendMessage({
+              text: `<blockquote expandable>🥸 ${thinkingText}</blockquote>`,
+              user: this.user,
+              bot: this.bot
+            });
+            await sendAndSaveReply(reply.text, thread, this.bot);
+          } else {
+            await sendAndSaveReply(reply as string, thread, this.bot);
+          }
         }
       }
     }

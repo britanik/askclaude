@@ -15,5 +15,6 @@ export interface IUser extends Document {
   prefs: {
     lang: 'eng' | 'rus',
     token_balance?: number,
+    useOpus?: boolean,
   }
 }

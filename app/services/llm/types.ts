@@ -31,6 +31,11 @@ export interface LLMToolResultContent {
   is_error?: boolean;
 }
 
+export interface LLMThinkingContent {
+  type: 'thinking';
+  thinking: string;
+}
+
 // Web search result (Claude-specific but useful to standardize)
 export interface LLMWebSearchResult {
   type: 'web_search_tool_result';
@@ -41,12 +46,13 @@ export interface LLMWebSearchResult {
   }>;
 }
 
-export type LLMContentPart = 
-  | LLMTextContent 
-  | LLMImageContent 
-  | LLMToolUseContent 
+export type LLMContentPart =
+  | LLMTextContent
+  | LLMImageContent
+  | LLMToolUseContent
   | LLMToolResultContent
-  | LLMWebSearchResult;
+  | LLMWebSearchResult
+  | LLMThinkingContent;
 
 // Message format
 export interface LLMMessage {
@@ -81,6 +87,10 @@ export interface LLMRequest {
   max_tokens?: number;
   temperature?: number;
   reasoning_effort?: 'low' | 'medium' | 'high';
+  extended_thinking?: {
+    type: 'enabled';
+    budget_tokens: number;
+  };
   response_format?: {
     type: 'json_schema';
     json_schema: {

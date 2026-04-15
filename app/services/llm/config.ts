@@ -2,6 +2,7 @@ export interface ModelConfig {
   provider: 'anthropic' | 'openai';
   apiType?: 'completions' | 'responses';  // Only for OpenAI
   reasoning?: 'low' | 'medium' | 'high';
+  thinking?: boolean;
 }
 
 /**
@@ -20,6 +21,11 @@ export const MODEL_CONFIG: Record<string, ModelConfig> = {
   
   'claude-sonnet-4-20250514': {
     provider: 'anthropic'
+  },
+
+  'claude-opus-4-6': {
+    provider: 'anthropic',
+    thinking: true
   },
 
   // OpenAI models - Completions API

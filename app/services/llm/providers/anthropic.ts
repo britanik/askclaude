@@ -33,6 +33,12 @@ export class AnthropicProvider implements LLMProvider {
       claudeRequest.system = request.system;
     }
 
+    // Add extended thinking if requested
+    if (request.extended_thinking) {
+      claudeRequest.thinking = request.extended_thinking;
+      delete claudeRequest.temperature;
+    }
+
     // Add tools if provided
     if (request.tools && request.tools.length > 0) {
       claudeRequest.tools = request.tools;
@@ -52,7 +58,6 @@ export class AnthropicProvider implements LLMProvider {
         }
       );
 
-      // Map Claude response to unified format
       return {
         content: response.data.content,
         usage: {

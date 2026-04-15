@@ -20,7 +20,8 @@ const UserSchema = new Schema<IUser>({
   pendingThread: { type: Schema.Types.ObjectId, ref: 'Thread' },
   prefs: {
     lang: { type: String },
-    token_balance: { type: Number }
+    token_balance: { type: Number },
+    useOpus: { type: Boolean, default: false }
   }
 })
 
