@@ -6,14 +6,14 @@ import { IMenuButton } from "../interfaces/menu-button"
 import { isMenuClicked } from "./menu"
 import { sendMessage } from "../templates/sendMessage"
 import { tmplRegisterLang } from "../templates/tmplRegisterLanguage"
-import { handleAssistantReply, sendAndSaveReply, handleUserReply, IAssistantParams, startAssistant } from "./assistants"
+import { handleAssistantReply, sendAndSaveReply, handleUserReply, IAssistantParams, startAssistant, getThreadMessages } from "./assistants"
 import { tmplAdmin } from "../templates/tmplAdmin"
 import { getTranscription } from "../services/ai"
 import { isAdmin, isTester, canAccessPremium, resetAdminTokens, resetAdminImages } from "../helpers/helpers"
 
 import { tmplSettings } from '../templates/tmplSettings'
 import { tmplInvite } from "../templates/tmplInvite"
-import { getTokenLimitMessage, isTokenLimit, updateUserSchema } from "./tokens"
+import { getTokenLimitMessage, isTokenLimit, updateUserSchema, estimateThreadMessagesTokens } from "./tokens"
 import { isValidInviteCode, processReferral } from "./invites"
 import { sendNotification } from "./notifications"
 import { getPeriodImageLimit, isImageLimit, moderateContent, sendGeneratedImage } from "./images"
@@ -470,12 +470,24 @@ export default class Navigation {
           // Only send to Claude if this isn't a media group or it's the first message after waiting
           if (!mediaGroupId || this.mediaGroups.includes(mediaGroupId)) {
 
+              // Pre-flight: if estimated thread tokens exceed remaining limit, ask user to top up.
+              // Save pendingThread so user can press "Получить ответ" after payment.
+              const threadMessages = await getThreadMessages(userReply.thread);
+              const estimatedTokens = estimateThreadMessagesTokens(threadMessages);
+              console.log(`[Pre-flight] chatId=${this.user.chatId} thread=${userReply.thread._id} estimatedTokens=${estimatedTokens} totalRemaining=${tokenLimit.totalRemaining} (daily=${tokenLimit.dailyRemaining}, package=${tokenLimit.packageRemaining})`);
+              if (estimatedTokens > tokenLimit.totalRemaining) {
+                console.log(`[Pre-flight] BLOCKED chatId=${this.user.chatId}: ${estimatedTokens} > ${tokenLimit.totalRemaining}. Saving pendingThread=${userReply.thread._id} and showing tmplLimits.`);
+                this.user.pendingThread = userReply.thread._id;
+                await this.user.save();
+                await tmplLimits(this.user, this.bot, this.dict);
+                logEvent({ user: this.user, category: 'template', template: 'tmplLimits' });
+                return;
+              }
+
               // Mark as processing so abortIfSequence knows there's an in-flight request
               markProcessing(this.user.chatId);
 
-              // Send thread to LLM (pass total remaining: daily + packages for pre-flight check)
-              const tokensRemaining = tokenLimit.totalRemaining;
-              const reply = await handleAssistantReply(userReply.thread, this.bot, this.dict, tokensRemaining);
+              const reply = await handleAssistantReply(userReply.thread, this.bot, this.dict);
 
               // Check if this request was aborted while waiting for LLM response
               if (isAborted(this.user.chatId)) {

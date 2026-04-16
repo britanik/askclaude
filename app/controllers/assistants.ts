@@ -8,7 +8,7 @@ import { IUser } from "../interfaces/users"
 import { IMessage } from "../interfaces/messages"
 import { sendMessage } from "../templates/sendMessage"
 import { analyzeConversation, formatMessagesWithImages, IConversationAnalysisResult, saveImagePermanently } from "../services/ai"
-import { logTokenUsage, logWebSearchUsage, estimateMessagesTokens } from "./tokens"
+import { logTokenUsage, logWebSearchUsage } from "./tokens"
 import { saveAIResponse } from "../helpers/fileLogger"
 import { withChatAction } from "../helpers/chatAction"
 import { trackExpense, editTransaction, createBudget, getBudgetInfoString, deleteBudget, deleteTransaction, getTransactionsString } from "./expense"
@@ -230,13 +230,13 @@ export async function handleUserReply(params: IHandleUserReplyParams): Promise<{
   return { thread, isNew };
 }
 
-export async function handleAssistantReply(thread: IThread, bot: TelegramBot, dict: Dict, dailyRemaining?: number): Promise<string | { thinking: string; text: string } | null> {
+export async function handleAssistantReply(thread: IThread, bot: TelegramBot, dict: Dict): Promise<string | { thinking: string; text: string } | null> {
   try {
     const assistantReply = await withChatAction(
       bot,
       thread.owner.chatId,
       'typing',
-      () => chatWithFunctionCalling({ thread, bot, dailyRemaining })
+      () => chatWithFunctionCalling({ thread, bot })
     );
 
     const replyForLog = typeof assistantReply === 'string' ? assistantReply : assistantReply?.text;
@@ -283,12 +283,11 @@ export async function getRecentThread(user: IUser): Promise<IThread> {
 
 export interface IChatWithFunctionCalling {
   thread: IThread,
-  bot: TelegramBot,
-  dailyRemaining?: number
+  bot: TelegramBot
 }
 
 async function chatWithFunctionCalling(params:IChatWithFunctionCalling): Promise<string | { thinking: string; text: string }> {
-  const { thread, bot, dailyRemaining } = params
+  const { thread, bot } = params
   
   try {
     const freshThread = await Thread.findById(thread._id).populate('owner')
@@ -374,11 +373,6 @@ async function chatWithFunctionCalling(params:IChatWithFunctionCalling): Promise
         
         if (tools.length > 0) {
           request.tools = tools;
-        }
-
-        // Pre-flight: block if estimated prompt tokens exceed remaining token limit (min of hourly/daily)
-        if (dailyRemaining !== undefined && estimateMessagesTokens(messages) > dailyRemaining) {
-          return 'Ваш запрос слишком большой для оставшегося лимита токенов. Попробуйте начать новый диалог или сократить сообщение.';
         }
 
         const response = await callLLM(request)

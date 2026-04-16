@@ -90,6 +90,14 @@ export default class Dict {
         rus: () => `Ответы на сегодня закончились 🙂 Продолжим через {time}.`,
         eng: () => `You've run out of answers for today 🙂 We'll continue in {time}.`
       },
+      TIME_HOURS_MINUTES: {
+        rus: () => `{hours} ч. {minutes} мин`,
+        eng: () => `{hours} h {minutes} min`
+      },
+      TIME_MINUTES_ONLY: {
+        rus: () => `{minutes} мин`,
+        eng: () => `{minutes} min`
+      },
       SETTINGS_DAILY_TOKEN_LIMIT_INFO: {
         rus: () => `Этот бот — мой инди-проект. Количество пользователей растет и бесплатный лимит это максимум, который я могу себе позволить (каждый ответ стоит реальных денег). Если бот вам полезен — поддержите проект и продолжите общение прямо сейчас за стоимость половинки сырка "Б.Ю. Александров" :)`,
         eng: () => `This bot is my indie project. Every response costs real money. The number of users is growing and the free limit is the most I can afford. If the bot is useful to you — support the project and continue chatting right now :)`

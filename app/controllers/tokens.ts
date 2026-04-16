@@ -3,12 +3,14 @@ import TelegramBot from 'node-telegram-bot-api';
 import { IUser } from '../interfaces/users';
 import { LimitType } from '../interfaces/limits';
 import { LLMMessage } from '../services/llm/types';
+import { IMessage } from '../interfaces/messages';
 import User from '../models/users';
 import Usage from '../models/usage';
 import Invite from '../models/invites';
 import Limit from '../models/limits';
 import { isAdmin, isTester, getPackageRemainingTokens, attributePackageUsage } from '../helpers/helpers';
 import { getUserBonusTotal } from './bonus';
+import Dict from '../helpers/dict';
 
 
 // Update user schema to remove token_balance field
@@ -56,14 +58,14 @@ export async function isTokenLimit(user: IUser): Promise<ITokenLimitResult> {
 }
 
 // Check which limit was reached and return appropriate message
-export async function getTokenLimitMessage(user: IUser, dict: any): Promise<string> {
+export async function getTokenLimitMessage(user: IUser, dict: Dict): Promise<string> {
   try {
     const dailyUsage: number = await getDailyTokenUsage(user);
     const dailyLimit = await getDailyTokenLimit(user);
     const packageRemaining = await getPackageRemainingTokens(user);
 
     if (dailyUsage >= dailyLimit && packageRemaining <= 0) {
-      return dict.getString('SETTINGS_DAILY_TOKEN_LIMIT_EXCEEDED', { time: getTimeToNextDay() });
+      return dict.getString('SETTINGS_DAILY_TOKEN_LIMIT_EXCEEDED', { time: getTimeToNextDay(dict) });
     }
 
     return '';
@@ -74,18 +76,18 @@ export async function getTokenLimitMessage(user: IUser, dict: any): Promise<stri
 }
 
 // Calculate time until tomorrow (for daily limits) - returns formatted string
-export function getTimeToNextDay(): string {
+export function getTimeToNextDay(dict: Dict): string {
   const now = moment();
   const tomorrow = moment().add(1, 'day').startOf('day');
   const duration = moment.duration(tomorrow.diff(now));
-  
+
   const hours = Math.floor(duration.asHours());
   const minutes = duration.minutes();
-  
+
   if (hours > 0) {
-    return `${hours} ч. ${minutes} мин.`;
+    return dict.getString('TIME_HOURS_MINUTES', { hours: String(hours), minutes: String(minutes) });
   } else {
-    return `${minutes} мин.`;
+    return dict.getString('TIME_MINUTES_ONLY', { minutes: String(minutes) });
   }
 }
 
@@ -234,7 +236,10 @@ export async function logTokenUsage(user: IUser, thread: any, inputTokens: numbe
     const dailyRemainingBefore = Math.max(0, dailyLimit - dailyUsageBefore);
     const overflowThisCall = Math.max(0, totalTokens - dailyRemainingBefore);
 
+    console.log(`[After-flight] chatId=${user.chatId} thread=${thread._id} model=${model} input=${inputTokens} output=${outputTokens} total=${totalTokens} dailyRemainingBefore=${dailyRemainingBefore} overflow=${overflowThisCall}`);
+
     if (overflowThisCall > 0) {
+      console.log(`[After-flight] chatId=${user.chatId}: attributing ${overflowThisCall} overflow tokens to packages`);
       await attributePackageUsage(user, overflowThisCall);
     }
   } catch (error) {
@@ -297,6 +302,12 @@ export function estimateMessagesTokens(messages: LLMMessage[]): number {
       }
     }
   }
+  return Math.ceil(totalChars / 3);
+}
+
+// Rough token estimate for stored thread messages (IMessage[])
+export function estimateThreadMessagesTokens(messages: IMessage[]): number {
+  const totalChars = messages.reduce((sum, m) => sum + (m.content?.length || 0), 0);
   return Math.ceil(totalChars / 3);
 }
 

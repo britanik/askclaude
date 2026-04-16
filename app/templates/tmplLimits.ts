@@ -10,7 +10,7 @@ import { PLANS, PaymentPlan } from "../controllers/payments";
 export async function tmplLimits(user: IUser, bot: TelegramBot, dict: Dict, showLimitMessage: boolean = true) {
   await userController.updateMessage(user, 'payConfirm', null);
 
-  const time = getTimeToNextDay();
+  const time = getTimeToNextDay(dict);
   const exceededLine = showLimitMessage
     ? `${dict.getString('SETTINGS_DAILY_TOKEN_LIMIT_EXCEEDED', { time })}\n\n`
     : '';
