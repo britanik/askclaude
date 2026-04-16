@@ -6,6 +6,7 @@ import { getTimeToNextDay } from "../controllers/tokens";
 import { canAccessPremium } from "../helpers/helpers";
 import * as userController from "../controllers/users";
 import { PLANS, PaymentPlan } from "../controllers/payments";
+import { logEvent } from "../controllers/log";
 
 export async function tmplLimits(user: IUser, bot: TelegramBot, dict: Dict, showLimitMessage: boolean = true) {
   await userController.updateMessage(user, 'payConfirm', null);
@@ -30,5 +31,12 @@ export async function tmplLimits(user: IUser, bot: TelegramBot, dict: Dict, show
     user,
     bot,
     buttons: showPackageButtons ? buttonRows : undefined
+  });
+
+  logEvent({
+    user,
+    category: 'template',
+    template: 'tmplLimits',
+    data: { variant: showLimitMessage ? 'limit' : 'preflight' }
   });
 }
