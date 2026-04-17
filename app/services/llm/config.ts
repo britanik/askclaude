@@ -23,7 +23,7 @@ export const MODEL_CONFIG: Record<string, ModelConfig> = {
     provider: 'anthropic'
   },
 
-  'claude-opus-4-6': {
+  'claude-opus-4-7': {
     provider: 'anthropic',
     thinking: true
   },

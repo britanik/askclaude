@@ -352,7 +352,7 @@ async function chatWithFunctionCalling(params:IChatWithFunctionCalling): Promise
 
         const useOpus = !!user.prefs['useOpus'];
         const model = useOpus
-          ? 'claude-opus-4-6'
+          ? 'claude-opus-4-7'
           : (process.env.MODEL_NORMAL || process.env.CLAUDE_MODEL);
 
         const request: LLMRequest = {
