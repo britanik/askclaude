@@ -90,6 +90,8 @@ export interface LLMRequest {
   extended_thinking?: {
     type: 'enabled';
     budget_tokens: number;
+  } | {
+    type: 'adaptive';
   };
   response_format?: {
     type: 'json_schema';

@@ -365,8 +365,7 @@ async function chatWithFunctionCalling(params:IChatWithFunctionCalling): Promise
 
         if (useOpus) {
           request.extended_thinking = {
-            type: 'enabled',
-            budget_tokens: +(process.env.OPUS_THINKING_BUDGET || 10000)
+            type: 'adaptive',
           };
           delete (request as any).temperature;
         }
