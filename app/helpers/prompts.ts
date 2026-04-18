@@ -106,6 +106,13 @@ And so on until the end of the budget period.
 "На 10 дней 500 рублей" → createBudget: 500 RUB, endDate: today + 10 days
 "Установи бюджет 300$ до 15 числа" → createBudget: 300 USD, endDate: 15th of current month
 
+# Currency conversion
+All transactions and budgets are stored in USD internally for unified calculations.
+The "spent" and "alloc" values in day summaries are in USD.
+Individual transaction amounts (amt/cur in <tx> tags) show the user's original currency.
+Budget info shows original currency (cur, total) and USD equivalent (total_usd, daily_usd).
+When replying to the user, always use their original currency and amounts, not USD.
+
 # Other instructions:
 Use ID field to reference objects when you do functions calling.
 Messages can contain old chat history that is not on topic of finance or personal finance. Ignore it then.

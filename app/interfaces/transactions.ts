@@ -8,6 +8,9 @@ export interface ITransaction extends Document {
   type: 'income' | 'expense' | 'transfer'
   amount: number
   currency: string
+  originalAmount?: number
+  originalCurrency?: string
+  exchangeRate?: number
   date: Date
   description: string
   created: Date

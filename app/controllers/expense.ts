@@ -3,6 +3,7 @@ import { ITransaction } from "../interfaces/transactions";
 import Transaction from "../models/transactions";
 import { Budget } from '../models/budgets';
 import moment from "moment";
+import { convertToUSD } from "../services/currency";
 
 export async function trackExpense(user: IUser, input): Promise<string> {
   try {    
@@ -23,12 +24,17 @@ export async function trackExpense(user: IUser, input): Promise<string> {
       transactionDate = moment().utc().startOf('day').toDate();
     }
 
+    const absAmount = Math.abs(amount);
+    const { amountUSD, exchangeRate } = await convertToUSD(absAmount, currency);
+
     const transaction = new Transaction({
-      // ID will be auto-assigned by the pre-save middleware
       user: user._id,
       type,
-      amount: Math.abs(amount),
-      currency,
+      amount: amountUSD,
+      currency: 'USD',
+      originalAmount: absAmount,
+      originalCurrency: currency,
+      exchangeRate,
       description,
       date: transactionDate
     });
@@ -39,7 +45,7 @@ export async function trackExpense(user: IUser, input): Promise<string> {
     const formattedDate = moment.utc(transactionDate).format('DD.MM.YYYY');
     const dateText = date ? ` на ${formattedDate}` : '';
 
-    return `${type === 'expense' ? 'Expense' : 'Income'} of ${Math.abs(amount)} ${currency} tracked successfully${dateText} with ID: ${transaction.ID}`;
+    return `${type === 'expense' ? 'Expense' : 'Income'} of ${absAmount} ${currency} tracked successfully${dateText} with ID: ${transaction.ID}`;
   } catch (error) {
     console.error('Error tracking expense:', error);
     return "Error tracking expense.";
@@ -67,25 +73,44 @@ export async function editTransaction(user: IUser, input): Promise<string> {
     }
 
     // Build update object with only provided fields
-    const possibleUpdates = { amount, description, type, currency, date };
     const updates: any = {};
-    
-    for (const [key, value] of Object.entries(possibleUpdates)) {
-      if (value !== undefined && value !== null) {
-        if (key === 'amount') {
-          updates[key] = Math.abs(value); // Ensure amount is positive
-        } else if (key === 'date') {
-          // Parse date properly with UTC and start of day
-          const parsedDate = moment.utc(value, 'DD.MM.YYYY', true);
-          if (parsedDate.isValid()) {
-            updates[key] = parsedDate.startOf('day').toDate();
-          } else {
-            return `Неверный формат даты: "${value}". Используйте формат: ДД.ММ.ГГГГ`;
-          }
-        } else {
-          updates[key] = value;
-        }
+    const updatedFields = [];
+
+    if (description !== undefined && description !== null) {
+      updates.description = description;
+      updatedFields.push(`описание: "${description}"`);
+    }
+    if (type !== undefined && type !== null) {
+      updates.type = type;
+      updatedFields.push(`тип: ${type}`);
+    }
+    if (date !== undefined && date !== null) {
+      const parsedDate = moment.utc(date, 'DD.MM.YYYY', true);
+      if (parsedDate.isValid()) {
+        updates.date = parsedDate.startOf('day').toDate();
+        updatedFields.push(`дата: ${moment.utc(updates.date).format('DD.MM.YYYY')}`);
+      } else {
+        return `Неверный формат даты: "${date}". Используйте формат: ДД.ММ.ГГГГ`;
       }
+    }
+
+    // Handle amount/currency changes with USD conversion
+    const newAmount = amount !== undefined && amount !== null ? Math.abs(amount) : null;
+    const newCurrency = currency || null;
+
+    if (newAmount !== null || newCurrency !== null) {
+      const finalOriginalAmount = newAmount ?? transaction.originalAmount ?? transaction.amount;
+      const finalOriginalCurrency = newCurrency ?? transaction.originalCurrency ?? transaction.currency;
+
+      const { amountUSD, exchangeRate } = await convertToUSD(finalOriginalAmount, finalOriginalCurrency);
+      updates.amount = amountUSD;
+      updates.currency = 'USD';
+      updates.originalAmount = finalOriginalAmount;
+      updates.originalCurrency = finalOriginalCurrency;
+      updates.exchangeRate = exchangeRate;
+
+      if (newAmount !== null) updatedFields.push(`сумма: ${finalOriginalAmount} ${finalOriginalCurrency}`);
+      if (newCurrency) updatedFields.push(`валюта: ${newCurrency}`);
     }
 
     // Check if there are any updates to apply
@@ -95,15 +120,7 @@ export async function editTransaction(user: IUser, input): Promise<string> {
 
     // Apply the updates to the transaction
     await Transaction.findByIdAndUpdate(transaction._id, updates);
-    
-    // Build success message with updated fields
-    const updatedFields = [];
-    if (updates.amount !== undefined) updatedFields.push(`сумма: ${updates.amount} ${updates.currency || transaction.currency}`);
-    if (updates.description) updatedFields.push(`описание: "${updates.description}"`);
-    if (updates.type) updatedFields.push(`тип: ${updates.type}`);
-    if (updates.currency) updatedFields.push(`валюта: ${updates.currency}`);
-    if (updates.date) updatedFields.push(`дата: ${moment.utc(updates.date).format('DD.MM.YYYY')}`);
-    
+
     return `Транзакция "${transaction.description}" (ID: ${transaction.ID}) успешно обновлена. Изменения: ${updatedFields.join(', ')}.`;
   } catch (error) {
     console.error('Error editing transaction:', error);
@@ -220,16 +237,11 @@ export async function getTransactionsString(
       const dayTransactions = groupedByDate.get(dateKey)!;
       const transactionDate = moment.utc(dateKey, 'DD.MM.YYYY');
       
-      // Calculate daily expense totals by currency
-      const dailyExpenseTotals = new Map<string, number>();
-      
+      // Calculate daily expense total in USD
+      let dailyExpenseTotalUSD = 0;
       dayTransactions.forEach(transaction => {
         if (transaction.type === 'expense') {
-          const currency = transaction.currency;
-          if (!dailyExpenseTotals.has(currency)) {
-            dailyExpenseTotals.set(currency, 0);
-          }
-          dailyExpenseTotals.set(currency, dailyExpenseTotals.get(currency)! + transaction.amount);
+          dailyExpenseTotalUSD += transaction.amount; // amount is always USD
         }
       });
       
@@ -250,22 +262,17 @@ export async function getTransactionsString(
         dateLabel = 'yesterday';
       }
       
-      // Build spent attribute
-      let spentAttr = '';
-      if (dailyExpenseTotals.size > 0) {
-        const spentParts: string[] = [];
-        dailyExpenseTotals.forEach((total, currency) => {
-          spentParts.push(`${total} ${currency}`);
-        });
-        spentAttr = ` spent="${spentParts.join(', ')}"`;
-      }
-      
-      // Build allocated attribute
+      // Build spent attribute (USD)
+      const spentAttr = dailyExpenseTotalUSD > 0
+        ? ` spent="${Math.round(dailyExpenseTotalUSD * 100) / 100} USD"`
+        : '';
+
+      // Build allocated attribute (USD)
       let allocatedAttr = '';
       if (dailyAllocationTotals.size > 0) {
         const allocatedParts: string[] = [];
-        dailyAllocationTotals.forEach((total, currency) => {
-          allocatedParts.push(`${total.toFixed(2)} ${currency}`);
+        dailyAllocationTotals.forEach((total, cur) => {
+          allocatedParts.push(`${total.toFixed(2)} ${cur}`);
         });
         allocatedAttr = ` alloc="${allocatedParts.join(', ')}"`;
       }
@@ -285,9 +292,11 @@ export async function getTransactionsString(
           moment.utc(b.date).diff(moment.utc(a.date))
         );
         
-        // Add individual expense transactions in XML format
+        // Add individual expense transactions in XML format (show original currency)
         sortedExpenseTransactions.forEach(t => {
-          result += `    <tx id="${t.ID}" amt="${t.amount}" cur="${t.currency}" desc="${t.description}"/>\n`;
+          const displayAmt = t.originalAmount ?? t.amount;
+          const displayCur = t.originalCurrency ?? t.currency;
+          result += `    <tx id="${t.ID}" amt="${displayAmt}" cur="${displayCur}" desc="${t.description}"/>\n`;
         });
       }
       
@@ -328,10 +337,9 @@ function calculateDayAllocationTotals(
     // Calculate rollover from previous days
     let rollover = 0;
     
-    // Get all expense transactions for this budget's currency from budget start to target date
-    const budgetTransactions = allTransactions.filter(t => 
+    // Get all expense transactions (all in USD) from budget start to target date
+    const budgetTransactions = allTransactions.filter(t =>
       t.type === 'expense' &&
-      t.currency === budget.currency &&
       moment.utc(t.date).isBetween(budgetStart, targetDate, 'day', '[)')
     );
 
@@ -394,37 +402,46 @@ export async function createBudget(user: IUser, input: any): Promise<string> {
       return "End date must be after start date.";
     }
     
-    // Check for existing budget with same currency (since we don't use isActive anymore)
-    const existingBudget = await Budget.findOne({ 
-      user: user._id, 
-      currency: currency.toUpperCase()
+    // Check for existing budget with same original currency
+    const existingBudget = await Budget.findOne({
+      user: user._id,
+      originalCurrency: currency.toUpperCase()
     });
-    
+
     if (existingBudget) {
       return `You already have a budget for ${currency.toUpperCase()}. Please delete it first.`;
     }
-    
+
+    // Convert to USD
+    const origTotal = parseInt(totalAmount);
+    const origDaily = parseInt(dailyAmount);
+    const { amountUSD: totalAmountUSD, exchangeRate } = await convertToUSD(origTotal, currency);
+    const { amountUSD: dailyAmountUSD } = await convertToUSD(origDaily, currency);
+
     // Create and save budget with auto-generated ID
     const budget = new Budget({
-      // ID will be auto-assigned by the pre-save middleware
       user: user._id,
       days: parseInt(days),
-      totalAmount: parseInt(totalAmount),
-      dailyAmount: parseInt(dailyAmount),
-      currency: currency.toUpperCase(),
+      totalAmount: totalAmountUSD,
+      dailyAmount: dailyAmountUSD,
+      currency: 'USD',
+      originalTotalAmount: origTotal,
+      originalDailyAmount: origDaily,
+      originalCurrency: currency.toUpperCase(),
+      exchangeRate,
       startDate: parsedStartDate.utc().toDate(),
       endDate: parsedEndDate.utc().toDate()
     });
 
     await budget.save();
-    
+
     // Format response
     const formattedStartDate = parsedStartDate.format('DD.MM.YYYY');
     const formattedEndDate = parsedEndDate.format('DD.MM.YYYY');
     const durationDays = parsedEndDate.diff(parsedStartDate, 'days');
-    const dailyAllocation = Math.round(totalAmount / durationDays * 100) / 100;
-    
-    return `Budget created successfully: ${totalAmount} ${currency.toUpperCase()} from ${formattedStartDate} to ${formattedEndDate} (${durationDays} days, ${dailyAllocation}/day)`;
+    const dailyAllocation = Math.round(origTotal / durationDays * 100) / 100;
+
+    return `Budget created successfully: ${origTotal} ${currency.toUpperCase()} (${totalAmountUSD} USD) from ${formattedStartDate} to ${formattedEndDate} (${durationDays} days, ${dailyAllocation} ${currency.toUpperCase()}/day)`;
   } catch (error) {
     console.error('Error creating budget:', error);
     return "Error creating budget.";
@@ -458,7 +475,9 @@ export async function deleteBudget(user: IUser, input: any): Promise<string> {
     const formattedStartDate = moment(budget.startDate).format('DD.MM.YYYY');
     const formattedEndDate = moment(budget.endDate).format('DD.MM.YYYY');
     
-    return `Budget for ${budget.currency} (${budget.totalAmount} ${budget.currency}, ${formattedStartDate} - ${formattedEndDate}) has been deleted successfully.`;
+    const displayCurrency = budget.originalCurrency || budget.currency;
+    const displayAmount = budget.originalTotalAmount || budget.totalAmount;
+    return `Budget for ${displayCurrency} (${displayAmount} ${displayCurrency}, ${formattedStartDate} - ${formattedEndDate}) has been deleted successfully.`;
   } catch (error) {
     console.error('Error deleting budget:', error);
     return "Error deleting budget.";
@@ -490,7 +509,9 @@ export async function getBudgetInfoString(user: IUser): Promise<string> {
       
       const status = budget.endDate <= now ? 'expired' : 'active';
       
-      return `  <budget id="${budget.ID}" cur="${budget.currency}" total="${budget.totalAmount}" start="${startDate}" end="${endDate}" days_rem="${daysRemaining}" daily="${dailyAllocation}" status="${status}"/>`;
+      const displayCur = budget.originalCurrency || budget.currency;
+      const displayTotal = budget.originalTotalAmount || budget.totalAmount;
+      return `  <budget id="${budget.ID}" cur="${displayCur}" total="${displayTotal}" total_usd="${budget.totalAmount}" start="${startDate}" end="${endDate}" days_rem="${daysRemaining}" daily_usd="${dailyAllocation}" status="${status}"/>`;
     }).join('\n');
     
     result += "\n</budgets>";

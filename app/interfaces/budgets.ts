@@ -9,6 +9,10 @@ export interface IBudget extends Document {
   totalAmount: number;
   dailyAmount: number;
   currency: string;
+  originalTotalAmount?: number;
+  originalDailyAmount?: number;
+  originalCurrency?: string;
+  exchangeRate?: number;
   startDate: Date;
   endDate: Date;
   created: Date;

@@ -15,6 +15,9 @@ const TransactionSchema = new Schema<ITransaction>({
   },
   amount: { type: Number, required: true },
   currency: { type: String, required: true },
+  originalAmount: { type: Number },
+  originalCurrency: { type: String },
+  exchangeRate: { type: Number },
   date: { type: Date, default: () => moment().utc() },
   description: { type: String, required: true },
   created: { type: Date, default: () => moment().utc() }

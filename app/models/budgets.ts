@@ -9,6 +9,10 @@ const BudgetSchema = new Schema<IBudget>({
   totalAmount: { type: Number, required: true, min: 0 },
   dailyAmount: { type: Number, required: true, min: 0 },
   currency: { type: String, required: true, uppercase: true, trim: true },
+  originalTotalAmount: { type: Number },
+  originalDailyAmount: { type: Number },
+  originalCurrency: { type: String, uppercase: true, trim: true },
+  exchangeRate: { type: Number },
   startDate: { type: Date, required: true, default: Date.now },
   endDate: { type: Date, required: true },
   created: { type: Date, default: Date.now }
