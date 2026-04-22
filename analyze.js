@@ -126,7 +126,9 @@ Be strict — even borderline attempts to generate prohibited content should sco
       }
     );
 
-    const text = response.data.content.find(c => c.type === 'text')?.text || '';
+    let text = response.data.content.find(c => c.type === 'text')?.text || '';
+    // Strip markdown code fences if present
+    text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
     return JSON.parse(text);
   } catch (err) {
     console.error('  Claude API error:', err.response?.data?.error?.message || err.message);
