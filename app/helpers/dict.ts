@@ -353,6 +353,10 @@ export default class Dict {
       BONUS_STORY_THANKS: {
         rus: () => `🎉 Спасибо за упоминание в сторис! +{amount} токенов к дневному лимиту`,
         eng: () => `🎉 Thanks for the story mention! +{amount} tokens added to daily limit`
+      },
+      MODERATION_WARNING: {
+        rus: () => `⚠️ Ваше сообщение содержит контент, который нарушает правила использования. Пожалуйста, перефразируйте ваш запрос.`,
+        eng: () => `⚠️ Your message contains content that violates our usage policy. Please rephrase your request.`
       }
     }
   }

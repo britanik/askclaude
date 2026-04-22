@@ -32,6 +32,38 @@ export interface IChatCallParams {
   bot: TelegramBot
 }
 
+export interface IModerationResult {
+  flagged: boolean
+  categories: Record<string, boolean>
+  category_scores: Record<string, number>
+}
+
+export async function checkModeration(text: string): Promise<IModerationResult> {
+  try {
+    const response = await axios.post(
+      'https://api.openai.com/v1/moderations',
+      { input: text },
+      {
+        headers: {
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 5000
+      }
+    )
+
+    const result = response.data.results[0]
+    return {
+      flagged: result.flagged,
+      categories: result.categories,
+      category_scores: result.category_scores
+    }
+  } catch (error) {
+    await logApiError('openai', error, 'Moderation check failed')
+    return { flagged: false, categories: {}, category_scores: {} }
+  }
+}
+
 export async function getTranscription(msg, bot: TelegramBot): Promise<string> {
   // Create audio directory path
   const audioDir = path.join(__dirname, '../audio')

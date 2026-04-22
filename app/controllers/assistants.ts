@@ -7,7 +7,7 @@ import { IThread } from "../interfaces/threads"
 import { IUser } from "../interfaces/users"
 import { IMessage } from "../interfaces/messages"
 import { sendMessage } from "../templates/sendMessage"
-import { analyzeConversation, formatMessagesWithImages, IConversationAnalysisResult, saveImagePermanently } from "../services/ai"
+import { analyzeConversation, checkModeration, formatMessagesWithImages, IConversationAnalysisResult, saveImagePermanently } from "../services/ai"
 import { logTokenUsage, logWebSearchUsage } from "./tokens"
 import { saveAIResponse } from "../helpers/fileLogger"
 import { withChatAction } from "../helpers/chatAction"
@@ -15,6 +15,7 @@ import { trackExpense, editTransaction, createBudget, getBudgetInfoString, delet
 import { financeTools, searchTool, imageGenerationTool } from "../helpers/tools"
 import { promptsDict } from "../helpers/prompts"
 import { logApiError } from "../helpers/errorLogger"
+import { logEvent } from "./log"
 import { callLLM, LLMRequest, isToolUse, LLMMessage } from "../services/llm"
 import { generateImageWithFallback, ImageGenerationResult } from '../services/image'
 import Image from '../models/images'
@@ -116,10 +117,52 @@ export interface IHandleUserReplyParams {
   bot: TelegramBot
 }
 
-export async function handleUserReply(params: IHandleUserReplyParams): Promise<{ thread: IThread, isNew: boolean, oldMessageNotFound?: boolean }> {
+export async function handleUserReply(params: IHandleUserReplyParams): Promise<{ thread: IThread, isNew: boolean, oldMessageNotFound?: boolean, moderationFlagged?: boolean }> {
 
   // Деструктуризация с переименованием images -> imageIds
   let { user, userReply, imageIds, mediaGroupId, replyToTelegramMessageId, userTelegramMessageId, bot } = params;
+
+  // Moderation check — before any further processing
+  if (userReply && userReply.trim()) {
+    const moderationResult = await checkModeration(userReply)
+    if (moderationResult.flagged) {
+      console.log('[MODERATION] Flagged:', Object.entries(moderationResult.categories).filter(([,v]) => v).map(([k]) => k).join(', '))
+
+      await logEvent({
+        user,
+        category: 'moderation',
+        text: userReply.substring(0, 500),
+        data: {
+          categories: moderationResult.categories,
+          category_scores: moderationResult.category_scores
+        }
+      })
+
+      const thread: IThread = await getRecentThread(user)
+
+      // Save user message for audit trail
+      await new Message({
+        thread: thread._id,
+        role: 'user',
+        content: userReply,
+        telegramMessageId: userTelegramMessageId
+      }).save()
+
+      // Send warning and save as assistant message
+      const dict = new Dict(user)
+      const warningText = dict.getString('MODERATION_WARNING')
+      const result = await sendMessage({ text: warningText, user, bot })
+
+      await new Message({
+        thread: thread._id,
+        role: 'assistant',
+        content: warningText,
+        telegramMessageId: result?.telegramMessageId
+      }).save()
+
+      return { thread, isNew: false, moderationFlagged: true }
+    }
+  }
 
   let thread: IThread = await getRecentThread(user);
   let isNew = false;

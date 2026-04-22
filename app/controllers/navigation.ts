@@ -403,6 +403,8 @@ export default class Navigation {
               bot: this.bot
             });
 
+            if (userReply.moderationFlagged) return;
+
             console.log('Save thread _id to user:', userReply.thread._id)
 
             // Save thread ID in user for processing after payment
@@ -431,7 +433,7 @@ export default class Navigation {
               // For subsequent messages in the same media group, just add the image and return
               // without sending to Claude yet - this is handled by the first message
               console.log(`Additional message in media group ${mediaGroupId}`);
-              await handleUserReply({
+              const mediaResult = await handleUserReply({
                 user: this.user,
                 userReply: text,
                 imageIds: images,
@@ -440,6 +442,7 @@ export default class Navigation {
                 userTelegramMessageId: this.msg.message_id,
                 bot: this.bot
               });
+              if (mediaResult.moderationFlagged) return;
               return; // Important: don't process this as a full message
             }
           }
@@ -456,7 +459,9 @@ export default class Navigation {
             userTelegramMessageId: this.msg.message_id,
             bot: this.bot
           });
-          
+
+          if (userReply.moderationFlagged) return;
+
           // If user replied to an old message we don't have tracked - just notify and stop
           if (userReply.oldMessageNotFound) {
             await sendMessage({

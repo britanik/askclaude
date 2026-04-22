@@ -59,7 +59,7 @@ export async function addLog(params: IAddEventParams) {
 
 export async function logEvent(params: {
   user: IUser,
-  category: 'command' | 'button' | 'template' | 'webapp',
+  category: 'command' | 'button' | 'template' | 'webapp' | 'moderation',
   method?: string,
   template?: string,
   text?: string,
