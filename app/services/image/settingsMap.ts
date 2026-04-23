@@ -3,8 +3,8 @@
  * GetImg excluded (NSFW-only, keeps defaults).
  */
 
-const portraitRatios = ['1:2','6:11','9:16','2:3','3:4','4:5','5:6']
-const landscapeRatios = ['6:5','5:4','4:3','3:2','16:9','11:6','2:1']
+const portraitRatios = ['1:8','1:4','9:16','2:3','3:4','4:5']
+const landscapeRatios = ['5:4','4:3','3:2','16:9','4:1','21:9','8:1']
 
 function getOrientation(ratio: string): 'portrait' | 'square' | 'landscape' {
   if (portraitRatios.includes(ratio)) return 'portrait'

@@ -128,7 +128,7 @@ bot.on('message', async ( msg, param ) => {
         const data = JSON.parse((msg as any).web_app_data.data)
         const user = await User.findOne({ chatId: msg.chat.id })
         if (user && data.action === 'saveImageSettings') {
-          const allowedRatios = ['1:2','6:11','9:16','2:3','3:4','4:5','5:6','1:1','6:5','5:4','4:3','3:2','16:9','11:6','2:1']
+          const allowedRatios = ['1:1','1:4','1:8','2:3','3:2','3:4','4:1','4:3','4:5','5:4','8:1','9:16','16:9','21:9']
           const allowedQualities = ['low','standard','high']
           const allowedSizes = ['1k','2k']
 
