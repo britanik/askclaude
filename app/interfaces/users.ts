@@ -16,5 +16,8 @@ export interface IUser extends Document {
     lang: 'eng' | 'rus',
     token_balance?: number,
     useOpus?: boolean,
+    imageAspectRatio?: string,
+    imageQuality?: string,
+    imageSize?: string,
   }
 }

@@ -354,6 +354,22 @@ export default class Dict {
         rus: () => `🎉 Спасибо за упоминание в сторис! +{amount} токенов к дневному лимиту`,
         eng: () => `🎉 Thanks for the story mention! +{amount} tokens added to daily limit`
       },
+      IMAGES_TITLE: {
+        rus: () => `🏞️ Настройки изображений`,
+        eng: () => `🏞️ Image Settings`
+      },
+      IMAGES_CURRENT_SETTINGS: {
+        rus: () => `Соотношение сторон: <b>{ratio}</b>\nКачество: <b>{quality}</b>\nРазрешение: <b>{size}</b>`,
+        eng: () => `Aspect ratio: <b>{ratio}</b>\nQuality: <b>{quality}</b>\nResolution: <b>{size}</b>`
+      },
+      BUTTON_IMAGE_SETTINGS: {
+        rus: () => `⚙️ Настройки`,
+        eng: () => `⚙️ Settings`
+      },
+      IMAGES_SETTINGS_SAVED: {
+        rus: () => `✅ Настройки изображений сохранены`,
+        eng: () => `✅ Image settings saved`
+      },
       MODERATION_WARNING: {
         rus: () => `⚠️ Ваше сообщение содержит контент, который нарушает правила использования. Пожалуйста, перефразируйте ваш запрос.`,
         eng: () => `⚠️ Your message contains content that violates our usage policy. Please rephrase your request.`

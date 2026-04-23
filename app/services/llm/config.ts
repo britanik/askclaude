@@ -42,7 +42,7 @@ export const MODEL_CONFIG: Record<string, ModelConfig> = {
   },
 
   // OpenAI models - Responses API
-  'gpt-5.1': {
+  'gpt-5.4': {
     provider: 'openai',
     apiType: 'responses'
   }

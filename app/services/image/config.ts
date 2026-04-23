@@ -22,9 +22,9 @@ export const IMAGE_MODEL_CONFIG: Record<string, ImageModelConfig> = {
   },
 
   // OpenAI models
-  'gpt-5': {
+  'gpt-5.4': {
     provider: 'openai',
-    model: 'gpt-5'
+    model: 'gpt-5.4'
   },
 
   // GetImg models

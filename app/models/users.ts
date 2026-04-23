@@ -21,7 +21,10 @@ const UserSchema = new Schema<IUser>({
   prefs: {
     lang: { type: String },
     token_balance: { type: Number },
-    useOpus: { type: Boolean, default: false }
+    useOpus: { type: Boolean, default: false },
+    imageAspectRatio: { type: String, default: '1:1' },
+    imageQuality: { type: String, default: 'standard' },
+    imageSize: { type: String, default: '1k' }
   }
 })
 

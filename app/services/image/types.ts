@@ -9,12 +9,15 @@ export interface PreviousImage {
 
 export interface ImageRequest {
   prompt: string;
-  size?: '1024x1024' | '1024x1536' | '1536x1024';
+  size?: string;
   quality?: 'low' | 'medium' | 'high' | 'auto'; // (OpenAI specific)
   model?: string;
   tier?: ImageTier;
   image?: PreviousImage; // For editing previous image (same provider - native multi-turn)
   imageBase64?: string; // For cross-provider editing (base64 fallback)
+  aspectRatio?: string;    // e.g. "3:4", "1:1", "16:9"
+  imageQuality?: string;   // "low" | "standard" | "high"
+  imageSize?: string;      // "1k" | "2k"
 }
 
 // Response from image generation

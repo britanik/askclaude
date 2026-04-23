@@ -6,6 +6,7 @@ import { GeminiImageProvider } from './providers/gemini';
 import { getImageModelConfig, getNsfwImageModel } from './config';
 import { moderateContent } from '../../controllers/images';
 import { ImageError } from './errors';
+import { getImageSettings } from './settingsMap';
 
 /**
  * Provider instances cache
@@ -77,10 +78,17 @@ function prepareImageForProvider(
     return {};
   }
 
-  // Same provider - use native multi-turn
+  // Same provider - use native multi-turn + base64 for reliable editing
   if (image.provider === targetProvider && image.multiTurnData) {
     console.log(`[Image] Same provider (${targetProvider}), using native multi-turn`);
-    return { multiTurnData: image.multiTurnData };
+    const result: { multiTurnData: any; imageBase64?: string } = { multiTurnData: image.multiTurnData };
+    if (image.path) {
+      const imageBase64 = loadImageAsBase64(image.path);
+      if (imageBase64) {
+        result.imageBase64 = imageBase64;
+      }
+    }
+    return result;
   }
 
   // Different provider - load image as base64 fallback
@@ -113,78 +121,96 @@ export async function generateImageWithFallback(request: ImageRequest): Promise<
   const { tier, image } = request;
   const topModel = getTopImageModel();
   const normalModel = getNormalImageModel();
-  
+
+  // Compute provider-specific settings from user prefs
+  const settings = getImageSettings({
+    imageAspectRatio: request.aspectRatio,
+    imageQuality: request.imageQuality,
+    imageSize: request.imageSize,
+  });
+
   // Step 1: Content moderation
   const moderation = await moderateContent(request.prompt);
-  
-  // Step 2: NSFW content goes to dedicated provider (no multi-turn)
+
+  // Step 2: NSFW content goes to dedicated provider (no multi-turn, no user settings)
   if (moderation.flagged && moderation.scores.sexual > 0.85) {
     console.log('[Image] Content flagged, using NSFW provider');
-    
+
     const nsfwModel = getNsfwImageModel();
     const nsfwConfig = getImageModelConfig(nsfwModel);
     const provider = getProvider(nsfwConfig.provider);
-    
+
     const response = await provider.generate({
       prompt: request.prompt,
       size: request.size,
       quality: request.quality,
       model: nsfwModel
     });
-    
+
     return { response, usedFallback: false, actualTier: tier };
   }
-  
+
   // Step 3: Generate with primary model
   const primaryModel = tier === 'top' ? topModel : normalModel;
   const primaryConfig = getImageModelConfig(primaryModel);
   const primaryProvider = getProvider(primaryConfig.provider);
   const primaryImageData = prepareImageForProvider(image, primaryConfig.provider);
-  
-  console.log(`[Image] ${tier.toUpperCase()} tier, using: ${primaryModel}`);
-  
+
+  // Build provider-specific size/quality based on provider type
+  const primarySize = primaryConfig.provider === 'openai' ? settings.openaiSize : request.size;
+  const primaryQuality = primaryConfig.provider === 'openai' ? settings.openaiQuality : request.quality;
+
+  console.log(`[Image] ${tier.toUpperCase()} tier, using: ${primaryModel}, ratio: ${settings.geminiRatio}, size: ${settings.geminiImageSize}`);
+
   try {
     const response = await primaryProvider.generate({
       prompt: request.prompt,
-      size: request.size,
-      quality: request.quality,
+      size: primarySize,
+      quality: primaryQuality as any,
       model: primaryModel,
       image: primaryImageData.multiTurnData ? { multiTurnData: primaryImageData.multiTurnData } : undefined,
-      imageBase64: primaryImageData.imageBase64
+      imageBase64: primaryImageData.imageBase64,
+      aspectRatio: settings.geminiRatio,
+      imageSize: request.imageSize,
     });
-    
+
     return { response, usedFallback: false, actualTier: tier };
-    
+
   } catch (error: any) {
     // NORMAL tier has no fallback
     if (tier === 'normal') {
       throw error;
     }
-    
+
     // TOP tier - fallback to normal on retryable errors
     const isRetryable = error instanceof ImageError && error.isRetryable();
     if (!isRetryable) {
       throw error;
     }
-    
+
     console.log(`[Image] TOP model failed: ${error.message}`);
     console.log(`[Image] Falling back to NORMAL: ${normalModel}`);
-    
+
     const normalConfig = getImageModelConfig(normalModel);
     const normalProvider = getProvider(normalConfig.provider);
     const normalImageData = prepareImageForProvider(image, normalConfig.provider);
-    
+
+    const fallbackSize = normalConfig.provider === 'openai' ? settings.openaiSize : request.size;
+    const fallbackQuality = normalConfig.provider === 'openai' ? settings.openaiQuality : request.quality;
+
     const response = await normalProvider.generate({
       prompt: request.prompt,
-      size: request.size,
-      quality: request.quality,
+      size: fallbackSize,
+      quality: fallbackQuality as any,
       model: normalModel,
       image: normalImageData.multiTurnData ? { multiTurnData: normalImageData.multiTurnData } : undefined,
-      imageBase64: normalImageData.imageBase64
+      imageBase64: normalImageData.imageBase64,
+      aspectRatio: settings.geminiRatio,
+      imageSize: request.imageSize,
     });
-    
-    return { 
-      response, 
+
+    return {
+      response,
       usedFallback: true,
       actualTier: 'normal',
       originalError: error

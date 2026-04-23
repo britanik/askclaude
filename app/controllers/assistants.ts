@@ -593,7 +593,7 @@ async function handleImageGenerationTool( input: Record<string, any>, user: IUse
       bot,
       user.chatId,
       'upload_photo',
-      () => generateImageWithFallback({ prompt, tier, image })
+      () => generateImageWithFallback({ prompt, tier, image, aspectRatio: user.prefs?.imageAspectRatio, imageQuality: user.prefs?.imageQuality, imageSize: user.prefs?.imageSize })
     );
 
     // Use actual tier (may have fallen back from top to normal)

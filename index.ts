@@ -122,6 +122,32 @@ bot.on('message', async ( msg, param ) => {
       return;
     }
 
+    // Handle web_app_data from Telegram Mini Apps
+    if ((msg as any).web_app_data) {
+      try {
+        const data = JSON.parse((msg as any).web_app_data.data)
+        const user = await User.findOne({ chatId: msg.chat.id })
+        if (user && data.action === 'saveImageSettings') {
+          const allowedRatios = ['1:2','6:11','9:16','2:3','3:4','4:5','5:6','1:1','6:5','5:4','4:3','3:2','16:9','11:6','2:1']
+          const allowedQualities = ['low','standard','high']
+          const allowedSizes = ['1k','2k']
+
+          if (data.imageAspectRatio && allowedRatios.includes(data.imageAspectRatio))
+            user.prefs.imageAspectRatio = data.imageAspectRatio
+          if (data.imageQuality && allowedQualities.includes(data.imageQuality))
+            user.prefs.imageQuality = data.imageQuality
+          if (data.imageSize && allowedSizes.includes(data.imageSize))
+            user.prefs.imageSize = data.imageSize
+
+          await user.save()
+
+          const dict = new Dict(user)
+          await sendMessage({ text: dict.getString('IMAGES_SETTINGS_SAVED'), user, bot })
+        }
+      } catch (e) { console.log('web_app_data error:', e) }
+      return
+    }
+
     // If user sends a new message while previous is being processed — mark as aborted
     if ((msg.text && !msg.text.startsWith('/')) || msg.photo || msg.document || msg.voice) {
       abortIfSequence(msg.chat.id)

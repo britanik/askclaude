@@ -217,7 +217,7 @@ export async function regenerateImage(imageId: string, user: IUser, bot: Telegra
       user.chatId,
       'upload_photo',
       async () => {
-        const genResult = await generateImageWithFallback({ prompt: image.prompt, tier });
+        const genResult = await generateImageWithFallback({ prompt: image.prompt, tier, aspectRatio: user.prefs?.imageAspectRatio, imageQuality: user.prefs?.imageQuality, imageSize: user.prefs?.imageSize });
         
         if (genResult.usedFallback) {
           await sendMessage({

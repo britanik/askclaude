@@ -563,6 +563,17 @@ export default class Navigation {
     }
   }
 
+  images() {
+    return {
+      action: async () => {
+        const { tmplImages } = require('../templates/tmplImages');
+        await tmplImages(this.user, this.bot, this.dict);
+        logEvent({ user: this.user, category: 'template', template: 'tmplImages' });
+      },
+      callback: async () => {},
+    }
+  }
+
   image() {
     return {
       action: async () => {
@@ -609,7 +620,7 @@ export default class Navigation {
         if (moderation.flagged && moderation.scores.sexual > 0.9) {
           // NSFW: Direct generation with GetImg, no threads, no assistant
           try {
-            const result = await withChatAction( this.bot, this.user.chatId, 'upload_photo', () => generateImageWithFallback({ prompt, tier: 'normal' }) );
+            const result = await withChatAction( this.bot, this.user.chatId, 'upload_photo', () => generateImageWithFallback({ prompt, tier: 'normal', aspectRatio: this.user.prefs?.imageAspectRatio, imageQuality: this.user.prefs?.imageQuality, imageSize: this.user.prefs?.imageSize }) );
             // Send image and save to DB (no threadId)
             const actualTier = result.actualTier;
             await sendGeneratedImage({ prompt, user: this.user, bot: this.bot, result, tier: actualTier });

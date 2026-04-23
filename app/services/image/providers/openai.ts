@@ -19,9 +19,10 @@ export class OpenAIImageProvider implements ImageProvider {
     
     try {
       const openaiRequest: any = {
-        model: request.model || 'gpt-5',
-        tools: [{ 
+        model: 'gpt-5.4',
+        tools: [{
           type: 'image_generation',
+          model: 'gpt-image-2',
           size: request.size || '1024x1024',
           quality: request.quality || 'high'
         }]
@@ -29,11 +30,24 @@ export class OpenAIImageProvider implements ImageProvider {
 
       // Build input based on available data
       if (request.image?.multiTurnData?.responseId) {
-        // Native multi-turn: use previous response ID
+        // Native multi-turn: use previous response ID + image data for reliable editing
         openaiRequest.previous_response_id = request.image.multiTurnData.responseId;
-        openaiRequest.input = 'Edit the image: ' + request.prompt;
-        console.log('[Image:OpenAI] Native multi-turn with responseId:', request.image.multiTurnData.responseId);
-        
+
+        if (request.imageBase64) {
+          // Send actual image pixels so the model edits rather than generates from scratch
+          openaiRequest.input = [{
+            role: 'user',
+            content: [
+              { type: 'input_image', image_url: `data:image/jpeg;base64,${request.imageBase64}` },
+              { type: 'input_text', text: 'Edit this image: ' + request.prompt }
+            ]
+          }];
+          console.log('[Image:OpenAI] Native multi-turn with responseId + image data:', request.image.multiTurnData.responseId);
+        } else {
+          openaiRequest.input = 'Edit the image: ' + request.prompt;
+          console.log('[Image:OpenAI] Native multi-turn with responseId (no image data):', request.image.multiTurnData.responseId);
+        }
+
       } else if (request.imageBase64) {
         // Cross-provider fallback: send image as input with role
         openaiRequest.input = [{ 
@@ -62,7 +76,7 @@ export class OpenAIImageProvider implements ImageProvider {
         }
       );
 
-      // console.log('response.data.output', response.data.output);
+      console.log('[Image:OpenAI] Response:', JSON.stringify(response.data?.tools[0]?.model, null, 2));
 
       const imageData = this.extractImageData(response.data);
       

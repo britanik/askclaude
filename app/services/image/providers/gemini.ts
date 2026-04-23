@@ -76,8 +76,8 @@ export class GeminiImageProvider implements ImageProvider {
           generationConfig: {
             responseModalities: ['IMAGE', 'TEXT'],
             imageConfig: {
-              imageSize: '1K',
-              aspectRatio: '1:1'
+              imageSize: request.imageSize === '2k' ? '2K' : '1K',
+              aspectRatio: request.aspectRatio || '1:1'
             }
           }
         },
