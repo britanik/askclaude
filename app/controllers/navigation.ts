@@ -581,12 +581,12 @@ export default class Navigation {
         const settingsInfo = this.dict.getString('IMAGES_CURRENT_SETTINGS', { ratio, quality, size })
         const text = `${this.dict.getString('IMAGE_ASK_PROMPT')}\n\n${settingsInfo}`
 
-        const buttons = [[{
+        const keyboard = [[{
           text: this.dict.getString('BUTTON_IMAGE_SETTINGS'),
           web_app: { url: `https://askclaude.ru/images?ratio=${ratio}&quality=${quality}&size=${size}` }
         } as any]]
 
-        await sendMessage({ text, user: this.user, bot: this.bot, buttons });
+        await sendMessage({ text, user: this.user, bot: this.bot, keyboard });
         logEvent({ user: this.user, category: 'template', template: 'imagePrompt' })
       },
       callback: async () => {
