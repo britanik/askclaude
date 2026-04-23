@@ -563,17 +563,6 @@ export default class Navigation {
     }
   }
 
-  images() {
-    return {
-      action: async () => {
-        const { tmplImages } = require('../templates/tmplImages');
-        await tmplImages(this.user, this.bot, this.dict);
-        logEvent({ user: this.user, category: 'template', template: 'tmplImages' });
-      },
-      callback: async () => {},
-    }
-  }
-
   image() {
     return {
       action: async () => {
@@ -585,8 +574,19 @@ export default class Navigation {
 
         this.user = await userController.addStep(this.user, 'image')
 
-        // Send prompt asking user to describe the image they want
-        await sendMessage({ text: this.dict.getString('IMAGE_ASK_PROMPT'), user: this.user, bot: this.bot });
+        const ratio = this.user.prefs?.imageAspectRatio || '1:1'
+        const quality = this.user.prefs?.imageQuality || 'standard'
+        const size = this.user.prefs?.imageSize || '1k'
+
+        const settingsInfo = this.dict.getString('IMAGES_CURRENT_SETTINGS', { ratio, quality, size })
+        const text = `${this.dict.getString('IMAGE_ASK_PROMPT')}\n\n${settingsInfo}`
+
+        const buttons = [[{
+          text: this.dict.getString('BUTTON_IMAGE_SETTINGS'),
+          web_app: { url: `https://askclaude.ru/images?ratio=${ratio}&quality=${quality}&size=${size}` }
+        } as any]]
+
+        await sendMessage({ text, user: this.user, bot: this.bot, buttons });
         logEvent({ user: this.user, category: 'template', template: 'imagePrompt' })
       },
       callback: async () => {

@@ -7,7 +7,6 @@ export const menuButtons = [
   { name: '/settings', method: 'settings' },
   { name: '/invite', method: 'invite' },
   { name: '/image', method: 'image' },
-  { name: '/images', method: 'images' },
   { name: '/tokens', method: 'tokens' },
   { name: '/stat', method: 'stat' },
   { name: '/run_scheduler', method: 'adminRunScheduler' },
