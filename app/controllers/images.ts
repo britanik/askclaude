@@ -207,17 +207,18 @@ export async function regenerateImage(imageId: string, user: IUser, bot: Telegra
       return;
     }
     
-    const tier = await getCurrentTier(user);
-    
+    const limitSwitchOff = process.env.IMAGE_LIMIT_SWITCH !== '1';
+    const tier = limitSwitchOff ? 'top' : await getCurrentTier(user);
+
     console.log(`Regenerating image with prompt: "${image.prompt}" for user ${user.username || user.chatId}, tier: ${tier}`);
-    
+
     // Generate new image with fallback support
     const result = await withChatAction(
       bot,
       user.chatId,
       'upload_photo',
       async () => {
-        const genResult = await generateImageWithFallback({ prompt: image.prompt, tier, aspectRatio: user.prefs?.imageAspectRatio, imageQuality: user.prefs?.imageQuality, imageSize: user.prefs?.imageSize });
+        const genResult = await generateImageWithFallback({ prompt: image.prompt, tier, aspectRatio: user.prefs?.imageAspectRatio, imageQuality: user.prefs?.imageQuality, imageSize: user.prefs?.imageSize, imageProvider: user.prefs?.imageProvider });
         
         if (genResult.usedFallback) {
           await sendMessage({

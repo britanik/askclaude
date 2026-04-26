@@ -577,13 +577,14 @@ export default class Navigation {
         const ratio = this.user.prefs?.imageAspectRatio || '1:1'
         const quality = this.user.prefs?.imageQuality || 'standard'
         const size = this.user.prefs?.imageSize || '1k'
+        const provider = this.user.prefs?.imageProvider || 'gemini'
 
         const settingsInfo = this.dict.getString('IMAGES_CURRENT_SETTINGS', { ratio, quality, size })
         const text = `${this.dict.getString('IMAGE_ASK_PROMPT')}\n\n${settingsInfo}`
 
         const keyboard = [[{
           text: this.dict.getString('BUTTON_IMAGE_SETTINGS'),
-          web_app: { url: `https://askclaude.ru/images?ratio=${ratio}&quality=${quality}&size=${size}` }
+          web_app: { url: `https://askclaude.ru/images?ratio=${ratio}&quality=${quality}&size=${size}&provider=${provider}` }
         } as any]]
 
         await sendMessage({ text, user: this.user, bot: this.bot, keyboard });
@@ -620,7 +621,7 @@ export default class Navigation {
         if (moderation.flagged && moderation.scores.sexual > 0.9) {
           // NSFW: Direct generation with GetImg, no threads, no assistant
           try {
-            const result = await withChatAction( this.bot, this.user.chatId, 'upload_photo', () => generateImageWithFallback({ prompt, tier: 'normal', aspectRatio: this.user.prefs?.imageAspectRatio, imageQuality: this.user.prefs?.imageQuality, imageSize: this.user.prefs?.imageSize }) );
+            const result = await withChatAction( this.bot, this.user.chatId, 'upload_photo', () => generateImageWithFallback({ prompt, tier: 'top', aspectRatio: this.user.prefs?.imageAspectRatio, imageQuality: this.user.prefs?.imageQuality, imageSize: this.user.prefs?.imageSize, imageProvider: this.user.prefs?.imageProvider }) );
             // Send image and save to DB (no threadId)
             const actualTier = result.actualTier;
             await sendGeneratedImage({ prompt, user: this.user, bot: this.bot, result, tier: actualTier });

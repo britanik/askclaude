@@ -570,9 +570,10 @@ async function handleImageGenerationTool( input: Record<string, any>, user: IUse
       return `Error: Daily image generation limit reached (${imageLimit} images). The user should try again tomorrow.`;
     }
 
-    // Get current tier based on usage
-    const tier = await getCurrentTier(user);
-    console.log(`[Image Tool] User tier: ${tier}`);
+    // Get current tier based on usage (skip when limit switch is off)
+    const limitSwitchOff = process.env.IMAGE_LIMIT_SWITCH !== '1';
+    const tier = limitSwitchOff ? 'top' : await getCurrentTier(user);
+    console.log(`[Image Tool] User tier: ${tier}, limitSwitch: ${limitSwitchOff ? 'off' : 'on'}`);
 
     // Look up previous image for multi-turn if editImageId provided
     let image: { multiTurnData?: any; provider?: string; path?: string } | undefined;
@@ -588,12 +589,12 @@ async function handleImageGenerationTool( input: Record<string, any>, user: IUse
       }
     }
 
-    // Generate image with tier-based model selection
+    // Generate image
     const result: ImageGenerationResult = await withChatAction(
       bot,
       user.chatId,
       'upload_photo',
-      () => generateImageWithFallback({ prompt, tier, image, aspectRatio: user.prefs?.imageAspectRatio, imageQuality: user.prefs?.imageQuality, imageSize: user.prefs?.imageSize })
+      () => generateImageWithFallback({ prompt, tier, image, aspectRatio: user.prefs?.imageAspectRatio, imageQuality: user.prefs?.imageQuality, imageSize: user.prefs?.imageSize, imageProvider: user.prefs?.imageProvider })
     );
 
     // Use actual tier (may have fallen back from top to normal)

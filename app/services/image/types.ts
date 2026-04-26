@@ -18,6 +18,7 @@ export interface ImageRequest {
   aspectRatio?: string;    // e.g. "3:4", "1:1", "16:9"
   imageQuality?: string;   // "low" | "standard" | "high"
   imageSize?: string;      // "1k" | "2k"
+  imageProvider?: string;  // "gemini" | "openai"
 }
 
 // Response from image generation

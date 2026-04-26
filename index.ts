@@ -138,6 +138,9 @@ bot.on('message', async ( msg, param ) => {
             user.prefs.imageQuality = data.imageQuality
           if (data.imageSize && allowedSizes.includes(data.imageSize))
             user.prefs.imageSize = data.imageSize
+          const allowedProviders = ['gemini','openai']
+          if (data.imageProvider && allowedProviders.includes(data.imageProvider))
+            user.prefs.imageProvider = data.imageProvider
 
           await user.save()
 

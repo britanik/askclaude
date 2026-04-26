@@ -24,7 +24,8 @@ const UserSchema = new Schema<IUser>({
     useOpus: { type: Boolean, default: false },
     imageAspectRatio: { type: String, default: '1:1' },
     imageQuality: { type: String, default: 'standard' },
-    imageSize: { type: String, default: '1k' }
+    imageSize: { type: String, default: '1k' },
+    imageProvider: { type: String, default: process.env.IMAGE_DEFAULT_PROVIDER || 'gemini' }
   }
 })
 

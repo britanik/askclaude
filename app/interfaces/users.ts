@@ -19,5 +19,6 @@ export interface IUser extends Document {
     imageAspectRatio?: string,
     imageQuality?: string,
     imageSize?: string,
+    imageProvider?: string,
   }
 }

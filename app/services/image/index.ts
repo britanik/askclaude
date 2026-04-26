@@ -3,7 +3,7 @@ import { ImageProvider, ImageRequest, ImageResponse, ImageTier, PreviousImage } 
 import { OpenAIImageProvider } from './providers/openai';
 import { GetImgProvider } from './providers/getimg';
 import { GeminiImageProvider } from './providers/gemini';
-import { getImageModelConfig, getNsfwImageModel } from './config';
+import { getImageModelConfig, getModelForProvider, getNsfwImageModel } from './config';
 import { moderateContent } from '../../controllers/images';
 import { ImageError } from './errors';
 import { getImageSettings } from './settingsMap';
@@ -36,11 +36,11 @@ function getProvider(name: 'openai' | 'getimg' | 'gemini'): ImageProvider {
 }
 
 export function getTopImageModel(): string {
-  return process.env.IMAGE_MODEL_TOP || 'gemini-3-pro-image-preview';
+  return getModelForProvider(process.env.IMAGE_PROVIDER_TOP || 'gemini');
 }
 
 export function getNormalImageModel(): string {
-  return process.env.IMAGE_MODEL_NORMAL || 'gpt-5';
+  return getModelForProvider(process.env.IMAGE_PROVIDER_NORMAL || 'openai');
 }
 
 /**
@@ -119,8 +119,22 @@ function prepareImageForProvider(
  */
 export async function generateImageWithFallback(request: ImageRequest): Promise<ImageGenerationResult> {
   const { tier, image } = request;
-  const topModel = getTopImageModel();
-  const normalModel = getNormalImageModel();
+  const limitSwitchOff = process.env.IMAGE_LIMIT_SWITCH !== '1';
+
+  // Determine primary and fallback models
+  let primaryModel: string;
+  let fallbackModel: string | null;
+
+  if (limitSwitchOff && request.imageProvider) {
+    // Provider-based: user chooses provider
+    const otherProvider = request.imageProvider === 'gemini' ? 'openai' : 'gemini';
+    primaryModel = getModelForProvider(request.imageProvider);
+    fallbackModel = getModelForProvider(otherProvider);
+  } else {
+    // Tier-based: automatic switching on limits
+    primaryModel = getTopImageModel();
+    fallbackModel = tier === 'top' ? getNormalImageModel() : null;
+  }
 
   // Compute provider-specific settings from user prefs
   const settings = getImageSettings({
@@ -151,7 +165,6 @@ export async function generateImageWithFallback(request: ImageRequest): Promise<
   }
 
   // Step 3: Generate with primary model
-  const primaryModel = tier === 'top' ? topModel : normalModel;
   const primaryConfig = getImageModelConfig(primaryModel);
   const primaryProvider = getProvider(primaryConfig.provider);
   const primaryImageData = prepareImageForProvider(image, primaryConfig.provider);
@@ -160,7 +173,7 @@ export async function generateImageWithFallback(request: ImageRequest): Promise<
   const primarySize = primaryConfig.provider === 'openai' ? settings.openaiSize : request.size;
   const primaryQuality = primaryConfig.provider === 'openai' ? settings.openaiQuality : request.quality;
 
-  console.log(`[Image] ${tier.toUpperCase()} tier, using: ${primaryModel}, ratio: ${settings.geminiRatio}, size: ${settings.geminiImageSize}`);
+  console.log(`[Image] Using: ${primaryModel}, provider: ${primaryConfig.provider}, ratio: ${settings.geminiRatio}, size: ${settings.geminiImageSize}`);
 
   try {
     const response = await primaryProvider.generate({
@@ -177,34 +190,34 @@ export async function generateImageWithFallback(request: ImageRequest): Promise<
     return { response, usedFallback: false, actualTier: tier };
 
   } catch (error: any) {
-    // NORMAL tier has no fallback
-    if (tier === 'normal') {
+    // No fallback available
+    if (!fallbackModel) {
       throw error;
     }
 
-    // TOP tier - fallback to normal on retryable errors
+    // Fallback only on retryable errors
     const isRetryable = error instanceof ImageError && error.isRetryable();
     if (!isRetryable) {
       throw error;
     }
 
-    console.log(`[Image] TOP model failed: ${error.message}`);
-    console.log(`[Image] Falling back to NORMAL: ${normalModel}`);
+    console.log(`[Image] Primary model failed: ${error.message}`);
+    console.log(`[Image] Falling back to: ${fallbackModel}`);
 
-    const normalConfig = getImageModelConfig(normalModel);
-    const normalProvider = getProvider(normalConfig.provider);
-    const normalImageData = prepareImageForProvider(image, normalConfig.provider);
+    const fallbackConfig = getImageModelConfig(fallbackModel);
+    const fallbackProvider = getProvider(fallbackConfig.provider);
+    const fallbackImageData = prepareImageForProvider(image, fallbackConfig.provider);
 
-    const fallbackSize = normalConfig.provider === 'openai' ? settings.openaiSize : request.size;
-    const fallbackQuality = normalConfig.provider === 'openai' ? settings.openaiQuality : request.quality;
+    const fallbackSize = fallbackConfig.provider === 'openai' ? settings.openaiSize : request.size;
+    const fallbackQuality = fallbackConfig.provider === 'openai' ? settings.openaiQuality : request.quality;
 
-    const response = await normalProvider.generate({
+    const response = await fallbackProvider.generate({
       prompt: request.prompt,
       size: fallbackSize,
       quality: fallbackQuality as any,
-      model: normalModel,
-      image: normalImageData.multiTurnData ? { multiTurnData: normalImageData.multiTurnData } : undefined,
-      imageBase64: normalImageData.imageBase64,
+      model: fallbackModel,
+      image: fallbackImageData.multiTurnData ? { multiTurnData: fallbackImageData.multiTurnData } : undefined,
+      imageBase64: fallbackImageData.imageBase64,
       aspectRatio: settings.geminiRatio,
       imageSize: request.imageSize,
     });

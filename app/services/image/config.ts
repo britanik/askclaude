@@ -22,6 +22,10 @@ export const IMAGE_MODEL_CONFIG: Record<string, ImageModelConfig> = {
   },
 
   // OpenAI models
+  'gpt-5': {
+    provider: 'openai',
+    model: 'gpt-5.4'
+  },
   'gpt-5.4': {
     provider: 'openai',
     model: 'gpt-5.4'
@@ -42,6 +46,11 @@ export function getImageModelConfig(modelName: string): ImageModelConfig {
   }
   
   return config;
+}
+
+export function getModelForProvider(provider: string): string {
+  if (provider === 'openai') return process.env.IMAGE_OPENAI_MODEL || 'gpt-5.4';
+  return process.env.IMAGE_GEMINI_MODEL || 'gemini-3-pro-image-preview';
 }
 
 export function getDefaultImageModel(): string {
