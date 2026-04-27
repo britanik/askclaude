@@ -13,6 +13,10 @@ const ImageSchema = new Schema({
   provider: { type: String, enum: ['openai', 'getimg', 'gemini', 'unknown'], default: 'unknown' },
   tier: { type: String, enum: ['top', 'normal'], default: 'top' },
   multiTurnData: { type: Schema.Types.Mixed }, // Provider-specific data for multi-turn editing
+  aspectRatio: { type: String },   // e.g. "1:1", "16:9"
+  quality: { type: String },       // "low", "standard", "high"
+  size: { type: String },          // "1k", "2k"
+  modelName: { type: String },     // e.g. "gemini-3-pro-image-preview", "gpt-5.4"
   // threadId: { type: Schema.Types.ObjectId, ref: 'Thread' } // Link to conversation thread
 })
 

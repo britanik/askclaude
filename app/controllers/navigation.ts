@@ -626,7 +626,7 @@ export default class Navigation {
             const result = await withChatAction( this.bot, this.user.chatId, 'upload_photo', () => generateImageWithFallback({ prompt, tier: 'top', aspectRatio: this.user.prefs?.imageAspectRatio, imageQuality: this.user.prefs?.imageQuality, imageSize: this.user.prefs?.imageSize, imageProvider: this.user.prefs?.imageProvider }) );
             // Send image and save to DB (no threadId)
             const actualTier = result.actualTier;
-            await sendGeneratedImage({ prompt, user: this.user, bot: this.bot, result, tier: actualTier });
+            await sendGeneratedImage({ prompt, user: this.user, bot: this.bot, result, tier: actualTier, aspectRatio: this.user.prefs?.imageAspectRatio, quality: this.user.prefs?.imageQuality, size: this.user.prefs?.imageSize });
           } catch (error) {
             console.error('Error generating NSFW image:', error);
             await sendMessage({ text: this.dict.getString('IMAGE_GENERATION_ERROR'), user: this.user, bot: this.bot });

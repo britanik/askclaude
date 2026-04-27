@@ -77,6 +77,9 @@ export interface SendGeneratedImageParams {
   result: ImageGenerationResult;
   tier: ImageTier;
   thread?: IThread;  // Optional: for assistant flow
+  aspectRatio?: string;
+  quality?: string;
+  size?: string;
 }
 
 export async function sendGeneratedImage(params: SendGeneratedImageParams): Promise<IImage> {
@@ -102,7 +105,7 @@ export async function sendGeneratedImage(params: SendGeneratedImageParams): Prom
   // Get telegram file ID
   const telegramFileId = sentPhoto.photo[sentPhoto.photo.length - 1].file_id;
 
-  // Save to database with tier
+  // Save to database with tier and generation settings
   const savedImage:IImage = await new Image({
     prompt: prompt,
     user,
@@ -111,6 +114,10 @@ export async function sendGeneratedImage(params: SendGeneratedImageParams): Prom
     provider: imageResponse.provider,
     tier: tier,
     multiTurnData: imageResponse.multiTurnData,
+    aspectRatio: params.aspectRatio,
+    quality: params.quality,
+    size: params.size,
+    modelName: result.modelName,
   }).save();
 
   // Save image as a Message
@@ -239,13 +246,16 @@ export async function regenerateImage(imageId: string, user: IUser, bot: Telegra
     const actualTier = result.actualTier || tier;
 
     // Send image and save to DB (reuse helper)
-    const savedImage = await sendGeneratedImage({ 
-      prompt: image.prompt, 
-      user, 
-      bot, 
+    const savedImage = await sendGeneratedImage({
+      prompt: image.prompt,
+      user,
+      bot,
       result,
       tier: actualTier,
-      thread: await getImageThread(image)
+      thread: await getImageThread(image),
+      aspectRatio: user.prefs?.imageAspectRatio,
+      quality: user.prefs?.imageQuality,
+      size: user.prefs?.imageSize,
     });
     
   } catch (error) {

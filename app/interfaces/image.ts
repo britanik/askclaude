@@ -12,4 +12,8 @@ export interface IImage extends Document {
   localPath?: string
   provider: ImageProvider
   multiTurnData?: any // Provider-specific data for multi-turn editing
+  aspectRatio?: string
+  quality?: string
+  size?: string
+  modelName?: string
 }

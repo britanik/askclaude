@@ -608,7 +608,10 @@ async function handleImageGenerationTool( input: Record<string, any>, user: IUse
       prompt,
       result,
       tier: actualTier,
-      bot
+      bot,
+      aspectRatio: user.prefs?.imageAspectRatio,
+      quality: user.prefs?.imageQuality,
+      size: user.prefs?.imageSize,
     });
 
     // Return success message with image ID for tool reply

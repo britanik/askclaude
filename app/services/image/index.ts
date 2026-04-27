@@ -51,6 +51,7 @@ export interface ImageGenerationResult {
   usedFallback: boolean;
   actualTier: ImageTier;
   originalError?: ImageError;
+  modelName?: string;
 }
 
 /**
@@ -161,7 +162,7 @@ export async function generateImageWithFallback(request: ImageRequest): Promise<
       model: nsfwModel
     });
 
-    return { response, usedFallback: false, actualTier: tier };
+    return { response, usedFallback: false, actualTier: tier, modelName: nsfwModel };
   }
 
   // Step 3: Generate with primary model
@@ -188,7 +189,7 @@ export async function generateImageWithFallback(request: ImageRequest): Promise<
     });
 
     console.log(`[Image] Done: ${primaryModel}`);
-    return { response, usedFallback: false, actualTier: tier };
+    return { response, usedFallback: false, actualTier: tier, modelName: primaryModel };
 
   } catch (error: any) {
     // No fallback available
@@ -228,7 +229,8 @@ export async function generateImageWithFallback(request: ImageRequest): Promise<
       response,
       usedFallback: true,
       actualTier: 'normal',
-      originalError: error
+      originalError: error,
+      modelName: fallbackModel
     };
   }
 }
