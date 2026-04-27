@@ -4,12 +4,15 @@ import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { IUser } from '../interfaces/users';
+import User from '../models/users';
 import Image from '../models/images';
 import Message from '../models/messages';
+import Dict from '../helpers/dict';
 import { withChatAction } from '../helpers/chatAction';
 import { sendMessage } from '../templates/sendMessage';
 import { logLimitHit } from './tokens';
 import { generateImageWithFallback, ImageGenerationResult, ImageTier } from '../services/image';
+import { getProviderDisplayName } from '../services/image/config';
 import { logApiError } from '../helpers/errorLogger';
 import { IThread } from '../interfaces/threads';
 import { IImage } from '../interfaces/image';
@@ -328,4 +331,44 @@ export async function getPeriodImageLimit(user: IUser): Promise<number> {
 export async function getImageThread(image: IImage): Promise<IThread | null> {
   const message = await Message.findOne({ images: image._id }).populate('thread');
   return message?.thread as IThread || null;
+}
+
+export async function handleWebAppData(msg: TelegramBot.Message, bot: TelegramBot) {
+  try {
+    const data = JSON.parse((msg as any).web_app_data.data)
+    const user = await User.findOne({ chatId: msg.chat.id })
+    if (user && data.action === 'saveImageSettings') {
+      const allowedRatios = ['1:1','1:4','1:8','2:3','3:2','3:4','4:1','4:3','4:5','5:4','8:1','9:16','16:9','21:9']
+      const allowedQualities = ['low','standard','high']
+      const allowedSizes = ['1k','2k']
+
+      if (data.imageAspectRatio && allowedRatios.includes(data.imageAspectRatio))
+        user.prefs.imageAspectRatio = data.imageAspectRatio
+      if (data.imageQuality && allowedQualities.includes(data.imageQuality))
+        user.prefs.imageQuality = data.imageQuality
+      if (data.imageSize && allowedSizes.includes(data.imageSize))
+        user.prefs.imageSize = data.imageSize
+      const allowedProviders = ['gemini','openai']
+      if (data.imageProvider && allowedProviders.includes(data.imageProvider))
+        user.prefs.imageProvider = data.imageProvider
+
+      await user.save()
+
+      const dict = new Dict(user)
+      const ratio = user.prefs?.imageAspectRatio || '1:1'
+      const quality = user.prefs?.imageQuality || 'standard'
+      const size = user.prefs?.imageSize || '1k'
+      const provider = user.prefs?.imageProvider || 'gemini'
+
+      const model = getProviderDisplayName(provider)
+      const settingsInfo = dict.getString('IMAGES_CURRENT_SETTINGS', { ratio, quality, size, model })
+      const text = `${dict.getString('IMAGE_ASK_PROMPT')}\n\n${settingsInfo}`
+      const keyboard = [[{
+        text: dict.getString('BUTTON_IMAGE_SETTINGS'),
+        web_app: { url: `https://askclaude.ru/images?ratio=${ratio}&quality=${quality}&size=${size}&provider=${provider}` }
+      } as any]]
+
+      await sendMessage({ text, user, bot, keyboard, deletable: 'imagePrompt' })
+    }
+  } catch (e) { console.log('web_app_data error:', e) }
 }

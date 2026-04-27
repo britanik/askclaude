@@ -16,7 +16,7 @@ import { sendMessage } from './app/templates/sendMessage'
 import { IInvite } from './app/models/invites'
 import { abortIfSequence } from './app/helpers/messageBuffer'
 import { logEvent } from './app/controllers/log'
-import { getProviderDisplayName } from './app/services/image/config'
+import { handleWebAppData } from './app/controllers/images'
 import { isMenuClicked } from './app/controllers/menu'
 
 // Load .env
@@ -125,44 +125,7 @@ bot.on('message', async ( msg, param ) => {
 
     // Handle web_app_data from Telegram Mini Apps
     if ((msg as any).web_app_data) {
-      try {
-        const data = JSON.parse((msg as any).web_app_data.data)
-        const user = await User.findOne({ chatId: msg.chat.id })
-        if (user && data.action === 'saveImageSettings') {
-          const allowedRatios = ['1:1','1:4','1:8','2:3','3:2','3:4','4:1','4:3','4:5','5:4','8:1','9:16','16:9','21:9']
-          const allowedQualities = ['low','standard','high']
-          const allowedSizes = ['1k','2k']
-
-          if (data.imageAspectRatio && allowedRatios.includes(data.imageAspectRatio))
-            user.prefs.imageAspectRatio = data.imageAspectRatio
-          if (data.imageQuality && allowedQualities.includes(data.imageQuality))
-            user.prefs.imageQuality = data.imageQuality
-          if (data.imageSize && allowedSizes.includes(data.imageSize))
-            user.prefs.imageSize = data.imageSize
-          const allowedProviders = ['gemini','openai']
-          if (data.imageProvider && allowedProviders.includes(data.imageProvider))
-            user.prefs.imageProvider = data.imageProvider
-
-          await user.save()
-
-          // Send a new imagePrompt message with updated settings (deletable handles removing the old one)
-          const dict = new Dict(user)
-          const ratio = user.prefs?.imageAspectRatio || '1:1'
-          const quality = user.prefs?.imageQuality || 'standard'
-          const size = user.prefs?.imageSize || '1k'
-          const provider = user.prefs?.imageProvider || 'gemini'
-
-          const model = getProviderDisplayName(provider)
-          const settingsInfo = dict.getString('IMAGES_CURRENT_SETTINGS', { ratio, quality, size, model })
-          const text = `${dict.getString('IMAGE_ASK_PROMPT')}\n\n${settingsInfo}`
-          const keyboard = [[{
-            text: dict.getString('BUTTON_IMAGE_SETTINGS'),
-            web_app: { url: `https://askclaude.ru/images?ratio=${ratio}&quality=${quality}&size=${size}&provider=${provider}` }
-          } as any]]
-
-          await sendMessage({ text, user, bot, keyboard, deletable: 'imagePrompt' })
-        }
-      } catch (e) { console.log('web_app_data error:', e) }
+      await handleWebAppData(msg, bot)
       return
     }
 
