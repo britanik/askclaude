@@ -53,6 +53,11 @@ export function getModelForProvider(provider: string): string {
   return process.env.IMAGE_GEMINI_MODEL || 'gemini-3-pro-image-preview';
 }
 
+export function getProviderDisplayName(provider: string): string {
+  if (provider === 'openai') return 'GPT Image 2';
+  return 'Nano Banana 2';
+}
+
 export function getDefaultImageModel(): string {
   return process.env.IMAGE_MODEL_DEFAULT || 'gemini-3-pro-image-preview';
 }

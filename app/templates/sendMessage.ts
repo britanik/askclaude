@@ -9,10 +9,11 @@ import { sendLongMessage } from '../helpers/messageChunker'
 
 export interface ISendMessageParams {
   user: IUser,
-  chatId?: number, // (not used): Chat ID to send the message to 
+  chatId?: number, // (not used): Chat ID to send the message to
   bot: TelegramBot,
   text?: string, // Optional: Text of the message to be sent
-  deletable?: string, // If possible to delete - store in user.messages
+  editable?: string, // Edit existing message in-place (for inline keyboards)
+  deletable?: string, // Delete old message and send a new one (for reply keyboards)
   buttons?: InlineKeyboardButton[][], // Optional: Buttons to include in the message
   keyboard?: KeyboardButton[][], // Optional: Keyboard to include in the message
   gallery?: InputMediaPhoto[] // Optional: Gallery of photos to send before the message
@@ -25,7 +26,7 @@ export interface ISendMessageResult {
 }
 
 export async function sendMessage(params: ISendMessageParams): Promise<ISendMessageResult | undefined> {
-  let { user, chatId, bot, text = 'Test message', deletable, buttons, keyboard, gallery, placeholder, timer } = params;
+  let { user, chatId, bot, text = 'Test message', editable, deletable, buttons, keyboard, gallery, placeholder, timer } = params;
   try {
     let sent: TelegramBot.Message;
 
@@ -36,16 +37,16 @@ export async function sendMessage(params: ISendMessageParams): Promise<ISendMess
 
     await saveAIResponse(text, 'nopre');
 
-    let options = getOptions({ 
-      buttons, 
-      keyboard, 
-      placeholder 
+    let options = getOptions({
+      buttons,
+      keyboard,
+      placeholder
     });
 
-    if (deletable && user) {
-      let messageId = userController.getMessage(user, deletable);
+    if (editable && user) {
+      let messageId = userController.getMessage(user, editable);
       if (messageId) {
-        // Edit existing message if it exists
+        // Edit existing message in-place (works for inline keyboards)
         let editOptions = {
           chat_id: chatId || user.chatId,
           message_id: messageId,
@@ -53,42 +54,30 @@ export async function sendMessage(params: ISendMessageParams): Promise<ISendMess
           disable_web_page_preview: true
         };
 
-        // Include only inline_keyboard in editOptions if buttons are provided
         if (buttons) {
           editOptions['reply_markup'] = { inline_keyboard: buttons };
         }
 
         await bot.editMessageText(text, editOptions);
         return { telegramMessageId: messageId };
-      } else {
-        if (gallery && gallery.length > 0) {
-          // Send gallery in front if it exists
-          await bot.sendMediaGroup(chatId || user.chatId, gallery);
-        }  
-  
-        // Send new message if no existing message to update
-        try {
-          sent = await bot.sendMessage(chatId || user.chatId, text, options);
-        } catch (e) {
-          // Handle message too long error by splitting into chunks
-          if (e.response?.body?.description?.includes('too long')) {
-            console.log('Message too long, splitting into chunks');
-            sent = await sendLongMessage(bot, chatId || user.chatId, text, options);
-          } else {
-            console.log(e, 'e');
-            throw e;
-          }
-        }
-
-        user = await userController.updateMessage(user, deletable, sent.message_id);
       }
-    } else {
+    }
+
+    if (deletable && user) {
+      let messageId = userController.getMessage(user, deletable);
+      if (messageId) {
+        // Delete old message (for reply keyboards that can't be edited)
+        try { await bot.deleteMessage(chatId || user.chatId, messageId) } catch (e) {}
+      }
+    }
+
+    {
       if (gallery && gallery.length > 0) {
         // Send gallery in front if it exists
         await bot.sendMediaGroup(chatId || user.chatId, gallery);
       }  
 
-      // Send new message without considering it deletable
+      // Send new message
       let chatIdToSent = chatId || user.chatId;
       try {
         sent = await bot.sendMessage(chatIdToSent, text, options);
@@ -112,6 +101,12 @@ export async function sendMessage(params: ISendMessageParams): Promise<ISendMess
           console.error('Failed to delete message:', err);
         }
       }, timer);
+    }
+
+    // Save new message ID if tracking key is set
+    const trackKey = editable || deletable;
+    if (trackKey && sent) {
+      user = await userController.updateMessage(user, trackKey, sent.message_id);
     }
 
     // Return the telegram message ID for tracking replies

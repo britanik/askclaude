@@ -173,7 +173,7 @@ export async function generateImageWithFallback(request: ImageRequest): Promise<
   const primarySize = primaryConfig.provider === 'openai' ? settings.openaiSize : request.size;
   const primaryQuality = primaryConfig.provider === 'openai' ? settings.openaiQuality : request.quality;
 
-  console.log(`[Image] Using: ${primaryModel}, provider: ${primaryConfig.provider}, ratio: ${settings.geminiRatio}, size: ${settings.geminiImageSize}`);
+  console.log(`[Image] Using: ${primaryModel}, provider: ${primaryConfig.provider}, ratio: ${request.aspectRatio}, quality: ${request.imageQuality}, size: ${request.imageSize}`);
 
   try {
     const response = await primaryProvider.generate({
@@ -187,6 +187,7 @@ export async function generateImageWithFallback(request: ImageRequest): Promise<
       imageSize: request.imageSize,
     });
 
+    console.log(`[Image] Done: ${primaryModel}`);
     return { response, usedFallback: false, actualTier: tier };
 
   } catch (error: any) {
@@ -222,6 +223,7 @@ export async function generateImageWithFallback(request: ImageRequest): Promise<
       imageSize: request.imageSize,
     });
 
+    console.log(`[Image] Done (fallback): ${fallbackModel}`);
     return {
       response,
       usedFallback: true,

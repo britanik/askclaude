@@ -17,6 +17,7 @@ import { getTokenLimitMessage, isTokenLimit, updateUserSchema, estimateThreadMes
 import { isValidInviteCode, processReferral } from "./invites"
 import { sendNotification } from "./notifications"
 import { getPeriodImageLimit, isImageLimit, moderateContent, sendGeneratedImage } from "./images"
+import { getProviderDisplayName } from "../services/image/config"
 import { IThread } from "../interfaces/threads"
 import Message from "../models/messages"
 import Thread from "../models/threads"
@@ -579,7 +580,8 @@ export default class Navigation {
         const size = this.user.prefs?.imageSize || '1k'
         const provider = this.user.prefs?.imageProvider || 'gemini'
 
-        const settingsInfo = this.dict.getString('IMAGES_CURRENT_SETTINGS', { ratio, quality, size })
+        const model = getProviderDisplayName(provider)
+        const settingsInfo = this.dict.getString('IMAGES_CURRENT_SETTINGS', { ratio, quality, size, model })
         const text = `${this.dict.getString('IMAGE_ASK_PROMPT')}\n\n${settingsInfo}`
 
         const keyboard = [[{
@@ -587,7 +589,7 @@ export default class Navigation {
           web_app: { url: `https://askclaude.ru/images?ratio=${ratio}&quality=${quality}&size=${size}&provider=${provider}` }
         } as any]]
 
-        await sendMessage({ text, user: this.user, bot: this.bot, keyboard });
+        await sendMessage({ text, user: this.user, bot: this.bot, keyboard, deletable: 'imagePrompt' });
         logEvent({ user: this.user, category: 'template', template: 'imagePrompt' })
       },
       callback: async () => {
@@ -633,7 +635,7 @@ export default class Navigation {
         }
 
         // Not NSFW: Use assistant flow with threads and Claude
-        this.assistant().callback();
+        await this.assistant().callback();
       },
     }
   }

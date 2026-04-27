@@ -359,8 +359,8 @@ export default class Dict {
         eng: () => `🏞️ Image Settings`
       },
       IMAGES_CURRENT_SETTINGS: {
-        rus: () => `Соотношение сторон: <b>{ratio}</b>\nКачество: <b>{quality}</b>\nРазрешение: <b>{size}</b>`,
-        eng: () => `Aspect ratio: <b>{ratio}</b>\nQuality: <b>{quality}</b>\nResolution: <b>{size}</b>`
+        rus: () => `Модель: <b>{model}</b>\nСоотношение сторон: <b>{ratio}</b>\nКачество: <b>{quality}</b>\nРазрешение: <b>{size}</b>`,
+        eng: () => `Model: <b>{model}</b>\nAspect ratio: <b>{ratio}</b>\nQuality: <b>{quality}</b>\nResolution: <b>{size}</b>`
       },
       BUTTON_IMAGE_SETTINGS: {
         rus: () => `⚙️ Настройки`,

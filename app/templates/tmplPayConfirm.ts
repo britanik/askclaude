@@ -21,7 +21,7 @@ export async function tmplPayConfirm(user: IUser, bot: TelegramBot, plan: Paymen
     text,
     user,
     bot,
-    deletable: 'payConfirm',
+    editable: 'payConfirm',
     buttons: [[{
       text: dict.getString('PAY_CONFIRM_BUTTON'),
       url: `https://askclaude.ru/pay?token=${paymentToken}`

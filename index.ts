@@ -16,6 +16,7 @@ import { sendMessage } from './app/templates/sendMessage'
 import { IInvite } from './app/models/invites'
 import { abortIfSequence } from './app/helpers/messageBuffer'
 import { logEvent } from './app/controllers/log'
+import { getProviderDisplayName } from './app/services/image/config'
 import { isMenuClicked } from './app/controllers/menu'
 
 // Load .env
@@ -144,8 +145,22 @@ bot.on('message', async ( msg, param ) => {
 
           await user.save()
 
+          // Send a new imagePrompt message with updated settings (deletable handles removing the old one)
           const dict = new Dict(user)
-          await sendMessage({ text: dict.getString('IMAGES_SETTINGS_SAVED'), user, bot })
+          const ratio = user.prefs?.imageAspectRatio || '1:1'
+          const quality = user.prefs?.imageQuality || 'standard'
+          const size = user.prefs?.imageSize || '1k'
+          const provider = user.prefs?.imageProvider || 'gemini'
+
+          const model = getProviderDisplayName(provider)
+          const settingsInfo = dict.getString('IMAGES_CURRENT_SETTINGS', { ratio, quality, size, model })
+          const text = `${dict.getString('IMAGE_ASK_PROMPT')}\n\n${settingsInfo}`
+          const keyboard = [[{
+            text: dict.getString('BUTTON_IMAGE_SETTINGS'),
+            web_app: { url: `https://askclaude.ru/images?ratio=${ratio}&quality=${quality}&size=${size}&provider=${provider}` }
+          } as any]]
+
+          await sendMessage({ text, user, bot, keyboard, deletable: 'imagePrompt' })
         }
       } catch (e) { console.log('web_app_data error:', e) }
       return
